@@ -4,6 +4,7 @@ import { PreviewView } from "./preview-view";
 import { TEMPLATE_DEFAULT } from "./templates/default";
 import { TEMPLATE_DARK } from "./templates/dark";
 import { TEMPLATE_DARK_GOLD } from "./templates/dark-gold";
+import { TEMPLATE_DARK_WARM } from "./templates/dark-warm";
 
 export interface NoteRendererSettings {
   activeTemplate: string;
@@ -75,6 +76,7 @@ export default class NoteRendererPlugin extends Plugin {
     this.templateCache.set("default", TEMPLATE_DEFAULT);
     this.templateCache.set("dark", TEMPLATE_DARK);
     this.templateCache.set("dark-gold", TEMPLATE_DARK_GOLD);
+    this.templateCache.set("dark-warm", TEMPLATE_DARK_WARM);
 
     // User templates from plugin directory
     const adapter = this.app.vault.adapter;

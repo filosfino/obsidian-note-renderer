@@ -102,7 +102,17 @@ function buildRichCoverPage(
 function autosizeCoverText(container: HTMLElement): void {
   const elements = container.querySelectorAll("p, h1, h2, h3, li");
   for (const el of elements) {
-    const text = (el as HTMLElement).textContent?.trim() ?? "";
+    const htmlEl = el as HTMLElement;
+
+    // Skip if the element or its children already have inline styles (user-controlled)
+    if (htmlEl.querySelector("[style]") || htmlEl.getAttribute("style")) {
+      // Still set weight and line-height but don't override font-size
+      if (!htmlEl.style.fontWeight) htmlEl.style.fontWeight = "800";
+      if (!htmlEl.style.lineHeight) htmlEl.style.lineHeight = "1.3";
+      continue;
+    }
+
+    const text = htmlEl.textContent?.trim() ?? "";
     const len = text.length;
 
     let fontSize: number;
@@ -120,9 +130,9 @@ function autosizeCoverText(container: HTMLElement): void {
       fontSize = 48;
     }
 
-    (el as HTMLElement).style.fontSize = `${fontSize}px`;
-    (el as HTMLElement).style.fontWeight = "800";
-    (el as HTMLElement).style.lineHeight = "1.3";
+    htmlEl.style.fontSize = `${fontSize}px`;
+    htmlEl.style.fontWeight = "800";
+    htmlEl.style.lineHeight = "1.3";
   }
 }
 

@@ -37,7 +37,7 @@ const chromePath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome
 // ── Constants ──
 const PAGE_WIDTH = 1080;
 const PAGE_HEIGHT = 1800;
-const PAGE_PADDING = 60;
+const PAGE_PADDING = 90;
 const CONTENT_HEIGHT = PAGE_HEIGHT - PAGE_PADDING * 2;
 
 // ── Load template CSS from TS source ──
@@ -146,6 +146,10 @@ function buildCoverHtml() {
   if (note.coverMarkdown) {
     let html = renderMd(note.coverMarkdown);
     html = html.replace(/<p>([\s\S]*?)<\/p>/g, (_, content) => {
+      // Skip autosize if content already has inline styles (user-controlled)
+      if (content.includes('style=')) {
+        return `<p style="font-weight:800; line-height:1.3;">${content}</p>`;
+      }
       const text = content.replace(/<[^>]+>/g, "").trim();
       return `<p style="${autosizeStyle(text)}">${content}</p>`;
     });
