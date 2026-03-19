@@ -2,11 +2,13 @@ import {
   ItemView,
   WorkspaceLeaf,
   TFile,
+  TAbstractFile,
   Notice,
   setIcon,
+  debounce,
 } from "obsidian";
 import { VIEW_TYPE, PAGE_WIDTH, PAGE_HEIGHT } from "./constants";
-import { renderNote, RenderedPages } from "./renderer";
+import { renderNote, RenderedPages, RenderOptions } from "./renderer";
 import { exportPages } from "./exporter";
 import type NoteRendererPlugin from "./main";
 
@@ -16,6 +18,8 @@ export class PreviewView extends ItemView {
   private currentPage = 0;
   private rendered: RenderedPages | null = null;
   private resizeObserver: ResizeObserver | null = null;
+  private fileChangeHandler: ((file: TAbstractFile) => void) | null = null;
+  private activeFileHandler: (() => void) | null = null;
 
   // DOM refs
   private previewContainer: HTMLElement | null = null;
@@ -72,6 +76,46 @@ export class PreviewView extends ItemView {
     exportBtn.title = "Export ZIP";
     exportBtn.addEventListener("click", () => this.handleExport());
 
+    // Font controls row
+    const fontBar = contentEl.createDiv("nr-font-bar");
+
+    // Font size: - [value] +
+    const sizeDown = fontBar.createEl("button", { cls: "nr-btn nr-btn-sm", text: "−" });
+    const sizeLabel = fontBar.createDiv({ cls: "nr-font-size-label", text: `${this.plugin.settings.fontSize}px` });
+    const sizeUp = fontBar.createEl("button", { cls: "nr-btn nr-btn-sm", text: "+" });
+
+    sizeDown.addEventListener("click", async () => {
+      this.plugin.settings.fontSize = Math.max(24, this.plugin.settings.fontSize - 2);
+      sizeLabel.textContent = `${this.plugin.settings.fontSize}px`;
+      await this.plugin.saveSettings();
+      await this.refresh();
+    });
+    sizeUp.addEventListener("click", async () => {
+      this.plugin.settings.fontSize = Math.min(72, this.plugin.settings.fontSize + 2);
+      sizeLabel.textContent = `${this.plugin.settings.fontSize}px`;
+      await this.plugin.saveSettings();
+      await this.refresh();
+    });
+
+    // Font family select
+    const fontSelect = fontBar.createEl("select", { cls: "nr-font-select" });
+    const fonts = [
+      { label: "苹方", value: '"PingFang SC", "Noto Sans SC", sans-serif' },
+      { label: "思源黑体", value: '"Noto Sans SC", "PingFang SC", sans-serif' },
+      { label: "思源宋体", value: '"Noto Serif SC", "Songti SC", serif' },
+      { label: "楷体", value: '"Kaiti SC", "STKaiti", serif' },
+      { label: "系统默认", value: '-apple-system, "PingFang SC", sans-serif' },
+    ];
+    fonts.forEach((f) => {
+      fontSelect.createEl("option", { text: f.label, value: f.value });
+    });
+    fontSelect.value = this.plugin.settings.fontFamily;
+    fontSelect.addEventListener("change", async () => {
+      this.plugin.settings.fontFamily = fontSelect.value;
+      await this.plugin.saveSettings();
+      await this.refresh();
+    });
+
     // Preview area
     this.previewContainer = contentEl.createDiv("nr-preview-area");
     this.pageDisplay = this.previewContainer.createDiv("nr-page-display");
@@ -94,6 +138,23 @@ export class PreviewView extends ItemView {
     });
     this.resizeObserver.observe(this.previewContainer);
 
+    // Watch for file changes — auto-refresh when the current note is modified
+    const debouncedRefresh = debounce(() => this.refresh(), 500, true);
+
+    this.fileChangeHandler = (file: TAbstractFile) => {
+      const activeFile = this.app.workspace.getActiveFile();
+      if (activeFile && file.path === activeFile.path) {
+        debouncedRefresh();
+      }
+    };
+    this.app.vault.on("modify", this.fileChangeHandler);
+
+    // Watch for active file change — refresh when switching notes
+    this.activeFileHandler = () => {
+      debouncedRefresh();
+    };
+    this.app.workspace.on("active-leaf-change", this.activeFileHandler as any);
+
     // Initial render
     await this.refresh();
   }
@@ -101,6 +162,12 @@ export class PreviewView extends ItemView {
   async onClose(): Promise<void> {
     this.rendered?.cleanup();
     this.resizeObserver?.disconnect();
+    if (this.fileChangeHandler) {
+      this.app.vault.off("modify", this.fileChangeHandler);
+    }
+    if (this.activeFileHandler) {
+      this.app.workspace.off("active-leaf-change", this.activeFileHandler as any);
+    }
   }
 
   async refresh(): Promise<void> {
@@ -119,11 +186,18 @@ export class PreviewView extends ItemView {
       markdown,
       file.path,
       templateCss,
-      this.plugin
+      this.plugin,
+      {
+        fontSize: this.plugin.settings.fontSize,
+        fontFamily: this.plugin.settings.fontFamily,
+      }
     );
 
     this.pages = this.rendered.pages;
-    this.currentPage = 0;
+    // Preserve current page if possible, otherwise reset to 0
+    if (this.currentPage >= this.pages.length) {
+      this.currentPage = 0;
+    }
     this.showPage();
   }
 

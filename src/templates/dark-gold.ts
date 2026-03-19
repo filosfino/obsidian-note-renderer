@@ -10,7 +10,8 @@ export const TEMPLATE_DARK_GOLD = `
   color: #d4d4d4;
   font-family: -apple-system, "PingFang SC", "Noto Sans SC", sans-serif;
   font-size: 32px;
-  line-height: 1.85;
+  line-height: 1.75;
+  letter-spacing: 0.05em;
   border-radius: 16px;
 }
 
@@ -54,6 +55,11 @@ export const TEMPLATE_DARK_GOLD = `
   color: #e8c36a;
 }
 
+.nr-cover-content p {
+  margin: 8px 0;
+  color: #e8c36a;
+}
+
 /* ── Body pages ── */
 
 .nr-page-body {
@@ -62,8 +68,10 @@ export const TEMPLATE_DARK_GOLD = `
 }
 
 .nr-page-content p {
-  margin: 0 0 28px 0;
+  margin: 0 0 1.2em 0;
   text-indent: 2em;
+  text-align: justify;
+  word-break: break-all;
 }
 
 /* First paragraph: no indent */
@@ -107,11 +115,20 @@ export const TEMPLATE_DARK_GOLD = `
   margin: 16px 0;
 }
 
-.nr-page-content img {
-  max-width: 100%;
+.nr-page-content img,
+.nr-page-content .image-embed.image-embed img:not([width]) {
+  max-width: 100% !important;
+  max-height: none !important;
   height: auto;
   display: block;
   margin: 16px auto;
+  border-radius: 8px;
+}
+
+.nr-page-content .image-embed,
+.nr-page-content .internal-embed {
+  display: block;
+  width: 100%;
 }
 
 /* Gold accent for bold text */

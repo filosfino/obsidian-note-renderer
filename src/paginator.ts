@@ -6,6 +6,19 @@ export interface Page {
 }
 
 /**
+ * Get the full outer height of an element including margins.
+ * getBoundingClientRect().height only returns border-box height,
+ * missing margins which are significant for paragraph spacing.
+ */
+function outerHeight(el: HTMLElement): number {
+  const rect = el.getBoundingClientRect();
+  const style = getComputedStyle(el);
+  const marginTop = parseFloat(style.marginTop) || 0;
+  const marginBottom = parseFloat(style.marginBottom) || 0;
+  return rect.height + marginTop + marginBottom;
+}
+
+/**
  * Paginate rendered body HTML into pages.
  *
  * Rules:
@@ -35,7 +48,7 @@ export function paginateBody(container: HTMLElement): Page[] {
       continue;
     }
 
-    const elHeight = el.getBoundingClientRect().height;
+    const elHeight = outerHeight(el);
 
     // Oversized element alone → own page
     if (elHeight > CONTENT_HEIGHT && currentPage.length === 0) {

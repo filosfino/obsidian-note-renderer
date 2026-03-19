@@ -17,28 +17,43 @@ export interface RenderedPages {
  * 3. Render body markdown via Obsidian → measure → paginate
  * 4. Return all page elements
  */
+export interface RenderOptions {
+  fontSize: number;
+  fontFamily: string;
+}
+
 export async function renderNote(
   app: App,
   markdown: string,
   sourcePath: string,
   templateCss: string,
-  parentComponent: Component
+  parentComponent: Component,
+  options: RenderOptions = { fontSize: 42, fontFamily: '"PingFang SC", sans-serif' }
 ): Promise<RenderedPages> {
   const structure = parseNoteStructure(markdown);
   const cleanups: (() => void)[] = [];
+
+  // Build full CSS: template + font overrides
+  const fontOverrideCss = `
+.nr-page {
+  font-size: ${options.fontSize}px;
+  font-family: ${options.fontFamily};
+  line-height: 1.75;
+  letter-spacing: 0.05em;
+}
+`;
+  const fullCss = templateCss + fontOverrideCss;
 
   const pages: HTMLElement[] = [];
 
   // --- Cover page ---
   let coverPage: HTMLElement;
   if (structure.coverMarkdown) {
-    // ## 封面 exists → render its markdown as cover
     coverPage = await buildRichCoverPage(
-      app, structure.coverMarkdown, sourcePath, templateCss, parentComponent, cleanups
+      app, structure.coverMarkdown, sourcePath, fullCss, parentComponent, cleanups
     );
   } else {
-    // Fallback: title-only cover
-    coverPage = buildTitleCoverPage(structure.title, templateCss);
+    coverPage = buildTitleCoverPage(structure.title, fullCss);
   }
   pages.push(coverPage);
 
@@ -48,7 +63,7 @@ export async function renderNote(
       app,
       structure.bodyMarkdown,
       sourcePath,
-      templateCss,
+      fullCss,
       parentComponent,
       cleanups
     );
@@ -90,8 +105,44 @@ async function buildRichCoverPage(
 
   await MarkdownRenderer.render(app, coverMarkdown, content, sourcePath, parentComponent);
 
+  // Auto-size cover text: shorter lines get bigger font
+  autosizeCoverText(content);
+
   pageDiv.appendChild(content);
   return pageDiv;
+}
+
+/**
+ * Auto-size text elements on the cover page.
+ * Shorter text → larger font, longer text → smaller font.
+ * Targets ~960px content width: at 120px a Chinese char is ~120px,
+ * so 8 chars fills one line. Scale down for longer text.
+ */
+function autosizeCoverText(container: HTMLElement): void {
+  const elements = container.querySelectorAll("p, h1, h2, h3, li");
+  for (const el of elements) {
+    const text = (el as HTMLElement).textContent?.trim() ?? "";
+    const len = text.length;
+
+    let fontSize: number;
+    if (len <= 4) {
+      fontSize = 128;
+    } else if (len <= 8) {
+      fontSize = 108;
+    } else if (len <= 12) {
+      fontSize = 88;
+    } else if (len <= 16) {
+      fontSize = 72;
+    } else if (len <= 24) {
+      fontSize = 60;
+    } else {
+      fontSize = 48;
+    }
+
+    (el as HTMLElement).style.fontSize = `${fontSize}px`;
+    (el as HTMLElement).style.fontWeight = "800";
+    (el as HTMLElement).style.lineHeight = "1.3";
+  }
 }
 
 function createPageDiv(extraClass: string, templateCss: string): HTMLElement {

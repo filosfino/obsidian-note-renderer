@@ -6,7 +6,8 @@ export const TEMPLATE_DEFAULT = `
   color: #1a1a1a;
   font-family: -apple-system, "PingFang SC", "Noto Sans SC", sans-serif;
   font-size: 32px;
-  line-height: 1.8;
+  line-height: 1.75;
+  letter-spacing: 0.05em;
 }
 
 /* Cover */
@@ -26,9 +27,16 @@ export const TEMPLATE_DEFAULT = `
   color: #1a1a1a;
 }
 
+.nr-cover-content p {
+  margin: 8px 0;
+  color: #1a1a1a;
+}
+
 /* Body */
 .nr-page-content p {
-  margin: 0 0 24px 0;
+  margin: 0 0 1.2em 0;
+  text-align: justify;
+  word-break: break-all;
 }
 
 .nr-page-content blockquote {
@@ -62,11 +70,20 @@ export const TEMPLATE_DEFAULT = `
   margin: 16px 0;
 }
 
-.nr-page-content img {
-  max-width: 100%;
+.nr-page-content img,
+.nr-page-content .image-embed.image-embed img:not([width]) {
+  max-width: 100% !important;
+  max-height: none !important;
   height: auto;
   display: block;
   margin: 16px auto;
+  border-radius: 8px;
+}
+
+.nr-page-content .image-embed,
+.nr-page-content .internal-embed {
+  display: block;
+  width: 100%;
 }
 
 .nr-page-content strong { font-weight: 700; }

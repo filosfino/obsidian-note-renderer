@@ -5,12 +5,16 @@ import { TEMPLATE_DEFAULT } from "./templates/default";
 import { TEMPLATE_DARK } from "./templates/dark";
 import { TEMPLATE_DARK_GOLD } from "./templates/dark-gold";
 
-interface NoteRendererSettings {
+export interface NoteRendererSettings {
   activeTemplate: string;
+  fontSize: number;
+  fontFamily: string;
 }
 
 const DEFAULT_SETTINGS: NoteRendererSettings = {
   activeTemplate: "dark",
+  fontSize: 42,
+  fontFamily: '"PingFang SC", "Noto Sans SC", sans-serif',
 };
 
 export default class NoteRendererPlugin extends Plugin {
