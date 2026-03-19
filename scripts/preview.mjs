@@ -120,16 +120,19 @@ function renderMd(text) {
   // Same preprocessing as src/md-to-html.ts — must stay in sync
 
   // Obsidian image embeds: ![[file]] → standard markdown image
+  // Ensure images are on their own line for proper pagination
   text = text.replace(/!\[\[([^\]]+)\]\]/g, (_, name) => {
     const vaultRoot = mdPath.includes("/4.projects/")
       ? mdPath.split("/4.projects/")[0]
       : join(import.meta.dirname, "../..");
     const imgPath = join(vaultRoot, "attachments", name);
-    if (existsSync(imgPath)) {
-      return `![${name}](file://${imgPath})`;
-    }
-    return `![${name}](${name})`;
+    const src = existsSync(imgPath) ? `file://${imgPath}` : name;
+    return `\n\n![${name}](${src})\n\n`;
   });
+
+  // Also split standard markdown images that are inline with text
+  text = text.replace(/([^\n])(!\[[^\]]*\]\([^)]+\))/g, "$1\n\n$2");
+  text = text.replace(/(!\[[^\]]*\]\([^)]+\))([^\n])/g, "$1\n\n$2");
 
   // Strip wikilinks to plain text
   text = text.replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, "$2"); // [[target|alias]] → alias
@@ -284,7 +287,17 @@ function paginate() {
   return pages;
 }
 
-// Build page elements
+// Wait for all images to load before paginating
+async function waitForImages() {
+  const imgs = document.querySelectorAll('#body-content img');
+  await Promise.all(Array.from(imgs).map(img =>
+    img.complete ? Promise.resolve() : new Promise(r => { img.onload = r; img.onerror = r; })
+  ));
+}
+
+async function main() {
+await waitForImages();
+
 const coverHtml = \`${coverHtml.replace(/`/g, "\\`").replace(/\$/g, "\\$")}\`;
 const bodyPages = paginate();
 
@@ -310,6 +323,8 @@ document.getElementById('measurer').remove();
 // Signal done
 window.__pagesReady = true;
 window.__pageCount = 1 + bodyPages.length;
+}
+main();
 </script>
 </body></html>`;
 
@@ -318,15 +333,23 @@ mkdirSync(outDir, { recursive: true });
 
 console.log(`Rendering "${note.title}" with template=${templateName}, fontSize=${fontSize}px...`);
 
+// Write HTML to file so Chrome can load file:// images
+const { writeFileSync } = await import("fs");
+const htmlPath = join(outDir, "preview.html");
+writeFileSync(htmlPath, fullHtml);
+
 const browser = await puppeteer.launch({
   executablePath: chromePath,
   headless: "new",
-  args: [`--window-size=${PAGE_WIDTH},${PAGE_HEIGHT}`],
+  args: [
+    `--window-size=${PAGE_WIDTH},${PAGE_HEIGHT}`,
+    "--allow-file-access-from-files",
+  ],
 });
 
 const page = await browser.newPage();
 await page.setViewport({ width: PAGE_WIDTH, height: PAGE_HEIGHT, deviceScaleFactor: 1 });
-await page.setContent(fullHtml, { waitUntil: "networkidle0" });
+await page.goto(`file://${htmlPath}`, { waitUntil: "networkidle0" });
 
 // Wait for pagination JS to complete
 await page.waitForFunction("window.__pagesReady === true", { timeout: 10000 });

@@ -14,10 +14,16 @@ export function renderMarkdownToHtml(
   resolveImage?: (name: string) => string
 ): string {
   // Pre-process: convert Obsidian image embeds to standard markdown
+  // and ensure images are on their own line (so marked renders them
+  // as separate <p> blocks, enabling proper pagination)
   let processed = markdown.replace(/!\[\[([^\]]+)\]\]/g, (_, name) => {
     const src = resolveImage ? resolveImage(name) : name;
-    return `![${name}](${src})`;
+    return `\n\n![${name}](${src})\n\n`;
   });
+
+  // Also split standard markdown images that are inline with text
+  processed = processed.replace(/([^\n])(!\[[^\]]*\]\([^)]+\))/g, "$1\n\n$2");
+  processed = processed.replace(/(!\[[^\]]*\]\([^)]+\))([^\n])/g, "$1\n\n$2");
 
   // Pre-process: strip wikilinks to plain text (we don't need links in rendered images)
   processed = processed.replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, "$2"); // [[target|alias]] → alias
