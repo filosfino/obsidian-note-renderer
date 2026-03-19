@@ -1,0 +1,130 @@
+/* Note Renderer — plugin UI styles */
+
+.nr-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 0;
+}
+
+/* Toolbar */
+.nr-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.nr-template-select {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 13px;
+}
+
+.nr-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.nr-btn:hover {
+  background: var(--background-modifier-hover);
+}
+
+.nr-btn-export {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-color: var(--interactive-accent);
+}
+
+.nr-btn-export:hover {
+  opacity: 0.9;
+}
+
+/* Preview area */
+.nr-preview-area {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 16px 8px;
+  background: var(--background-secondary);
+}
+
+.nr-page-display {
+  display: flex;
+  justify-content: center;
+}
+
+.nr-page-wrapper {
+  overflow: hidden;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.nr-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+/* Navigation */
+.nr-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.nr-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+  cursor: pointer;
+}
+
+.nr-nav-btn:hover {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+.nr-page-indicator {
+  font-size: 13px;
+  color: var(--text-muted);
+  min-width: 48px;
+  text-align: center;
+}
+
+/* Hidden measurer */
+.nr-measurer {
+  visibility: hidden;
+  pointer-events: none;
+}
