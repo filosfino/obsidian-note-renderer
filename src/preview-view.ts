@@ -15,11 +15,16 @@ export class PreviewView extends ItemView {
   private pages: HTMLElement[] = [];
   private currentPage = 0;
   private rendered: RenderedPages | null = null;
+  private resizeObserver: ResizeObserver | null = null;
 
   // DOM refs
   private previewContainer: HTMLElement | null = null;
   private pageDisplay: HTMLElement | null = null;
   private pageIndicator: HTMLElement | null = null;
+
+  // Current displayed clone + wrapper (for rescaling without re-rendering)
+  private currentClone: HTMLElement | null = null;
+  private currentWrapper: HTMLElement | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: NoteRendererPlugin) {
     super(leaf);
@@ -67,7 +72,7 @@ export class PreviewView extends ItemView {
     exportBtn.title = "Export ZIP";
     exportBtn.addEventListener("click", () => this.handleExport());
 
-    // Preview area — scaled to fit sidebar
+    // Preview area
     this.previewContainer = contentEl.createDiv("nr-preview-area");
     this.pageDisplay = this.previewContainer.createDiv("nr-page-display");
 
@@ -83,12 +88,19 @@ export class PreviewView extends ItemView {
     setIcon(nextBtn, "chevron-right");
     nextBtn.addEventListener("click", () => this.goPage(1));
 
+    // ResizeObserver — rescale on sidebar width change
+    this.resizeObserver = new ResizeObserver(() => {
+      this.rescale();
+    });
+    this.resizeObserver.observe(this.previewContainer);
+
     // Initial render
     await this.refresh();
   }
 
   async onClose(): Promise<void> {
     this.rendered?.cleanup();
+    this.resizeObserver?.disconnect();
   }
 
   async refresh(): Promise<void> {
@@ -119,6 +131,8 @@ export class PreviewView extends ItemView {
     if (!this.pageDisplay || !this.pageIndicator) return;
 
     this.pageDisplay.empty();
+    this.currentClone = null;
+    this.currentWrapper = null;
 
     if (this.pages.length === 0) {
       this.showEmpty("No content to render");
@@ -126,28 +140,33 @@ export class PreviewView extends ItemView {
     }
 
     const page = this.pages[this.currentPage];
-    const wrapper = this.pageDisplay.createDiv("nr-page-wrapper");
+    this.currentWrapper = this.pageDisplay.createDiv("nr-page-wrapper");
 
-    // Clone the page for display
-    const clone = page.cloneNode(true) as HTMLElement;
-    clone.style.transformOrigin = "top left";
-    wrapper.appendChild(clone);
+    this.currentClone = page.cloneNode(true) as HTMLElement;
+    this.currentClone.style.transformOrigin = "top left";
+    this.currentWrapper.appendChild(this.currentClone);
 
-    // Scale to fit the sidebar
-    requestAnimationFrame(() => {
-      const availableWidth = this.pageDisplay!.clientWidth - 20;
-      const scale = Math.min(availableWidth / PAGE_WIDTH, 0.4);
-      clone.style.transform = `scale(${scale})`;
-      wrapper.style.width = `${PAGE_WIDTH * scale}px`;
-      wrapper.style.height = `${PAGE_HEIGHT * scale}px`;
-    });
+    this.rescale();
 
     this.pageIndicator.textContent = `${this.currentPage + 1} / ${this.pages.length}`;
+  }
+
+  /** Rescale the current page clone to fit the container width */
+  private rescale(): void {
+    if (!this.currentClone || !this.currentWrapper || !this.previewContainer) return;
+
+    const areaWidth = this.previewContainer.clientWidth;
+    const scale = (areaWidth - 24) / PAGE_WIDTH;
+    this.currentClone.style.transform = `scale(${scale})`;
+    this.currentWrapper.style.width = `${PAGE_WIDTH * scale}px`;
+    this.currentWrapper.style.height = `${PAGE_HEIGHT * scale}px`;
   }
 
   private showEmpty(msg: string): void {
     if (!this.pageDisplay) return;
     this.pageDisplay.empty();
+    this.currentClone = null;
+    this.currentWrapper = null;
     this.pageDisplay.createDiv({ cls: "nr-empty", text: msg });
     if (this.pageIndicator) this.pageIndicator.textContent = "";
   }

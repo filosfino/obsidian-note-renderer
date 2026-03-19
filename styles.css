@@ -61,16 +61,20 @@
 .nr-preview-area {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   justify-content: center;
-  align-items: flex-start;
-  padding: 16px 8px;
+  align-items: center;
+  padding: 12px;
   background: var(--background-secondary);
+  min-height: 0;
 }
 
 .nr-page-display {
   display: flex;
   justify-content: center;
+  align-items: center;
+  width: 100%;
 }
 
 .nr-page-wrapper {
