@@ -117,18 +117,24 @@ const fontOverride = `
 }`;
 
 function renderMd(text) {
-  // Handle Obsidian image embeds: ![[file]] → <img>
+  // Same preprocessing as src/md-to-html.ts — must stay in sync
+
+  // Obsidian image embeds: ![[file]] → standard markdown image
   text = text.replace(/!\[\[([^\]]+)\]\]/g, (_, name) => {
-    // Try to resolve from vault attachments
     const vaultRoot = mdPath.includes("/4.projects/")
       ? mdPath.split("/4.projects/")[0]
       : join(import.meta.dirname, "../..");
     const imgPath = join(vaultRoot, "attachments", name);
     if (existsSync(imgPath)) {
-      return `<img src="file://${imgPath}" alt="${name}">`;
+      return `![${name}](file://${imgPath})`;
     }
-    return `<img src="${name}" alt="${name}">`;
+    return `![${name}](${name})`;
   });
+
+  // Strip wikilinks to plain text
+  text = text.replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, "$2"); // [[target|alias]] → alias
+  text = text.replace(/\[\[([^\]]+)\]\]/g, "$1"); // [[target]] → target
+
   return marked.parse(text, { breaks: false, gfm: true });
 }
 

@@ -1,22 +1,14 @@
-import { App, MarkdownRenderer, Component } from "obsidian";
+import { App, Component } from "obsidian";
 import { PAGE_WIDTH, PAGE_HEIGHT, PAGE_PADDING } from "./constants";
 import { paginateBody, Page } from "./paginator";
 import { parseNoteStructure } from "./parser";
+import { renderMarkdownToHtml, createVaultImageResolver } from "./md-to-html";
 
 export interface RenderedPages {
   pages: HTMLElement[];
   cleanup: () => void;
 }
 
-/**
- * Render a markdown note into paginated page elements.
- *
- * Flow:
- * 1. Parse markdown → title + body sections
- * 2. Build cover page from title text
- * 3. Render body markdown via Obsidian → measure → paginate
- * 4. Return all page elements
- */
 export interface RenderOptions {
   fontSize: number;
   fontFamily: string;
@@ -32,6 +24,7 @@ export async function renderNote(
 ): Promise<RenderedPages> {
   const structure = parseNoteStructure(markdown);
   const cleanups: (() => void)[] = [];
+  const resolveImage = createVaultImageResolver(app);
 
   // Build full CSS: template + font overrides
   const fontOverrideCss = `
@@ -49,9 +42,7 @@ export async function renderNote(
   // --- Cover page ---
   let coverPage: HTMLElement;
   if (structure.coverMarkdown) {
-    coverPage = await buildRichCoverPage(
-      app, structure.coverMarkdown, sourcePath, fullCss, parentComponent, cleanups
-    );
+    coverPage = buildRichCoverPage(structure.coverMarkdown, fullCss, resolveImage);
   } else {
     coverPage = buildTitleCoverPage(structure.title, fullCss);
   }
@@ -60,11 +51,9 @@ export async function renderNote(
   // --- Body pages ---
   if (structure.bodyMarkdown) {
     const bodyPages = await renderBodyPages(
-      app,
       structure.bodyMarkdown,
-      sourcePath,
       fullCss,
-      parentComponent,
+      resolveImage,
       cleanups
     );
     pages.push(...bodyPages);
@@ -76,8 +65,8 @@ export async function renderNote(
   };
 }
 
-function buildTitleCoverPage(title: string, templateCss: string): HTMLElement {
-  const pageDiv = createPageDiv("nr-page-cover", templateCss);
+function buildTitleCoverPage(title: string, css: string): HTMLElement {
+  const pageDiv = createPageDiv("nr-page-cover", css);
 
   const content = document.createElement("div");
   content.classList.add("nr-cover-content");
@@ -86,37 +75,29 @@ function buildTitleCoverPage(title: string, templateCss: string): HTMLElement {
   h1.textContent = title;
   content.appendChild(h1);
 
+  autosizeCoverText(content);
   pageDiv.appendChild(content);
   return pageDiv;
 }
 
-async function buildRichCoverPage(
-  app: App,
+function buildRichCoverPage(
   coverMarkdown: string,
-  sourcePath: string,
-  templateCss: string,
-  parentComponent: Component,
-  cleanups: (() => void)[]
-): Promise<HTMLElement> {
-  const pageDiv = createPageDiv("nr-page-cover", templateCss);
+  css: string,
+  resolveImage: (name: string) => string
+): HTMLElement {
+  const pageDiv = createPageDiv("nr-page-cover", css);
 
   const content = document.createElement("div");
   content.classList.add("nr-cover-content");
+  content.innerHTML = renderMarkdownToHtml(coverMarkdown, resolveImage);
 
-  await MarkdownRenderer.render(app, coverMarkdown, content, sourcePath, parentComponent);
-
-  // Auto-size cover text: shorter lines get bigger font
   autosizeCoverText(content);
-
   pageDiv.appendChild(content);
   return pageDiv;
 }
 
 /**
  * Auto-size text elements on the cover page.
- * Shorter text → larger font, longer text → smaller font.
- * Targets ~960px content width: at 120px a Chinese char is ~120px,
- * so 8 chars fills one line. Scale down for longer text.
  */
 function autosizeCoverText(container: HTMLElement): void {
   const elements = container.querySelectorAll("p, h1, h2, h3, li");
@@ -145,7 +126,7 @@ function autosizeCoverText(container: HTMLElement): void {
   }
 }
 
-function createPageDiv(extraClass: string, templateCss: string): HTMLElement {
+function createPageDiv(extraClass: string, css: string): HTMLElement {
   const pageDiv = document.createElement("div");
   pageDiv.classList.add("nr-page", extraClass);
   pageDiv.style.cssText = `
@@ -158,20 +139,21 @@ function createPageDiv(extraClass: string, templateCss: string): HTMLElement {
   `;
 
   const styleEl = document.createElement("style");
-  styleEl.textContent = templateCss;
+  styleEl.textContent = css;
   pageDiv.appendChild(styleEl);
 
   return pageDiv;
 }
 
 async function renderBodyPages(
-  app: App,
   bodyMarkdown: string,
-  sourcePath: string,
-  templateCss: string,
-  parentComponent: Component,
+  css: string,
+  resolveImage: (name: string) => string,
   cleanups: (() => void)[]
 ): Promise<HTMLElement[]> {
+  // Render markdown to HTML using shared engine
+  const bodyHtml = renderMarkdownToHtml(bodyMarkdown, resolveImage);
+
   // Create hidden measurer at full resolution
   const measurer = document.createElement("div");
   measurer.classList.add("nr-measurer");
@@ -185,23 +167,22 @@ async function renderBodyPages(
   `;
   document.body.appendChild(measurer);
 
-  // Apply template CSS for accurate measurement
   const measureStyle = document.createElement("style");
-  measureStyle.textContent = templateCss;
+  measureStyle.textContent = css;
   measurer.appendChild(measureStyle);
 
-  // Wrap in .nr-page .nr-page-content for CSS to match
+  // Wrap in .nr-page .nr-page-content for CSS selectors to match
   const pageShell = document.createElement("div");
   pageShell.classList.add("nr-page");
   measurer.appendChild(pageShell);
 
   const contentDiv = document.createElement("div");
   contentDiv.classList.add("nr-page-content");
+  contentDiv.innerHTML = bodyHtml;
   pageShell.appendChild(contentDiv);
 
-  await MarkdownRenderer.render(app, bodyMarkdown, contentDiv, sourcePath, parentComponent);
-
-  // Wait for layout
+  // Wait for layout + images to load
+  await waitForImages(contentDiv);
   await new Promise((r) => requestAnimationFrame(r));
   await new Promise((r) => requestAnimationFrame(r));
 
@@ -212,7 +193,7 @@ async function renderBodyPages(
   const pageElements = pageData.map((page, idx) => {
     const pageDiv = document.createElement("div");
     pageDiv.classList.add("nr-page", "nr-page-body");
-    pageDiv.dataset.pageIndex = String(idx + 1); // +1 because cover is 0
+    pageDiv.dataset.pageIndex = String(idx + 1);
 
     pageDiv.style.cssText = `
       width: ${PAGE_WIDTH}px;
@@ -224,7 +205,7 @@ async function renderBodyPages(
     `;
 
     const pageStyle = document.createElement("style");
-    pageStyle.textContent = templateCss;
+    pageStyle.textContent = css;
     pageDiv.appendChild(pageStyle);
 
     const pageContent = document.createElement("div");
@@ -241,4 +222,24 @@ async function renderBodyPages(
   cleanups.push(() => measurer.remove());
 
   return pageElements;
+}
+
+/** Wait for all images in a container to finish loading */
+function waitForImages(container: HTMLElement): Promise<void> {
+  const images = Array.from(container.querySelectorAll("img"));
+  if (images.length === 0) return Promise.resolve();
+
+  return Promise.all(
+    images.map(
+      (img) =>
+        new Promise<void>((resolve) => {
+          if (img.complete) {
+            resolve();
+          } else {
+            img.onload = () => resolve();
+            img.onerror = () => resolve();
+          }
+        })
+    )
+  ).then(() => {});
 }
