@@ -36,7 +36,7 @@ const chromePath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome
 
 // ── Constants ──
 const PAGE_WIDTH = 1080;
-const PAGE_HEIGHT = 1440;
+const PAGE_HEIGHT = 1800;
 const PAGE_PADDING = 60;
 const CONTENT_HEIGHT = PAGE_HEIGHT - PAGE_PADDING * 2;
 
