@@ -9,7 +9,7 @@
  *   - Screenshot each page
  *
  * Usage:
- *   node scripts/preview.mjs <note.md> [--template dark-gold] [--font-size 42] [--out /tmp/nr-preview]
+ *   node scripts/preview.mjs <note.md> [--template cream] [--font-size 42] [--mode long|card] [--out /tmp/nr-preview]
  */
 
 import { readFileSync, mkdirSync, existsSync } from "fs";
@@ -21,24 +21,52 @@ import { marked } from "marked";
 const args = process.argv.slice(2);
 const mdPath = args.find((a) => !a.startsWith("--"));
 if (!mdPath) {
-  console.error("Usage: node scripts/preview.mjs <note.md> [--template dark-gold] [--font-size 42]");
+  console.error("Usage: node scripts/preview.mjs <note.md> [--template ink-gold] [--font-size 42]");
   process.exit(1);
 }
 function getArg(name, fallback) {
   const idx = args.indexOf(`--${name}`);
   return idx >= 0 && args[idx + 1] ? args[idx + 1] : fallback;
 }
-const templateName = getArg("template", "dark-gold");
-const fontSize = parseInt(getArg("font-size", "42"));
-const fontFamily = getArg("font-family", '"PingFang SC", "Noto Sans SC", sans-serif');
+
+// ── Load Obsidian plugin settings as defaults ──
+function loadPluginSettings() {
+  // Walk up from note path to find .obsidian/plugins/note-renderer/data.json
+  const candidates = [
+    mdPath.includes("/4.projects/")
+      ? join(mdPath.split("/4.projects/")[0], ".obsidian/plugins/note-renderer/data.json")
+      : null,
+    join(import.meta.dirname, "../../.obsidian/plugins/note-renderer/data.json"),
+  ].filter(Boolean);
+  for (const p of candidates) {
+    if (existsSync(p)) {
+      try {
+        return JSON.parse(readFileSync(p, "utf-8"));
+      } catch { /* ignore parse errors */ }
+    }
+  }
+  return {};
+}
+const pluginSettings = loadPluginSettings();
+
+// CLI args override plugin settings, plugin settings override hardcoded defaults
+const templateName = getArg("template", pluginSettings.activeTemplate || "cream");
+const fontSize = parseInt(getArg("font-size", String(pluginSettings.fontSize || 42)));
+const fontFamily = getArg("font-family", pluginSettings.fontFamily || '"PingFang SC", "Noto Sans SC", sans-serif');
+const coverFontFamily = getArg("cover-font", pluginSettings.coverFontFamily || '"Yuanti SC", "PingFang SC", sans-serif');
+const pluginPageMode = pluginSettings.pageMode === "card" ? "card" : "long";
+const pageMode = getArg("mode", pluginPageMode);
 const outDir = getArg("out", "/tmp/nr-preview");
 const chromePath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 
 // ── Constants ──
 const PAGE_WIDTH = 1080;
-const PAGE_HEIGHT = 1800;
-const PAGE_PADDING = 90;
-const CONTENT_HEIGHT = PAGE_HEIGHT - PAGE_PADDING * 2;
+const PAGE_HEIGHTS = { long: 1800, card: 1440 };
+const PAGE_HEIGHT = PAGE_HEIGHTS[pageMode] || 1800;
+const PAGE_PADDING_H = 90;
+const PAGE_PADDING_TOP = 120;
+const PAGE_PADDING_BOTTOM = 90;
+const CONTENT_HEIGHT = PAGE_HEIGHT - PAGE_PADDING_TOP - PAGE_PADDING_BOTTOM;
 
 // ── Load template CSS from TS source ──
 function loadTemplateCss(name) {
@@ -76,7 +104,8 @@ function parseNote(md) {
   }
 
   const titleSec = sections.find((s) => s.heading === "标题");
-  const coverSec = sections.find((s) => s.heading === "封面");
+  const coverSec = sections.find((s) => s.heading === "封面文字") || sections.find((s) => s.heading === "封面");
+  const coverImageSec = sections.find((s) => s.heading === "封面图");
   const bodySec = sections.find((s) => s.heading === "正文");
 
   const title = titleSec
@@ -86,6 +115,7 @@ function parseNote(md) {
   return {
     title,
     coverMarkdown: coverSec ? coverSec.content.trim() : null,
+    coverImageMarkdown: coverImageSec ? coverImageSec.content.trim() : null,
     bodyMarkdown: bodySec ? bodySec.content.trim() : "",
   };
 }
@@ -114,6 +144,9 @@ const fontOverride = `
   font-family: ${fontFamily};
   line-height: 1.75;
   letter-spacing: 0.05em;
+}
+.nr-page-cover .nr-cover-content {
+  font-family: ${coverFontFamily};
 }`;
 
 function renderMd(text) {
@@ -141,11 +174,27 @@ function renderMd(text) {
   return marked.parse(text, { breaks: false, gfm: true });
 }
 
+// Resolve cover image to file:// URL
+function resolveCoverImage() {
+  if (!note.coverImageMarkdown) return null;
+  const imgMatch = note.coverImageMarkdown.match(/!\[\[([^\]]+)\]\]/);
+  if (!imgMatch) return null;
+  const name = imgMatch[1];
+  const vaultRoot = mdPath.includes("/4.projects/")
+    ? mdPath.split("/4.projects/")[0]
+    : join(import.meta.dirname, "../..");
+  const imgPath = join(vaultRoot, "attachments", name);
+  return existsSync(imgPath) ? `file://${imgPath}` : null;
+}
+
 // Cover HTML
 function buildCoverHtml() {
+  const coverImageUrl = resolveCoverImage();
+  let textHtml;
+
   if (note.coverMarkdown) {
-    let html = renderMd(note.coverMarkdown);
-    html = html.replace(/<p>([\s\S]*?)<\/p>/g, (_, content) => {
+    textHtml = renderMd(note.coverMarkdown);
+    textHtml = textHtml.replace(/<p>([\s\S]*?)<\/p>/g, (_, content) => {
       // Skip autosize if content already has inline styles (user-controlled)
       if (content.includes('style=')) {
         return `<p style="font-weight:800; line-height:1.3;">${content}</p>`;
@@ -153,10 +202,16 @@ function buildCoverHtml() {
       const text = content.replace(/<[^>]+>/g, "").trim();
       return `<p style="${autosizeStyle(text)}">${content}</p>`;
     });
-    return html;
+  } else {
+    const style = autosizeStyle(note.title);
+    textHtml = `<h1 style="${style}">${note.title}</h1>`;
   }
-  const style = autosizeStyle(note.title);
-  return `<h1 style="${style}">${note.title}</h1>`;
+
+  if (!coverImageUrl) return textHtml;
+
+  // Cover image as background, text overlaid on top
+  return `<img src="${coverImageUrl}" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;border-radius:16px;z-index:0;">
+<div style="position:relative;z-index:1;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;padding:${PAGE_PADDING_TOP}px ${PAGE_PADDING_H}px ${PAGE_PADDING_BOTTOM}px;">${textHtml}</div>`;
 }
 
 // Build the full HTML document
@@ -175,7 +230,7 @@ ${fontOverride}
 .nr-page {
   width: ${PAGE_WIDTH}px;
   height: ${PAGE_HEIGHT}px;
-  padding: ${PAGE_PADDING}px;
+  padding: ${PAGE_PADDING_TOP}px ${PAGE_PADDING_H}px ${PAGE_PADDING_BOTTOM}px;
   overflow: hidden;
   position: relative;
 }
@@ -195,7 +250,7 @@ ${fontOverride}
   left: -9999px;
   top: 0;
   width: ${PAGE_WIDTH}px;
-  padding: ${PAGE_PADDING}px;
+  padding: ${PAGE_PADDING_TOP}px ${PAGE_PADDING_H}px ${PAGE_PADDING_BOTTOM}px;
 }
 #measurer .nr-page-content {
   /* inherits font from .nr-page via template CSS won't apply here,
@@ -208,7 +263,8 @@ ${fontOverride}
 
 .nr-page-content p {
   text-align: justify;
-  word-break: break-all;
+  word-break: normal;
+  overflow-wrap: break-word;
 }
 
 .nr-page-content img {
@@ -247,8 +303,9 @@ body { margin: 0; padding: 0; background: #000; }
 
 <script>
 const PAGE_HEIGHT = ${PAGE_HEIGHT};
-const PAGE_PADDING = ${PAGE_PADDING};
-const CONTENT_HEIGHT = PAGE_HEIGHT - PAGE_PADDING * 2;
+const PAGE_PADDING_TOP = ${PAGE_PADDING_TOP};
+const PAGE_PADDING_BOTTOM = ${PAGE_PADDING_BOTTOM};
+const CONTENT_HEIGHT = PAGE_HEIGHT - PAGE_PADDING_TOP - PAGE_PADDING_BOTTOM;
 
 function outerHeight(el) {
   const rect = el.getBoundingClientRect();
@@ -310,7 +367,14 @@ const pagesContainer = document.getElementById('pages');
 // Cover page
 const coverDiv = document.createElement('div');
 coverDiv.className = 'nr-page nr-page-cover';
-coverDiv.innerHTML = '<div class="nr-cover-content">' + coverHtml + '</div>';
+const hasCoverImage = coverHtml.includes('nr-cover-bg-image') || coverHtml.includes('object-fit:cover');
+if (hasCoverImage) {
+  // Cover image mode: HTML already has absolute image + overlay div with padding
+  coverDiv.style.padding = '0';
+  coverDiv.innerHTML = coverHtml;
+} else {
+  coverDiv.innerHTML = '<div class="nr-cover-content">' + coverHtml + '</div>';
+}
 pagesContainer.appendChild(coverDiv);
 
 // Body pages
