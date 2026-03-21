@@ -1,7 +1,7 @@
-export const TEMPLATE_DARK_WARM = `
-/* ── Dark Warm (暖色深底) ──────────────────────────────
- *  取色自「我以为在看别人的故事」实际小红书页面。
- *  暖灰底色 + 米白文字 + 暖金高亮，适合情感/故事向文章。
+export const TEMPLATE_AMBER = `
+/* ── Amber (琥珀) ─────────────────────────────────────
+ *  温暖故事。暖灰底 + 米白文字 + 暖金高亮 + 噪点纹理。
+ *  适合情感/故事向文章。
  */
 
 .nr-page {
@@ -17,7 +17,7 @@ export const TEMPLATE_DARK_WARM = `
 /* ── Cover page ── */
 
 .nr-page-cover {
-  background: #3c3a38;
+  background: #2d2b29;
   border: 1px solid #504a42;
   /* Noise texture overlay for depth */
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E");
@@ -29,33 +29,19 @@ export const TEMPLATE_DARK_WARM = `
   justify-content: center;
   align-items: flex-start;
   height: 100%;
-  padding-top: 20%;
   position: relative;
 }
 
-/* Large quotation mark — visual anchor for upper space */
+/* Decorative accent bar */
 .nr-cover-content::before {
-  content: "\\201C";
-  position: absolute;
-  top: 4%;
-  left: 0;
-  font-size: 240px;
-  font-weight: 700;
-  color: rgba(240, 212, 114, 0.12);
-  line-height: 1;
-  font-family: Georgia, "Times New Roman", serif;
-}
-
-/* Subtle golden glow behind text area */
-.nr-cover-content::after {
   content: "";
   position: absolute;
-  left: -40px;
-  bottom: 25%;
-  width: 400px;
-  height: 300px;
-  background: radial-gradient(ellipse, rgba(240, 212, 114, 0.06) 0%, transparent 70%);
-  pointer-events: none;
+  left: 0;
+  top: 15%;
+  width: 6px;
+  height: 80px;
+  background: #f0d472;
+  border-radius: 3px;
 }
 
 .nr-cover-content h1 {
@@ -71,6 +57,44 @@ export const TEMPLATE_DARK_WARM = `
   color: #f0d472;
 }
 
+/* Cover emphasis: marker highlight — bottom-half stripe */
+.nr-cover-content mark {
+  background: linear-gradient(to top, rgba(240,212,114,0.25) 35%, transparent 35%);
+  padding: 0 4px;
+  color: inherit;
+}
+
+/* Cover emphasis: hand-drawn underline */
+.nr-cover-content u {
+  text-decoration: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 12'%3E%3Cpath d='M2 8 Q30 2 50 7 T100 6 T150 8 T198 5' fill='none' stroke='%23f0d472' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: repeat-x;
+  background-position: bottom;
+  background-size: 200px 12px;
+  padding-bottom: 8px;
+  color: inherit;
+}
+
+/* Cover image overlay: text on image */
+.nr-cover-has-image .nr-cover-content {
+  background: linear-gradient(to top, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.25) 50%, transparent 100%);
+  justify-content: flex-end;
+  border-radius: 16px;
+}
+.nr-cover-has-image .nr-cover-content h1,
+.nr-cover-has-image .nr-cover-content p {
+  color: #fff;
+  -webkit-text-stroke: var(--nr-stroke-width, 6px) rgba(0,0,0,0.8);
+  paint-order: stroke fill;
+  text-shadow: 0 4px 16px rgba(0,0,0,0.6);
+}
+.nr-cover-has-image .nr-cover-content::before {
+  background: #fff;
+}
+.nr-cover-has-image .nr-cover-content mark {
+  background: linear-gradient(to top, rgba(255,255,255,0.3) 35%, transparent 35%);
+}
+
 /* ── Body pages ── */
 
 .nr-page-body {
@@ -84,9 +108,9 @@ export const TEMPLATE_DARK_WARM = `
 
 .nr-page-content p {
   margin: 0 0 1.2em 0;
-  text-indent: 2em;
   text-align: justify;
-  word-break: break-all;
+  word-break: normal;
+  overflow-wrap: break-word;
 }
 
 .nr-page-content blockquote {
@@ -95,7 +119,6 @@ export const TEMPLATE_DARK_WARM = `
   margin: 20px 0;
   color: #c0b8a8;
   font-style: italic;
-  text-indent: 0;
 }
 
 .nr-page-content ul,
@@ -106,15 +129,15 @@ export const TEMPLATE_DARK_WARM = `
 
 .nr-page-content li {
   margin-bottom: 8px;
-  text-indent: 0;
 }
 
 .nr-page-content code {
+  font-family: "SF Mono", "Menlo", monospace;
   background: #3a3630;
   padding: 2px 8px;
   border-radius: 4px;
-  font-size: 0.9em;
-  color: #e8dcc0;
+  font-size: 0.85em;
+  color: #d4956a;
 }
 
 .nr-page-content pre {

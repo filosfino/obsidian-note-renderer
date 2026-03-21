@@ -57,6 +57,12 @@
   background: var(--background-modifier-hover);
 }
 
+.nr-btn-active {
+  background: var(--interactive-accent) !important;
+  color: var(--text-on-accent) !important;
+  border-radius: 4px;
+}
+
 .nr-font-size-label {
   font-size: 12px;
   color: var(--text-muted);

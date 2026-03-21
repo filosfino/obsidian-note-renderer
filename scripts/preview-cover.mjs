@@ -12,7 +12,7 @@ const args = process.argv.slice(2);
 const mdPath = args.find(a => !a.startsWith("--"));
 function getArg(name, fb) { const i = args.indexOf(`--${name}`); return i >= 0 && args[i+1] ? args[i+1] : fb; }
 
-const templateName = getArg("template", "dark-gold");
+const templateName = getArg("template", "cream");
 const titleFont = getArg("font", '"PingFang SC", "Noto Sans SC", sans-serif');
 const outDir = "/tmp/nr-preview";
 
@@ -51,7 +51,7 @@ const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
 * { margin: 0; padding: 0; box-sizing: border-box; }
 ${css}
 .nr-page {
-  width: 1080px; height: 1800px; padding: 60px;
+  width: 1080px; height: 1800px; padding: 120px 90px 90px;
   overflow: hidden; position: relative;
   font-family: ${titleFont};
 }

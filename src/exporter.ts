@@ -5,7 +5,8 @@ import JSZip from "jszip";
  * Export page elements as PNG images packed into a zip file.
  *
  * Each page element must be attached to the DOM (can be offscreen)
- * at its full 1080×1440 resolution for accurate capture.
+ * at its full resolution for accurate capture. The height is read
+ * from each page's inline style to support both 3:5 and 3:4 modes.
  */
 export async function exportPages(
   pages: HTMLElement[],
@@ -22,9 +23,13 @@ export async function exportPages(
     const page = pages[i].cloneNode(true) as HTMLElement;
     offscreen.appendChild(page);
 
+    // Read actual dimensions from the page's inline style
+    const pageWidth = parseInt(page.style.width) || 1080;
+    const pageHeight = parseInt(page.style.height) || 1800;
+
     const blob = await toBlob(page, {
-      width: 1080,
-      height: 1440,
+      width: pageWidth,
+      height: pageHeight,
       pixelRatio: 1,
       cacheBust: true,
     });

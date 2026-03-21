@@ -1,12 +1,10 @@
-export const TEMPLATE_DARK_GOLD = `
-/* ── Dark Gold (引言风格) ──────────────────────────────
- *  Cover: textured dark bg, large quotation mark, gold title
- *  Body:  dark bg with subtle border, gold highlights
- *  Based on XHS 暗金引言 theme screenshots.
+export const TEMPLATE_INK_GOLD = `
+/* ── Ink Gold (暗金) ──────────────────────────────────
+ *  仪式感。深底 + 金色引号装饰 + 金色强调，适合观点/引言类文章。
  */
 
 .nr-page {
-  background: #3d3d3d;
+  background: #333;
   color: #d4d4d4;
   font-family: -apple-system, "PingFang SC", "Noto Sans SC", sans-serif;
   font-size: 32px;
@@ -21,7 +19,7 @@ export const TEMPLATE_DARK_GOLD = `
   background:
     radial-gradient(circle at 20% 80%, rgba(255,255,255,0.02) 0%, transparent 50%),
     radial-gradient(circle at 80% 20%, rgba(255,255,255,0.02) 0%, transparent 50%),
-    #3d3d3d;
+    #333;
   border: 1px solid #555;
 }
 
@@ -34,17 +32,16 @@ export const TEMPLATE_DARK_GOLD = `
   position: relative;
 }
 
-/* Large quotation mark decoration */
+/* Decorative accent bar */
 .nr-cover-content::before {
-  content: "\\201C\\201C";
+  content: "";
   position: absolute;
-  top: 0;
   left: 0;
-  font-size: 120px;
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.15);
-  line-height: 1;
-  font-family: Georgia, "Times New Roman", serif;
+  top: 15%;
+  width: 6px;
+  height: 80px;
+  background: #e8c36a;
+  border-radius: 3px;
 }
 
 .nr-cover-content h1 {
@@ -60,6 +57,44 @@ export const TEMPLATE_DARK_GOLD = `
   color: #e8c36a;
 }
 
+/* Cover emphasis: marker highlight — bottom-half stripe */
+.nr-cover-content mark {
+  background: linear-gradient(to top, rgba(232,195,106,0.25) 35%, transparent 35%);
+  padding: 0 4px;
+  color: inherit;
+}
+
+/* Cover emphasis: hand-drawn underline */
+.nr-cover-content u {
+  text-decoration: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 12'%3E%3Cpath d='M2 8 Q30 2 50 7 T100 6 T150 8 T198 5' fill='none' stroke='%23e8c36a' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: repeat-x;
+  background-position: bottom;
+  background-size: 200px 12px;
+  padding-bottom: 8px;
+  color: inherit;
+}
+
+/* Cover image overlay: text on image */
+.nr-cover-has-image .nr-cover-content {
+  background: linear-gradient(to top, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.25) 50%, transparent 100%);
+  justify-content: flex-end;
+  border-radius: 16px;
+}
+.nr-cover-has-image .nr-cover-content h1,
+.nr-cover-has-image .nr-cover-content p {
+  color: #fff;
+  -webkit-text-stroke: var(--nr-stroke-width, 6px) rgba(0,0,0,0.8);
+  paint-order: stroke fill;
+  text-shadow: 0 4px 16px rgba(0,0,0,0.6);
+}
+.nr-cover-has-image .nr-cover-content::before {
+  background: #fff;
+}
+.nr-cover-has-image .nr-cover-content mark {
+  background: linear-gradient(to top, rgba(255,255,255,0.3) 35%, transparent 35%);
+}
+
 /* ── Body pages ── */
 
 .nr-page-body {
@@ -69,14 +104,9 @@ export const TEMPLATE_DARK_GOLD = `
 
 .nr-page-content p {
   margin: 0 0 1.2em 0;
-  text-indent: 2em;
   text-align: justify;
-  word-break: break-all;
-}
-
-/* First paragraph: no indent */
-.nr-page-content p:first-child {
-  text-indent: 2em;
+  word-break: normal;
+  overflow-wrap: break-word;
 }
 
 .nr-page-content blockquote {
@@ -85,7 +115,6 @@ export const TEMPLATE_DARK_GOLD = `
   margin: 20px 0;
   color: #bbb;
   font-style: italic;
-  text-indent: 0;
 }
 
 .nr-page-content ul,
@@ -96,15 +125,15 @@ export const TEMPLATE_DARK_GOLD = `
 
 .nr-page-content li {
   margin-bottom: 8px;
-  text-indent: 0;
 }
 
 .nr-page-content code {
+  font-family: "SF Mono", "Menlo", monospace;
   background: #2a2a2a;
   padding: 2px 8px;
   border-radius: 4px;
-  font-size: 0.9em;
-  color: #e0d4b8;
+  font-size: 0.85em;
+  color: #d4956a;
 }
 
 .nr-page-content pre {

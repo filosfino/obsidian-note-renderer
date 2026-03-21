@@ -1,4 +1,4 @@
-import { CONTENT_HEIGHT } from "./constants";
+import { CONTENT_HEIGHT as DEFAULT_CONTENT_HEIGHT } from "./constants";
 
 export interface Page {
   elements: HTMLElement[];
@@ -27,7 +27,8 @@ function outerHeight(el: HTMLElement): number {
  *   split at the previous element boundary
  * - Oversized single elements get their own page with CSS scaling
  */
-export function paginateBody(container: HTMLElement): Page[] {
+export function paginateBody(container: HTMLElement, contentHeight: number = DEFAULT_CONTENT_HEIGHT): Page[] {
+  const CONTENT_HEIGHT = contentHeight;
   const pages: Page[] = [];
   const children = Array.from(container.children) as HTMLElement[];
 

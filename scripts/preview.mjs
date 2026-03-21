@@ -49,12 +49,52 @@ function loadPluginSettings() {
 }
 const pluginSettings = loadPluginSettings();
 
+// ── Parse ## renderer_config from note (same logic as src/parser.ts) ──
+function parseNoteRendererConfig(mdContent) {
+  // Strip frontmatter
+  const fm = mdContent.match(/^---\n[\s\S]*?\n---\n?/);
+  const stripped = fm ? mdContent.slice(fm[0].length) : mdContent;
+
+  // Find ## renderer_config section
+  const h2Regex = /^## (.+)$/gm;
+  const matches = [];
+  let m;
+  while ((m = h2Regex.exec(stripped)) !== null) {
+    matches.push({ heading: m[1].trim(), index: m.index, full: m[0] });
+  }
+  for (let i = 0; i < matches.length; i++) {
+    if (matches[i].heading !== "renderer_config") continue;
+    const start = matches[i].index + matches[i].full.length;
+    const end = i + 1 < matches.length ? matches[i + 1].index : stripped.length;
+    const sectionContent = stripped.slice(start, end);
+    const jsonMatch = sectionContent.match(/```(?:json)?\s*\n([\s\S]*?)\n```/);
+    if (!jsonMatch) return null;
+    try {
+      const parsed = JSON.parse(jsonMatch[1]);
+      if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+        return parsed;
+      }
+    } catch { /* invalid JSON */ }
+    return null;
+  }
+  return null;
+}
+
+// Load note content early so we can read renderer_config
+const mdRaw = readFileSync(mdPath, "utf-8");
+const noteRendererConfig = parseNoteRendererConfig(mdRaw);
+
+// Merge: noteRendererConfig > pluginSettings > hardcoded defaults
+// CLI args still take highest precedence (override everything)
+const effectiveSettings = Object.assign({}, pluginSettings, noteRendererConfig || {});
+
 // CLI args override plugin settings, plugin settings override hardcoded defaults
-const templateName = getArg("template", pluginSettings.activeTemplate || "cream");
-const fontSize = parseInt(getArg("font-size", String(pluginSettings.fontSize || 42)));
-const fontFamily = getArg("font-family", pluginSettings.fontFamily || '"PingFang SC", "Noto Sans SC", sans-serif');
-const coverFontFamily = getArg("cover-font", pluginSettings.coverFontFamily || '"Yuanti SC", "PingFang SC", sans-serif');
-const pluginPageMode = pluginSettings.pageMode === "card" ? "card" : "long";
+// Priority: CLI args > noteRendererConfig > pluginSettings > defaults
+const templateName = getArg("template", effectiveSettings.activeTemplate || "cream");
+const fontSize = parseInt(getArg("font-size", String(effectiveSettings.fontSize || 42)));
+const fontFamily = getArg("font-family", effectiveSettings.fontFamily || '"PingFang SC", "Noto Sans SC", sans-serif');
+const coverFontFamily = getArg("cover-font", effectiveSettings.coverFontFamily || '"Yuanti SC", "PingFang SC", sans-serif');
+const pluginPageMode = effectiveSettings.pageMode === "card" ? "card" : "long";
 const pageMode = getArg("mode", pluginPageMode);
 const outDir = getArg("out", "/tmp/nr-preview");
 const chromePath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
@@ -134,7 +174,7 @@ function autosizeStyle(text) {
 }
 
 // ── Build HTML ──
-const md = readFileSync(mdPath, "utf-8");
+const md = mdRaw;
 const note = parseNote(md);
 const templateCss = loadTemplateCss(templateName);
 
@@ -152,14 +192,32 @@ const fontOverride = `
 function renderMd(text) {
   // Same preprocessing as src/md-to-html.ts — must stay in sync
 
-  // Obsidian image embeds: ![[file]] → standard markdown image
+  // Obsidian image embeds: ![[file]] or ![[file|width]] or ![[file|widthxheight]]
   // Ensure images are on their own line for proper pagination
-  text = text.replace(/!\[\[([^\]]+)\]\]/g, (_, name) => {
+  text = text.replace(/!\[\[([^\]]+)\]\]/g, (_, raw) => {
     const vaultRoot = mdPath.includes("/4.projects/")
       ? mdPath.split("/4.projects/")[0]
       : join(import.meta.dirname, "../..");
+    // Parse optional size: ![[image.png|500]] or ![[image.png|500x300]]
+    const pipeIndex = raw.lastIndexOf("|");
+    let name = raw;
+    let sizeAttr = "";
+    if (pipeIndex !== -1) {
+      const sizePart = raw.slice(pipeIndex + 1).trim();
+      const sizeMatch = sizePart.match(/^(\d+)(?:x(\d+))?$/);
+      if (sizeMatch) {
+        name = raw.slice(0, pipeIndex).trim();
+        sizeAttr = ` width="${sizeMatch[1]}"`;
+        if (sizeMatch[2]) {
+          sizeAttr += ` height="${sizeMatch[2]}"`;
+        }
+      }
+    }
     const imgPath = join(vaultRoot, "attachments", name);
     const src = existsSync(imgPath) ? `file://${imgPath}` : name;
+    if (sizeAttr) {
+      return `\n\n<img src="${src}" alt="${name}"${sizeAttr}>\n\n`;
+    }
     return `\n\n![${name}](${src})\n\n`;
   });
 
@@ -399,6 +457,9 @@ main();
 // ── Render with Puppeteer ──
 mkdirSync(outDir, { recursive: true });
 
+if (noteRendererConfig) {
+  console.log(`  [renderer_config] Found in note — overrides applied`);
+}
 console.log(`Rendering "${note.title}" with template=${templateName}, fontSize=${fontSize}px...`);
 
 // Write HTML to file so Chrome can load file:// images

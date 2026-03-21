@@ -16,8 +16,26 @@ export function renderMarkdownToHtml(
   // Pre-process: convert Obsidian image embeds to standard markdown
   // and ensure images are on their own line (so marked renders them
   // as separate <p> blocks, enabling proper pagination)
-  let processed = markdown.replace(/!\[\[([^\]]+)\]\]/g, (_, name) => {
+  let processed = markdown.replace(/!\[\[([^\]]+)\]\]/g, (_, raw) => {
+    // Parse optional size: ![[image.png|500]] or ![[image.png|500x300]]
+    const pipeIndex = raw.lastIndexOf("|");
+    let name = raw;
+    let sizeAttr = "";
+    if (pipeIndex !== -1) {
+      const sizePart = raw.slice(pipeIndex + 1).trim();
+      const sizeMatch = sizePart.match(/^(\d+)(?:x(\d+))?$/);
+      if (sizeMatch) {
+        name = raw.slice(0, pipeIndex).trim();
+        sizeAttr = ` width="${sizeMatch[1]}"`;
+        if (sizeMatch[2]) {
+          sizeAttr += ` height="${sizeMatch[2]}"`;
+        }
+      }
+    }
     const src = resolveImage ? resolveImage(name) : name;
+    if (sizeAttr) {
+      return `\n\n<img src="${src}" alt="${name}"${sizeAttr}>\n\n`;
+    }
     return `\n\n![${name}](${src})\n\n`;
   });
 
