@@ -1,4 +1,4 @@
-export const TEMPLATE_CREAM = `
+export const THEME_CREAM = `
 /* ── Cream (奶油) ─────────────────────────────────────
  *  柔和日常。奶油底 + 深暖灰文字 + 珊瑚色强调。
  *  适合白天发布、故事向和观点向内容。

@@ -1,11 +1,11 @@
-export const TEMPLATE_SAGE = `
-/* ── Sage (灰豆绿) ──────────────────────────────────────
- *  自然清新。灰绿底 + 绿色强调，适合自然/生活/清新感内容。
+export const THEME_INK_GOLD = `
+/* ── Ink Gold (暗金) ──────────────────────────────────
+ *  仪式感。深底 + 金色引号装饰 + 金色强调，适合观点/引言类文章。
  */
 
 .nr-page {
-  background: #e8ede6;
-  color: #4a5548;
+  background: #333;
+  color: #d4d4d4;
   font-family: -apple-system, "PingFang SC", "Noto Sans SC", sans-serif;
   font-size: 32px;
   line-height: 1.75;
@@ -17,9 +17,10 @@ export const TEMPLATE_SAGE = `
 
 .nr-page-cover {
   background:
-    radial-gradient(circle at 85% 10%, rgba(123, 139, 111, 0.08) 0%, transparent 40%),
-    radial-gradient(circle at 10% 90%, rgba(123, 139, 111, 0.05) 0%, transparent 40%),
-    #e8ede6;
+    radial-gradient(circle at 20% 80%, rgba(255,255,255,0.02) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(255,255,255,0.02) 0%, transparent 50%),
+    #333;
+  border: 1px solid #555;
 }
 
 .nr-cover-content {
@@ -39,7 +40,7 @@ export const TEMPLATE_SAGE = `
   top: 15%;
   width: 6px;
   height: 80px;
-  background: #7b8b6f;
+  background: #e8c36a;
   border-radius: 3px;
 }
 
@@ -48,17 +49,17 @@ export const TEMPLATE_SAGE = `
   font-weight: 800;
   line-height: 1.3;
   margin: 0;
-  color: #7b8b6f;
+  color: #e8c36a;
 }
 
 .nr-cover-content p {
-  margin: 12px 0;
-  color: #7b8b6f;
+  margin: 8px 0;
+  color: #e8c36a;
 }
 
 /* Cover emphasis: marker highlight — bottom-half stripe */
 .nr-cover-content mark {
-  background: linear-gradient(to top, rgba(123,139,111,0.20) 35%, transparent 35%);
+  background: linear-gradient(to top, rgba(232,195,106,0.25) 35%, transparent 35%);
   padding: 0 4px;
   color: inherit;
 }
@@ -66,7 +67,7 @@ export const TEMPLATE_SAGE = `
 /* Cover emphasis: hand-drawn underline */
 .nr-cover-content u {
   text-decoration: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 12'%3E%3Cpath d='M2 8 Q30 2 50 7 T100 6 T150 8 T198 5' fill='none' stroke='%237b8b6f' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 12'%3E%3Cpath d='M2 8 Q30 2 50 7 T100 6 T150 8 T198 5' fill='none' stroke='%23e8c36a' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E");
   background-repeat: repeat-x;
   background-position: bottom;
   background-size: 200px 12px;
@@ -76,29 +77,29 @@ export const TEMPLATE_SAGE = `
 
 /* Cover image overlay: text on image */
 .nr-cover-has-image .nr-cover-content {
-  background: linear-gradient(to top, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.2) 50%, transparent 100%);
+  background: linear-gradient(to top, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.25) 50%, transparent 100%);
   justify-content: flex-end;
   border-radius: 16px;
 }
 .nr-cover-has-image .nr-cover-content h1,
 .nr-cover-has-image .nr-cover-content p {
   color: #fff;
-  -webkit-text-stroke: var(--nr-stroke-width, 6px) rgba(0,0,0,0.7);
+  -webkit-text-stroke: var(--nr-stroke-width, 6px) rgba(0,0,0,0.8);
   paint-order: stroke fill;
-  text-shadow: 0 4px 16px rgba(0,0,0,0.5);
+  text-shadow: 0 4px 16px rgba(0,0,0,0.6);
 }
 .nr-cover-has-image .nr-cover-content::before {
   background: #fff;
 }
 .nr-cover-has-image .nr-cover-content mark {
-  background: linear-gradient(to top, rgba(255,255,255,0.35) 35%, transparent 35%);
+  background: linear-gradient(to top, rgba(255,255,255,0.3) 35%, transparent 35%);
 }
 
 /* ── Body pages ── */
 
 .nr-page-body {
-  background: #e8ede6;
-  box-shadow: inset 6px 0 12px -6px rgba(0, 0, 0, 0.06);
+  background: #333;
+  border: 1px solid #4a4a4a;
 }
 
 .nr-page-content p {
@@ -109,10 +110,10 @@ export const TEMPLATE_SAGE = `
 }
 
 .nr-page-content blockquote {
-  border-left: 6px solid #7b8b6f;
+  border-left: 6px solid #e8c36a;
   padding: 8px 0 8px 24px;
   margin: 20px 0;
-  color: #6b7a60;
+  color: #bbb;
   font-style: italic;
 }
 
@@ -128,23 +129,19 @@ export const TEMPLATE_SAGE = `
 
 .nr-page-content code {
   font-family: "SF Mono", "Menlo", monospace;
-  background: #dfe5dc;
+  background: #2a2a2a;
   padding: 2px 8px;
   border-radius: 4px;
   font-size: 0.85em;
-  color: #6b7a5e;
+  color: #d4956a;
 }
 
 .nr-page-content pre {
-  background: #dfe5dc;
+  background: #2a2a2a;
   padding: 24px;
   border-radius: 8px;
   overflow-x: auto;
   margin: 16px 0;
-}
-
-.nr-page-content pre code {
-  color: #4a5548;
 }
 
 .nr-page-content img,
@@ -163,15 +160,15 @@ export const TEMPLATE_SAGE = `
   width: 100%;
 }
 
-/* Muted green accent for bold text */
+/* Gold accent for bold text */
 .nr-page-content strong {
   font-weight: 700;
-  color: #7b8b6f;
+  color: #e8c36a;
 }
 
 .nr-page-content em {
   font-style: italic;
-  color: #6b7a60;
+  color: #e8c36a;
 }
 
 .nr-oversized {

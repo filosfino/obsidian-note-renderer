@@ -1,20 +1,49 @@
 import { Plugin } from "obsidian";
 import { VIEW_TYPE } from "./constants";
 import { PreviewView } from "./preview-view";
-import { TEMPLATE_PAPER } from "./templates/paper";
-import { TEMPLATE_GRAPHITE } from "./templates/graphite";
-import { TEMPLATE_INK_GOLD } from "./templates/ink-gold";
-import { TEMPLATE_AMBER } from "./templates/amber";
-import { TEMPLATE_CREAM } from "./templates/cream";
-import { TEMPLATE_LATTE } from "./templates/latte";
-import { TEMPLATE_SAGE } from "./templates/sage";
-import { TEMPLATE_MIST } from "./templates/mist";
-import { TEMPLATE_ROSE } from "./templates/rose";
+import { THEME_PAPER } from "./themes/paper";
+import { THEME_GRAPHITE } from "./themes/graphite";
+import { THEME_INK_GOLD } from "./themes/ink-gold";
+import { THEME_AMBER } from "./themes/amber";
+import { THEME_CREAM } from "./themes/cream";
+import { THEME_LATTE } from "./themes/latte";
+import { THEME_SAGE } from "./themes/sage";
+import { THEME_MIST } from "./themes/mist";
+import { THEME_ROSE } from "./themes/rose";
 
 import type { PageMode, CoverStrokeStyle } from "./constants";
 
+// Preset: a named snapshot of all rendering parameters (theme + params)
+export interface RendererPreset {
+  activeTheme: string;
+  fontSize: number;
+  fontFamily: string;
+  coverFontFamily: string;
+  coverStrokePercent: number;
+  coverStrokeStyle: CoverStrokeStyle;
+  coverStrokeOpacity: number;
+  coverGlowSize: number;
+  coverBanner: boolean;
+  coverBannerColor: string;
+  coverBannerSkew: number;
+  coverFontColor: string;
+  coverFontScale: number;
+  coverLetterSpacing: number;
+  coverLineHeight: number;
+  coverOffsetX: number;
+  coverOffsetY: number;
+  coverOverlay: boolean;
+  coverShadow: boolean;
+  coverShadowBlur: number;
+  coverShadowOffsetX: number;
+  coverShadowOffsetY: number;
+  pageMode: PageMode;
+}
+
 export interface NoteRendererSettings {
-  activeTemplate: string;
+  activeTheme: string;
+  activePreset: string;                       // "" = no preset selected
+  presets: Record<string, RendererPreset>;     // name → config snapshot
   fontSize: number;
   fontFamily: string;
   coverFontFamily: string;
@@ -39,8 +68,21 @@ export interface NoteRendererSettings {
   pageMode: PageMode;
 }
 
+// Keys that are part of a preset (excludes meta fields like activePreset and presets)
+export const PRESET_KEYS: (keyof RendererPreset)[] = [
+  "activeTheme", "fontSize", "fontFamily", "coverFontFamily",
+  "coverStrokePercent", "coverStrokeStyle", "coverStrokeOpacity", "coverGlowSize",
+  "coverBanner", "coverBannerColor", "coverBannerSkew", "coverFontColor",
+  "coverFontScale", "coverLetterSpacing", "coverLineHeight",
+  "coverOffsetX", "coverOffsetY", "coverOverlay",
+  "coverShadow", "coverShadowBlur", "coverShadowOffsetX", "coverShadowOffsetY",
+  "pageMode",
+];
+
 const DEFAULT_SETTINGS: NoteRendererSettings = {
-  activeTemplate: "cream",
+  activeTheme: "cream",
+  activePreset: "",
+  presets: {},
   fontSize: 42,
   fontFamily: '"PingFang SC", "Noto Sans SC", sans-serif',
   coverFontFamily: '"Yuanti SC", "PingFang SC", sans-serif',
@@ -68,12 +110,12 @@ const DEFAULT_SETTINGS: NoteRendererSettings = {
 export default class NoteRendererPlugin extends Plugin {
   settings: NoteRendererSettings = DEFAULT_SETTINGS;
 
-  // Template cache: name → CSS string
-  private templateCache: Map<string, string> = new Map();
+  // Theme cache: name → CSS string
+  private themeCache: Map<string, string> = new Map();
 
   async onload(): Promise<void> {
     await this.loadSettings();
-    await this.indexTemplates();
+    await this.indexThemes();
 
     this.registerView(VIEW_TYPE, (leaf) => new PreviewView(leaf, this));
 
@@ -99,7 +141,7 @@ export default class NoteRendererPlugin extends Plugin {
   }
 
   onunload(): void {
-    this.templateCache.clear();
+    this.themeCache.clear();
   }
 
   async activateView(): Promise<void> {
@@ -116,49 +158,91 @@ export default class NoteRendererPlugin extends Plugin {
     }
   }
 
-  async indexTemplates(): Promise<void> {
-    this.templateCache.clear();
+  async indexThemes(): Promise<void> {
+    this.themeCache.clear();
 
-    // Bundled templates
-    this.templateCache.set("paper", TEMPLATE_PAPER);
-    this.templateCache.set("graphite", TEMPLATE_GRAPHITE);
-    this.templateCache.set("ink-gold", TEMPLATE_INK_GOLD);
-    this.templateCache.set("amber", TEMPLATE_AMBER);
-    this.templateCache.set("cream", TEMPLATE_CREAM);
-    this.templateCache.set("latte", TEMPLATE_LATTE);
-    this.templateCache.set("sage", TEMPLATE_SAGE);
-    this.templateCache.set("mist", TEMPLATE_MIST);
-    this.templateCache.set("rose", TEMPLATE_ROSE);
+    // Bundled themes
+    this.themeCache.set("paper", THEME_PAPER);
+    this.themeCache.set("graphite", THEME_GRAPHITE);
+    this.themeCache.set("ink-gold", THEME_INK_GOLD);
+    this.themeCache.set("amber", THEME_AMBER);
+    this.themeCache.set("cream", THEME_CREAM);
+    this.themeCache.set("latte", THEME_LATTE);
+    this.themeCache.set("sage", THEME_SAGE);
+    this.themeCache.set("mist", THEME_MIST);
+    this.themeCache.set("rose", THEME_ROSE);
 
-    // User templates from plugin directory
+    // User themes from plugin directory
     const adapter = this.app.vault.adapter;
-    const templatesDir = `${this.manifest.dir}/templates`;
+    const themesDir = `${this.manifest.dir}/themes`;
 
-    if (await adapter.exists(templatesDir)) {
-      const listing = await adapter.list(templatesDir);
+    if (await adapter.exists(themesDir)) {
+      const listing = await adapter.list(themesDir);
       for (const filePath of listing.files) {
         if (filePath.endsWith(".css")) {
           const name = filePath.split("/").pop()!.replace(".css", "");
           const css = await adapter.read(filePath);
-          this.templateCache.set(name, css);
+          this.themeCache.set(name, css);
         }
       }
     }
   }
 
-  getTemplateNames(): string[] {
-    return Array.from(this.templateCache.keys());
+  getThemeNames(): string[] {
+    return Array.from(this.themeCache.keys());
   }
 
-  async loadTemplate(name: string): Promise<string> {
-    if (!this.templateCache.has(name)) {
-      await this.indexTemplates();
+  async loadTheme(name: string): Promise<string> {
+    if (!this.themeCache.has(name)) {
+      await this.indexThemes();
     }
-    return this.templateCache.get(name) ?? this.templateCache.get("cream") ?? "";
+    return this.themeCache.get(name) ?? this.themeCache.get("cream") ?? "";
+  }
+
+  // ── Preset management ──
+
+  /** Snapshot current settings (excluding meta fields) as a named preset. */
+  savePreset(name: string): void {
+    const preset: Record<string, unknown> = {};
+    for (const key of PRESET_KEYS) {
+      preset[key] = (this.settings as Record<string, unknown>)[key];
+    }
+    this.settings.presets[name] = preset as RendererPreset;
+    this.settings.activePreset = name;
+  }
+
+  /** Apply a preset's values to current settings. */
+  loadPreset(name: string): void {
+    const preset = this.settings.presets[name];
+    if (!preset) return;
+    for (const key of PRESET_KEYS) {
+      (this.settings as Record<string, unknown>)[key] = preset[key];
+    }
+    this.settings.activePreset = name;
+  }
+
+  /** Delete a preset by name. Clears activePreset if it was the deleted one. */
+  deletePreset(name: string): void {
+    delete this.settings.presets[name];
+    if (this.settings.activePreset === name) {
+      this.settings.activePreset = "";
+    }
+  }
+
+  getPresetNames(): string[] {
+    return Object.keys(this.settings.presets);
   }
 
   async loadSettings(): Promise<void> {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    const raw = await this.loadData();
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, raw);
+
+    // Migrate legacy key: activeTemplate → activeTheme
+    if (raw && (raw as any).activeTemplate && !raw.activeTheme) {
+      this.settings.activeTheme = (raw as any).activeTemplate;
+    }
+    // Clean up legacy key from runtime settings
+    delete (this.settings as any).activeTemplate;
   }
 
   async saveSettings(): Promise<void> {

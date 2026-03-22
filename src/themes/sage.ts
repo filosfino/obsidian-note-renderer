@@ -1,11 +1,11 @@
-export const TEMPLATE_LATTE = `
-/* ── Latte (奶咖) ──────────────────────────────────────
- *  温暖复古。奶咖底 + 咖啡棕强调，适合日常随笔和生活感悟。
+export const THEME_SAGE = `
+/* ── Sage (灰豆绿) ──────────────────────────────────────
+ *  自然清新。灰绿底 + 绿色强调，适合自然/生活/清新感内容。
  */
 
 .nr-page {
-  background: #f5ede8;
-  color: #5a4a42;
+  background: #e8ede6;
+  color: #4a5548;
   font-family: -apple-system, "PingFang SC", "Noto Sans SC", sans-serif;
   font-size: 32px;
   line-height: 1.75;
@@ -17,9 +17,9 @@ export const TEMPLATE_LATTE = `
 
 .nr-page-cover {
   background:
-    radial-gradient(circle at 85% 10%, rgba(161, 116, 83, 0.08) 0%, transparent 40%),
-    radial-gradient(circle at 10% 90%, rgba(161, 116, 83, 0.05) 0%, transparent 40%),
-    #f5ede8;
+    radial-gradient(circle at 85% 10%, rgba(123, 139, 111, 0.08) 0%, transparent 40%),
+    radial-gradient(circle at 10% 90%, rgba(123, 139, 111, 0.05) 0%, transparent 40%),
+    #e8ede6;
 }
 
 .nr-cover-content {
@@ -39,7 +39,7 @@ export const TEMPLATE_LATTE = `
   top: 15%;
   width: 6px;
   height: 80px;
-  background: #a17453;
+  background: #7b8b6f;
   border-radius: 3px;
 }
 
@@ -48,17 +48,17 @@ export const TEMPLATE_LATTE = `
   font-weight: 800;
   line-height: 1.3;
   margin: 0;
-  color: #a17453;
+  color: #7b8b6f;
 }
 
 .nr-cover-content p {
   margin: 12px 0;
-  color: #a17453;
+  color: #7b8b6f;
 }
 
 /* Cover emphasis: marker highlight — bottom-half stripe */
 .nr-cover-content mark {
-  background: linear-gradient(to top, rgba(161,116,83,0.20) 35%, transparent 35%);
+  background: linear-gradient(to top, rgba(123,139,111,0.20) 35%, transparent 35%);
   padding: 0 4px;
   color: inherit;
 }
@@ -66,7 +66,7 @@ export const TEMPLATE_LATTE = `
 /* Cover emphasis: hand-drawn underline */
 .nr-cover-content u {
   text-decoration: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 12'%3E%3Cpath d='M2 8 Q30 2 50 7 T100 6 T150 8 T198 5' fill='none' stroke='%23a17453' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 12'%3E%3Cpath d='M2 8 Q30 2 50 7 T100 6 T150 8 T198 5' fill='none' stroke='%237b8b6f' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E");
   background-repeat: repeat-x;
   background-position: bottom;
   background-size: 200px 12px;
@@ -97,7 +97,7 @@ export const TEMPLATE_LATTE = `
 /* ── Body pages ── */
 
 .nr-page-body {
-  background: #f5ede8;
+  background: #e8ede6;
   box-shadow: inset 6px 0 12px -6px rgba(0, 0, 0, 0.06);
 }
 
@@ -109,10 +109,10 @@ export const TEMPLATE_LATTE = `
 }
 
 .nr-page-content blockquote {
-  border-left: 6px solid #a17453;
+  border-left: 6px solid #7b8b6f;
   padding: 8px 0 8px 24px;
   margin: 20px 0;
-  color: #7a6b60;
+  color: #6b7a60;
   font-style: italic;
 }
 
@@ -128,15 +128,15 @@ export const TEMPLATE_LATTE = `
 
 .nr-page-content code {
   font-family: "SF Mono", "Menlo", monospace;
-  background: #ece4dd;
+  background: #dfe5dc;
   padding: 2px 8px;
   border-radius: 4px;
   font-size: 0.85em;
-  color: #965454;
+  color: #6b7a5e;
 }
 
 .nr-page-content pre {
-  background: #ece4dd;
+  background: #dfe5dc;
   padding: 24px;
   border-radius: 8px;
   overflow-x: auto;
@@ -144,7 +144,7 @@ export const TEMPLATE_LATTE = `
 }
 
 .nr-page-content pre code {
-  color: #5a4a42;
+  color: #4a5548;
 }
 
 .nr-page-content img,
@@ -163,15 +163,15 @@ export const TEMPLATE_LATTE = `
   width: 100%;
 }
 
-/* Coffee brown accent for bold text */
+/* Muted green accent for bold text */
 .nr-page-content strong {
   font-weight: 700;
-  color: #a17453;
+  color: #7b8b6f;
 }
 
 .nr-page-content em {
   font-style: italic;
-  color: #7a6b60;
+  color: #6b7a60;
 }
 
 .nr-oversized {

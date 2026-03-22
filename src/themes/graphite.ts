@@ -1,11 +1,11 @@
-export const TEMPLATE_INK_GOLD = `
-/* ── Ink Gold (暗金) ──────────────────────────────────
- *  仪式感。深底 + 金色引号装饰 + 金色强调，适合观点/引言类文章。
+export const THEME_GRAPHITE = `
+/* ── Graphite (石墨) ──────────────────────────────────
+ *  冷静克制。深灰底 + 白字，无装饰，适合工具/技术类文章。
  */
 
 .nr-page {
-  background: #333;
-  color: #d4d4d4;
+  background: #3a3a3a;
+  color: #e0e0e0;
   font-family: -apple-system, "PingFang SC", "Noto Sans SC", sans-serif;
   font-size: 32px;
   line-height: 1.75;
@@ -13,16 +13,7 @@ export const TEMPLATE_INK_GOLD = `
   border-radius: 16px;
 }
 
-/* ── Cover page ── */
-
-.nr-page-cover {
-  background:
-    radial-gradient(circle at 20% 80%, rgba(255,255,255,0.02) 0%, transparent 50%),
-    radial-gradient(circle at 80% 20%, rgba(255,255,255,0.02) 0%, transparent 50%),
-    #333;
-  border: 1px solid #555;
-}
-
+/* Cover */
 .nr-cover-content {
   display: flex;
   flex-direction: column;
@@ -40,26 +31,26 @@ export const TEMPLATE_INK_GOLD = `
   top: 15%;
   width: 6px;
   height: 80px;
-  background: #e8c36a;
+  background: #fff;
   border-radius: 3px;
 }
 
 .nr-cover-content h1 {
-  font-size: 68px;
+  font-size: 72px;
   font-weight: 800;
-  line-height: 1.3;
+  line-height: 1.25;
   margin: 0;
-  color: #e8c36a;
+  color: #fff;
 }
 
 .nr-cover-content p {
   margin: 8px 0;
-  color: #e8c36a;
+  color: #fff;
 }
 
 /* Cover emphasis: marker highlight — bottom-half stripe */
 .nr-cover-content mark {
-  background: linear-gradient(to top, rgba(232,195,106,0.25) 35%, transparent 35%);
+  background: linear-gradient(to top, rgba(255,255,255,0.15) 35%, transparent 35%);
   padding: 0 4px;
   color: inherit;
 }
@@ -67,7 +58,7 @@ export const TEMPLATE_INK_GOLD = `
 /* Cover emphasis: hand-drawn underline */
 .nr-cover-content u {
   text-decoration: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 12'%3E%3Cpath d='M2 8 Q30 2 50 7 T100 6 T150 8 T198 5' fill='none' stroke='%23e8c36a' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 12'%3E%3Cpath d='M2 8 Q30 2 50 7 T100 6 T150 8 T198 5' fill='none' stroke='%23ffffff' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E");
   background-repeat: repeat-x;
   background-position: bottom;
   background-size: 200px 12px;
@@ -95,13 +86,7 @@ export const TEMPLATE_INK_GOLD = `
   background: linear-gradient(to top, rgba(255,255,255,0.3) 35%, transparent 35%);
 }
 
-/* ── Body pages ── */
-
-.nr-page-body {
-  background: #333;
-  border: 1px solid #4a4a4a;
-}
-
+/* Body */
 .nr-page-content p {
   margin: 0 0 1.2em 0;
   text-align: justify;
@@ -110,7 +95,7 @@ export const TEMPLATE_INK_GOLD = `
 }
 
 .nr-page-content blockquote {
-  border-left: 6px solid #e8c36a;
+  border-left: 6px solid #555;
   padding: 8px 0 8px 24px;
   margin: 20px 0;
   color: #bbb;
@@ -123,21 +108,19 @@ export const TEMPLATE_INK_GOLD = `
   margin: 0 0 24px 0;
 }
 
-.nr-page-content li {
-  margin-bottom: 8px;
-}
+.nr-page-content li { margin-bottom: 8px; }
 
 .nr-page-content code {
   font-family: "SF Mono", "Menlo", monospace;
-  background: #2a2a2a;
+  background: #2e2e2e;
   padding: 2px 8px;
   border-radius: 4px;
   font-size: 0.85em;
-  color: #d4956a;
+  color: #eb5757;
 }
 
 .nr-page-content pre {
-  background: #2a2a2a;
+  background: #2e2e2e;
   padding: 24px;
   border-radius: 8px;
   overflow-x: auto;
@@ -160,16 +143,8 @@ export const TEMPLATE_INK_GOLD = `
   width: 100%;
 }
 
-/* Gold accent for bold text */
-.nr-page-content strong {
-  font-weight: 700;
-  color: #e8c36a;
-}
-
-.nr-page-content em {
-  font-style: italic;
-  color: #e8c36a;
-}
+.nr-page-content strong { font-weight: 700; color: #fff; }
+.nr-page-content em { font-style: italic; }
 
 .nr-oversized {
   display: flex;

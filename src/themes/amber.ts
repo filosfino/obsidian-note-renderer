@@ -1,4 +1,4 @@
-export const TEMPLATE_AMBER = `
+export const THEME_AMBER = `
 /* ── Amber (琥珀) ─────────────────────────────────────
  *  温暖故事。暖灰底 + 米白文字 + 暖金高亮 + 噪点纹理。
  *  适合情感/故事向文章。

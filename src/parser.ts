@@ -42,6 +42,11 @@ export function parseRendererConfig(markdown: string): Record<string, unknown> |
   try {
     const parsed = JSON.parse(jsonMatch[1]);
     if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+      // Migrate legacy key: activeTemplate → activeTheme
+      if ("activeTemplate" in parsed && !("activeTheme" in parsed)) {
+        parsed.activeTheme = parsed.activeTemplate;
+        delete parsed.activeTemplate;
+      }
       return parsed as Record<string, unknown>;
     }
   } catch {

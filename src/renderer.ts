@@ -38,7 +38,7 @@ export async function renderNote(
   app: App,
   markdown: string,
   sourcePath: string,
-  templateCss: string,
+  themeCss: string,
   parentComponent: Component,
   options: RenderOptions = { fontSize: 42, fontFamily: '"PingFang SC", sans-serif', coverFontFamily: '', coverStyle: "auto", pageMode: "long" }
 ): Promise<RenderedPages> {
@@ -51,7 +51,7 @@ export async function renderNote(
   const coverFont = options.coverFontFamily || options.fontFamily;
   const coverColor = options.coverFontColor || "";
 
-  // Build full CSS: template + font overrides
+  // Build full CSS: theme + font overrides
   const coverColorCss = coverColor ? `
 .nr-page-cover .nr-cover-content h1,
 .nr-page-cover .nr-cover-content p { color: ${coverColor}; }
@@ -69,7 +69,7 @@ export async function renderNote(
 }
 ${coverColorCss}
 `;
-  const fullCss = templateCss + fontOverrideCss;
+  const fullCss = themeCss + fontOverrideCss;
 
   const pages: HTMLElement[] = [];
 

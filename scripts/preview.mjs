@@ -9,7 +9,7 @@
  *   - Screenshot each page
  *
  * Usage:
- *   node scripts/preview.mjs <note.md> [--template cream] [--font-size 42] [--mode long|card] [--out /tmp/nr-preview]
+ *   node scripts/preview.mjs <note.md> [--theme cream] [--font-size 42] [--mode long|card] [--out /tmp/nr-preview]
  */
 
 import { readFileSync, mkdirSync, existsSync } from "fs";
@@ -21,7 +21,7 @@ import { marked } from "marked";
 const args = process.argv.slice(2);
 const mdPath = args.find((a) => !a.startsWith("--"));
 if (!mdPath) {
-  console.error("Usage: node scripts/preview.mjs <note.md> [--template ink-gold] [--font-size 42]");
+  console.error("Usage: node scripts/preview.mjs <note.md> [--theme ink-gold] [--font-size 42]");
   process.exit(1);
 }
 function getArg(name, fallback) {
@@ -90,7 +90,7 @@ const effectiveSettings = Object.assign({}, pluginSettings, noteRendererConfig |
 
 // CLI args override plugin settings, plugin settings override hardcoded defaults
 // Priority: CLI args > noteRendererConfig > pluginSettings > defaults
-const templateName = getArg("template", effectiveSettings.activeTemplate || "cream");
+const themeName = getArg("theme", getArg("template", effectiveSettings.activeTheme || effectiveSettings.activeTemplate || "cream"));
 const fontSize = parseInt(getArg("font-size", String(effectiveSettings.fontSize || 42)));
 const fontFamily = getArg("font-family", effectiveSettings.fontFamily || '"PingFang SC", "Noto Sans SC", sans-serif');
 const coverFontFamily = getArg("cover-font", effectiveSettings.coverFontFamily || '"Yuanti SC", "PingFang SC", sans-serif');
@@ -109,10 +109,10 @@ const PAGE_PADDING_BOTTOM = 90;
 const CONTENT_HEIGHT = PAGE_HEIGHT - PAGE_PADDING_TOP - PAGE_PADDING_BOTTOM;
 
 // ── Load template CSS from TS source ──
-function loadTemplateCss(name) {
-  const file = join(import.meta.dirname, `../src/templates/${name}.ts`);
+function loadThemeCss(name) {
+  const file = join(import.meta.dirname, `../src/themes/${name}.ts`);
   if (!existsSync(file)) {
-    console.error(`Unknown template: ${name}`);
+    console.error(`Unknown theme: ${name}`);
     process.exit(1);
   }
   const content = readFileSync(file, "utf-8");
@@ -176,7 +176,7 @@ function autosizeStyle(text) {
 // ── Build HTML ──
 const md = mdRaw;
 const note = parseNote(md);
-const templateCss = loadTemplateCss(templateName);
+const themeCss = loadThemeCss(themeName);
 
 const fontOverride = `
 .nr-page {
@@ -282,7 +282,7 @@ const fullHtml = `<!DOCTYPE html>
 <html><head><meta charset="utf-8">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-${templateCss}
+${themeCss}
 ${fontOverride}
 
 .nr-page {
@@ -460,7 +460,7 @@ mkdirSync(outDir, { recursive: true });
 if (noteRendererConfig) {
   console.log(`  [renderer_config] Found in note — overrides applied`);
 }
-console.log(`Rendering "${note.title}" with template=${templateName}, fontSize=${fontSize}px...`);
+console.log(`Rendering "${note.title}" with theme=${themeName}, fontSize=${fontSize}px...`);
 
 // Write HTML to file so Chrome can load file:// images
 const { writeFileSync } = await import("fs");

@@ -1,18 +1,27 @@
-export const TEMPLATE_PAPER = `
-/* ── Paper (素纸) ──────────────────────────────────────
- *  极简留白。纯白底 + 深色字，加粗仅靠字重，不上色。
+export const THEME_LATTE = `
+/* ── Latte (奶咖) ──────────────────────────────────────
+ *  温暖复古。奶咖底 + 咖啡棕强调，适合日常随笔和生活感悟。
  */
 
 .nr-page {
-  background: #fff;
-  color: #1a1a1a;
+  background: #f5ede8;
+  color: #5a4a42;
   font-family: -apple-system, "PingFang SC", "Noto Sans SC", sans-serif;
   font-size: 32px;
   line-height: 1.75;
   letter-spacing: 0.05em;
+  border-radius: 16px;
 }
 
-/* Cover */
+/* ── Cover page ── */
+
+.nr-page-cover {
+  background:
+    radial-gradient(circle at 85% 10%, rgba(161, 116, 83, 0.08) 0%, transparent 40%),
+    radial-gradient(circle at 10% 90%, rgba(161, 116, 83, 0.05) 0%, transparent 40%),
+    #f5ede8;
+}
+
 .nr-cover-content {
   display: flex;
   flex-direction: column;
@@ -30,26 +39,26 @@ export const TEMPLATE_PAPER = `
   top: 15%;
   width: 6px;
   height: 80px;
-  background: #1a1a1a;
+  background: #a17453;
   border-radius: 3px;
 }
 
 .nr-cover-content h1 {
-  font-size: 72px;
+  font-size: 68px;
   font-weight: 800;
-  line-height: 1.25;
+  line-height: 1.3;
   margin: 0;
-  color: #1a1a1a;
+  color: #a17453;
 }
 
 .nr-cover-content p {
-  margin: 8px 0;
-  color: #1a1a1a;
+  margin: 12px 0;
+  color: #a17453;
 }
 
 /* Cover emphasis: marker highlight — bottom-half stripe */
 .nr-cover-content mark {
-  background: linear-gradient(to top, rgba(26,26,26,0.12) 35%, transparent 35%);
+  background: linear-gradient(to top, rgba(161,116,83,0.20) 35%, transparent 35%);
   padding: 0 4px;
   color: inherit;
 }
@@ -57,7 +66,7 @@ export const TEMPLATE_PAPER = `
 /* Cover emphasis: hand-drawn underline */
 .nr-cover-content u {
   text-decoration: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 12'%3E%3Cpath d='M2 8 Q30 2 50 7 T100 6 T150 8 T198 5' fill='none' stroke='%231a1a1a' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 12'%3E%3Cpath d='M2 8 Q30 2 50 7 T100 6 T150 8 T198 5' fill='none' stroke='%23a17453' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E");
   background-repeat: repeat-x;
   background-position: bottom;
   background-size: 200px 12px;
@@ -85,7 +94,13 @@ export const TEMPLATE_PAPER = `
   background: linear-gradient(to top, rgba(255,255,255,0.35) 35%, transparent 35%);
 }
 
-/* Body */
+/* ── Body pages ── */
+
+.nr-page-body {
+  background: #f5ede8;
+  box-shadow: inset 6px 0 12px -6px rgba(0, 0, 0, 0.06);
+}
+
 .nr-page-content p {
   margin: 0 0 1.2em 0;
   text-align: justify;
@@ -94,10 +109,10 @@ export const TEMPLATE_PAPER = `
 }
 
 .nr-page-content blockquote {
-  border-left: 6px solid #e0e0e0;
+  border-left: 6px solid #a17453;
   padding: 8px 0 8px 24px;
-  margin: 16px 0;
-  color: #555;
+  margin: 20px 0;
+  color: #7a6b60;
   font-style: italic;
 }
 
@@ -107,23 +122,29 @@ export const TEMPLATE_PAPER = `
   margin: 0 0 24px 0;
 }
 
-.nr-page-content li { margin-bottom: 8px; }
+.nr-page-content li {
+  margin-bottom: 8px;
+}
 
 .nr-page-content code {
   font-family: "SF Mono", "Menlo", monospace;
-  background: #f5f0eb;
+  background: #ece4dd;
   padding: 2px 8px;
   border-radius: 4px;
   font-size: 0.85em;
-  color: #eb5757;
+  color: #965454;
 }
 
 .nr-page-content pre {
-  background: #f5f5f5;
+  background: #ece4dd;
   padding: 24px;
   border-radius: 8px;
   overflow-x: auto;
   margin: 16px 0;
+}
+
+.nr-page-content pre code {
+  color: #5a4a42;
 }
 
 .nr-page-content img,
@@ -142,8 +163,16 @@ export const TEMPLATE_PAPER = `
   width: 100%;
 }
 
-.nr-page-content strong { font-weight: 700; }
-.nr-page-content em { font-style: italic; }
+/* Coffee brown accent for bold text */
+.nr-page-content strong {
+  font-weight: 700;
+  color: #a17453;
+}
+
+.nr-page-content em {
+  font-style: italic;
+  color: #7a6b60;
+}
 
 .nr-oversized {
   display: flex;

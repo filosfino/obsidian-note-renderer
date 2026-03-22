@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Quick cover-only preview. Much faster than full preview.
- * Usage: node scripts/preview-cover.mjs <note.md> [--template dark-gold] [--font font-family]
+ * Usage: node scripts/preview-cover.mjs <note.md> [--theme dark-gold] [--font font-family]
  */
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
 import { join } from "path";
@@ -12,12 +12,12 @@ const args = process.argv.slice(2);
 const mdPath = args.find(a => !a.startsWith("--"));
 function getArg(name, fb) { const i = args.indexOf(`--${name}`); return i >= 0 && args[i+1] ? args[i+1] : fb; }
 
-const templateName = getArg("template", "cream");
+const themeName = getArg("theme", "cream");
 const titleFont = getArg("font", '"PingFang SC", "Noto Sans SC", sans-serif');
 const outDir = "/tmp/nr-preview";
 
-// Load template CSS
-const tsFile = readFileSync(join(import.meta.dirname, `../src/templates/${templateName}.ts`), "utf8");
+// Load theme CSS
+const tsFile = readFileSync(join(import.meta.dirname, `../src/themes/${templateName}.ts`), "utf8");
 const cssMatch = tsFile.match(/`([\s\S]+?)`/);
 let css = cssMatch ? cssMatch[1].replace(/\\\\([0-9a-fA-F]{4})/g, "\\$1") : "";
 

@@ -1,4 +1,4 @@
-export const TEMPLATE_MIST = `
+export const THEME_MIST = `
 /* ── Mist (雾霾蓝) ──────────────────────────────────────
  *  冷调文艺。雾蓝底 + 蓝灰强调，适合文学/思考/内省类内容。
  */

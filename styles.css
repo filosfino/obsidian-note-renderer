@@ -82,6 +82,18 @@
   font-size: 12px;
 }
 
+.nr-select-fixed {
+  width: 120px;
+  flex: none;
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 12px;
+}
+
 .nr-btn {
   display: flex;
   align-items: center;
@@ -99,6 +111,15 @@
 
 .nr-btn:hover {
   background: var(--background-modifier-hover);
+}
+
+.nr-btn-wide {
+  min-width: 48px;
+  padding: 0 8px;
+}
+
+.nr-sub-label {
+  margin-left: 16px;
 }
 
 .nr-btn-export {
@@ -146,14 +167,55 @@
   font-size: 14px;
 }
 
-/* Navigation */
+/* Navigation — 3-column layout */
 .nr-nav {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 16px;
-  padding: 8px 12px;
+  justify-content: space-between;
+  padding: 8px;
+  gap: 8px;
   border-top: 1px solid var(--background-modifier-border);
+}
+
+.nr-nav-left {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+}
+
+.nr-nav-center {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.nr-nav-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  flex: 1;
+}
+
+.nr-nav-separator {
+  width: 1px;
+  height: 16px;
+  background: var(--background-modifier-border);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+.nr-mode-indicator {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+.nr-mode-indicator:hover {
+  color: var(--text-normal);
 }
 
 .nr-nav-btn {
@@ -179,6 +241,32 @@
   color: var(--text-muted);
   min-width: 48px;
   text-align: center;
+}
+
+/* Section headers */
+.nr-section-header {
+  padding: 4px 8px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--background-modifier-border);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.nr-row-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  min-width: 32px;
+  flex-shrink: 0;
+}
+
+/* Stepper container */
+.nr-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 8px;
 }
 
 /* Hidden measurer */
