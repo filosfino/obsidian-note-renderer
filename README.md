@@ -240,4 +240,6 @@ npm run build  # 生产构建，输出到 main.js
 
 如果这个插件对你有帮助，请我喝杯咖啡吧！
 
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/filosfino)
+<a href="https://ko-fi.com/filosfino"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Ko-fi" height="36"></a>
+
+<img src="assets/wechat-pay.png" alt="微信赞赏" width="200">
