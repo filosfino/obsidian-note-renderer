@@ -110,6 +110,16 @@ Build output is automatically copied to the plugin directory (configured in esbu
 | Content area (long) | 900×1590px |
 | Content area (card) | 900×1230px |
 
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=filosfino/obsidian-note-renderer&type=Date)](https://star-history.com/#filosfino/obsidian-note-renderer&Date)
+
+## Support
+
+If you find this plugin useful, buy me a coffee!
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/filosfino)
+
 ---
 
 # 中文文档
@@ -221,3 +231,13 @@ npm run build  # 生产构建，输出到 main.js
 | 左右边距 | 90px |
 | 内容区（long） | 900×1590px |
 | 内容区（card） | 900×1230px |
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=filosfino/obsidian-note-renderer&type=Date)](https://star-history.com/#filosfino/obsidian-note-renderer&Date)
+
+## 请我喝杯咖啡
+
+如果这个插件对你有帮助，请我喝杯咖啡吧！
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/filosfino)
