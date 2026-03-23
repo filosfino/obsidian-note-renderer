@@ -139,7 +139,7 @@
   overflow-x: hidden;
   display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: flex-end;
   padding: 12px;
   background: var(--background-secondary);
   min-height: 0;
@@ -148,7 +148,7 @@
 .nr-page-display {
   display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: flex-end;
   width: 100%;
 }
 

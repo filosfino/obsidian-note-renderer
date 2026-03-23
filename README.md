@@ -1,5 +1,9 @@
 # Note Renderer
 
+An Obsidian plugin that renders markdown notes into beautifully paginated images, optimized for publishing on Xiaohongshu (小红书). Features 9 built-in themes, auto-pagination, cover design with stroke/glow effects, real-time preview, and one-click ZIP export.
+
+---
+
 Obsidian 插件，将 markdown 笔记渲染为分页图片，用于小红书图文发布。
 
 ## 功能
