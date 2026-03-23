@@ -1,4 +1,4 @@
-import { Plugin } from "obsidian";
+import { Plugin, normalizePath } from "obsidian";
 import { VIEW_TYPE } from "./constants";
 import { PreviewView } from "./preview-view";
 import { THEME_PAPER } from "./themes/paper";
@@ -137,7 +137,7 @@ export default class NoteRendererPlugin extends Plugin {
       },
     });
 
-    this.addRibbonIcon("image", "Note Renderer", () => this.activateView());
+    this.addRibbonIcon("image", "Note renderer", () => this.activateView());
   }
 
   onunload(): void {
@@ -174,7 +174,7 @@ export default class NoteRendererPlugin extends Plugin {
 
     // User themes from plugin directory
     const adapter = this.app.vault.adapter;
-    const themesDir = `${this.manifest.dir}/themes`;
+    const themesDir = normalizePath(`${this.manifest.dir}/themes`);
 
     if (await adapter.exists(themesDir)) {
       const listing = await adapter.list(themesDir);

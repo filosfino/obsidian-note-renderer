@@ -4,6 +4,8 @@ import {
   TFile,
   TAbstractFile,
   Notice,
+  Modal,
+  Setting,
   setIcon,
   debounce,
 } from "obsidian";
@@ -128,33 +130,35 @@ export class PreviewView extends ItemView {
     const presetSaveBtn = presetBar.createEl("button", { cls: "nr-btn nr-btn-sm", text: "存" });
     presetSaveBtn.title = "保存当前配置为预设";
     presetSaveBtn.style.minWidth = "36px";
-    presetSaveBtn.addEventListener("click", async () => {
-      const name = window.prompt("预设名称：", this.plugin.settings.activePreset || "");
-      if (!name) return;
-      // Save the effective config (which may come from note config), not just global
-      const preset: Record<string, unknown> = {};
-      for (const key of PRESET_KEYS) {
-        preset[key] = (this.effective as Record<string, unknown>)[key];
-      }
-      this.plugin.settings.presets[name] = preset as any;
-      this.plugin.settings.activePreset = name;
-      await this.plugin.saveSettings();
-      this.rebuildPresetOptions();
-      new Notice(`预设「${name}」已保存`);
+    presetSaveBtn.addEventListener("click", () => {
+      new InputModal(this.app, "保存预设", this.plugin.settings.activePreset || "", async (name) => {
+        if (!name) return;
+        const preset: Record<string, unknown> = {};
+        for (const key of PRESET_KEYS) {
+          preset[key] = (this.effective as Record<string, unknown>)[key];
+        }
+        this.plugin.settings.presets[name] = preset as any;
+        this.plugin.settings.activePreset = name;
+        await this.plugin.saveSettings();
+        this.rebuildPresetOptions();
+        new Notice(`预设「${name}」已保存`);
+      }).open();
     });
 
     const presetDelBtn = presetBar.createEl("button", { cls: "nr-btn nr-btn-sm", text: "删" });
     presetDelBtn.title = "删除当前预设";
     presetDelBtn.style.minWidth = "36px";
-    presetDelBtn.addEventListener("click", async () => {
+    presetDelBtn.addEventListener("click", () => {
       const name = this.plugin.settings.activePreset;
       if (!name) { new Notice("没有选中预设"); return; }
-      if (!confirm(`删除预设「${name}」？`)) return;
-      this.plugin.deletePreset(name);
-      await this.plugin.saveSettings();
-      this.rebuildPresetOptions();
-      new Notice(`预设「${name}」已删除`);
-      await this.refresh();
+      new ConfirmModal(this.app, `删除预设「${name}」？`, async (confirmed) => {
+        if (!confirmed) return;
+        this.plugin.deletePreset(name);
+        await this.plugin.saveSettings();
+        this.rebuildPresetOptions();
+        new Notice(`预设「${name}」已删除`);
+        await this.refresh();
+      }).open();
     });
 
     // ── Row 3: 主题 ──
@@ -1204,4 +1208,85 @@ function insertRendererConfigSection(markdown: string, configSection: string): s
   }
   // Otherwise append at end
   return markdown.trimEnd() + "\n" + configSection;
+}
+
+/** Modal for text input (replaces window.prompt) */
+class InputModal extends Modal {
+  private result: string;
+  private onSubmit: (result: string | null) => void;
+  private placeholder: string;
+  private title: string;
+
+  constructor(app: import("obsidian").App, title: string, placeholder: string, onSubmit: (result: string | null) => void) {
+    super(app);
+    this.title = title;
+    this.placeholder = placeholder;
+    this.result = placeholder;
+    this.onSubmit = onSubmit;
+  }
+
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.createEl("h4", { text: this.title });
+
+    new Setting(contentEl)
+      .addText((text) =>
+        text.setValue(this.placeholder).onChange((value) => {
+          this.result = value;
+        })
+      );
+
+    new Setting(contentEl)
+      .addButton((btn) =>
+        btn.setButtonText("确定").setCta().onClick(() => {
+          this.close();
+          this.onSubmit(this.result);
+        })
+      )
+      .addButton((btn) =>
+        btn.setButtonText("取消").onClick(() => {
+          this.close();
+          this.onSubmit(null);
+        })
+      );
+  }
+
+  onClose() {
+    this.contentEl.empty();
+  }
+}
+
+/** Modal for confirmation (replaces window.confirm) */
+class ConfirmModal extends Modal {
+  private message: string;
+  private onConfirm: (confirmed: boolean) => void;
+
+  constructor(app: import("obsidian").App, message: string, onConfirm: (confirmed: boolean) => void) {
+    super(app);
+    this.message = message;
+    this.onConfirm = onConfirm;
+  }
+
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.createEl("p", { text: this.message });
+
+    new Setting(contentEl)
+      .addButton((btn) =>
+        btn.setButtonText("确定").setCta().onClick(() => {
+          this.close();
+          this.onConfirm(true);
+        })
+      )
+      .addButton((btn) =>
+        btn.setButtonText("取消").onClick(() => {
+          this.close();
+          this.onConfirm(false);
+        })
+      );
+  }
+
+  onClose() {
+    this.contentEl.empty();
+  }
 }

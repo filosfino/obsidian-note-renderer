@@ -1,4 +1,4 @@
-import { App, Component } from "obsidian";
+import { App, Component, sanitizeHTMLToDom } from "obsidian";
 import { PAGE_WIDTH, CONTENT_WIDTH, PAGE_PADDING_H, PAGE_PADDING_TOP, PAGE_PADDING_BOTTOM, PAGE_HEIGHTS, getContentHeight, type PageMode, type CoverStrokeStyle } from "./constants";
 import { paginateBody, Page } from "./paginator";
 import { parseNoteStructure } from "./parser";
@@ -247,7 +247,7 @@ function buildRichCoverPage(
 
   const content = document.createElement("div");
   content.classList.add("nr-cover-content");
-  content.innerHTML = renderMarkdownToHtml(coverMarkdown, resolveImage);
+  content.append(sanitizeHTMLToDom(renderMarkdownToHtml(coverMarkdown, resolveImage)));
 
   autosizeCoverText(content, coverTextOpts);
   pageDiv.appendChild(content);
@@ -380,7 +380,7 @@ async function renderBodyPages(
 
   const contentDiv = document.createElement("div");
   contentDiv.classList.add("nr-page-content");
-  contentDiv.innerHTML = bodyHtml;
+  contentDiv.append(sanitizeHTMLToDom(bodyHtml));
   pageShell.appendChild(contentDiv);
 
   // Wait for layout + images to load
