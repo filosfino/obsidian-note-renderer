@@ -3,7 +3,7 @@
   "name": "Note Renderer",
   "version": "0.1.0",
   "minAppVersion": "1.0.0",
-  "description": "Render markdown notes to paginated images for Xiaohongshu",
+  "description": "Render markdown notes into paginated images optimized for Xiaohongshu.",
   "author": "filosfino",
   "authorUrl": "https://github.com/filosfino",
   "isDesktopOnly": true
