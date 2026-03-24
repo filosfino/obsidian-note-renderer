@@ -13,6 +13,7 @@ import { THEME_ROSE } from "./themes/rose";
 
 import { RENDER_DEFAULTS, RENDER_KEYS, type RenderOptions } from "./schema";
 import { migrateSettings } from "./config-manager";
+import { DEFAULT_FONTS, getFontDisplayName, type FontEntry } from "./fonts";
 
 // ── Types (derived from schema) ──────────────────────────────────────────────
 
@@ -21,6 +22,7 @@ export type RendererPreset = RenderOptions;
 export interface NoteRendererSettings extends RenderOptions {
   activePreset: string;
   presets: Record<string, Partial<RendererPreset>>;
+  customFonts: FontEntry[];
 }
 
 // Preset keys = all render keys (auto-derived)
@@ -30,6 +32,7 @@ const DEFAULT_SETTINGS: NoteRendererSettings = {
   ...RENDER_DEFAULTS,
   activePreset: "",
   presets: {},
+  customFonts: [],
 };
 
 // ── Plugin ───────────────────────────────────────────────────────────────────
@@ -227,8 +230,39 @@ export default class NoteRendererPlugin extends Plugin {
       }
     }
 
+    // Ensure customFonts exists (migration from older data.json)
+    this.settings.customFonts ??= [];
+
+    // Auto-import fonts used in current settings and presets into customFonts
+    this.importUsedFonts();
+
     // Persist migrated settings so data.json gets updated
     await this.saveSettings();
+  }
+
+  /** Auto-add fonts from current settings and presets into customFonts if not already in default list */
+  private importUsedFonts(): void {
+    const defaultValues = new Set(DEFAULT_FONTS.map(f => f.value));
+    const customValues = new Set(this.settings.customFonts.map(f => f.value));
+
+    const maybeAdd = (value: string) => {
+      if (!value || defaultValues.has(value) || customValues.has(value)) return;
+      // Extract primary font name from CSS font-family for the label
+      const match = value.match(/^"([^"]+)"/);
+      const label = match ? getFontDisplayName(match[1]) : value.split(",")[0].trim();
+      this.settings.customFonts.push({ label, value });
+      customValues.add(value);
+    };
+
+    // Current settings
+    maybeAdd(this.settings.fontFamily);
+    maybeAdd(this.settings.coverFontFamily);
+
+    // All presets
+    for (const preset of Object.values(this.settings.presets)) {
+      if (preset.fontFamily) maybeAdd(preset.fontFamily);
+      if (preset.coverFontFamily) maybeAdd(preset.coverFontFamily);
+    }
   }
 
   async saveSettings(): Promise<void> {

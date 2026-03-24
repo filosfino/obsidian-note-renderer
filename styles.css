@@ -748,3 +748,8 @@
 .nr-page-wrapper { position: relative; overflow: hidden; }
 .nr-page-clone { transform-origin: top left; }
 .nr-clickable { cursor: pointer; }
+
+/* Font manager modal */
+.nr-font-filter-bar { display: flex; gap: 4px; flex-wrap: wrap; }
+.nr-font-batch-bar { display: flex; gap: 4px; align-items: center; }
+.nr-font-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }

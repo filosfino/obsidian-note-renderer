@@ -1,7 +1,8 @@
 import { Notice, Menu, setIcon } from "obsidian";
 import type { App } from "obsidian";
 import { FIELD_SCHEMAS, EFFECT_SCHEMAS, RENDER_DEFAULTS, getFieldSchema } from "./schema";
-import { InputModal, ConfirmModal } from "./modals";
+import { InputModal, ConfirmModal, FontManagerModal } from "./modals";
+import { getCoverFontList, getBodyFontList, type FontEntry } from "./fonts";
 import { PRESET_KEYS } from "./main";
 import type NoteRendererPlugin from "./main";
 import type { NoteRendererSettings } from "./main";
@@ -66,110 +67,24 @@ export interface PanelRefs {
   modeIndicator: HTMLElement;
 }
 
-// ── Font lists ──────────────────────────────────────────────────────────────
+// ── Font helpers ────────────────────────────────────────────────────────────
 
-const COVER_FONTS = [
-  // ── 黑体/粗体 ──
-  { label: "汉仪旗黑85S", value: '"HYQiHei 85S", "HYQiHei", sans-serif' },
-  { label: "汉仪旗黑95S", value: '"HYQiHei 95S", "HYQiHei", sans-serif' },
-  { label: "思源黑 Heavy", value: '"Source Han Sans SC Heavy", "Source Han Sans SC", sans-serif' },
-  { label: "方正筑紫黑 B", value: '"FZFW ZhuZi HeiS B", "FZFWZhuZiHeiS-B", sans-serif' },
-  { label: "苹方", value: '"PingFang SC", "Noto Sans SC", sans-serif' },
-  // ── 宋体/明朝 ──
-  { label: "方正书宋", value: '"FZShuSong-Z01S", "Songti SC", serif' },
-  { label: "方正大标宋", value: '"FZDaBiaoSong-B06S", "Songti SC", serif' },
-  { label: "方正标雅宋", value: '"FZYaSongS-R-GB", "Songti SC", serif' },
-  { label: "方正筑紫明朝", value: '"FZFW ZhuZi MinchoS L", "Songti SC", serif' },
-  { label: "方正筑紫A老明朝", value: '"FZFW ZhuZi A Old Mincho R", "Songti SC", serif' },
-  { label: "思源宋体", value: '"Noto Serif SC", "Songti SC", serif' },
-  // ── 圆体/可爱 ──
-  { label: "圆体", value: '"Yuanti SC", "PingFang SC", sans-serif' },
-  { label: "方正兰亭圆", value: '"FZLanTingYuanS-L-GB", "Yuanti SC", sans-serif' },
-  { label: "方正卡通", value: '"FZKaTong-M19S", "Wawati SC", sans-serif' },
-  { label: "娃娃体", value: '"Wawati SC", "PingFang SC", sans-serif' },
-  // ── 楷体/书法 ──
-  { label: "方正盛世楷书", value: '"FZShengShiKaiShuS-EB-GB", "Kaiti SC", serif' },
-  { label: "方正北魏楷书", value: '"FZBeiWeiKaiShu-Z15S", "Kaiti SC", serif' },
-  { label: "方正钟繇小楷", value: '"FZZhongYaoXiaoKaiS", "Kaiti SC", serif' },
-  { label: "霞鹜文楷", value: '"LXGW WenKai", "Kaiti SC", serif' },
-  { label: "行楷", value: '"Xingkai SC", "Kaiti SC", serif' },
-  // ── 手写体 ──
-  { label: "字魂镇魂手书", value: '"zihunzhenhunshoushu", sans-serif' },
-  { label: "字小魂扶摇手书", value: '"zixiaohunfuyaoshoushu", sans-serif' },
-  { label: "字魂水云行楷", value: '"zihunshuiyunxingkai", serif' },
-  { label: "字魂相思明月楷", value: '"zihunxiangsimingyuekai", serif' },
-  { label: "字魂白鸽天行", value: '"zihunbaigetianxingti", sans-serif' },
-  { label: "字魂仙剑奇侠", value: '"zihunxianjianqixiati", sans-serif' },
-  { label: "手札体", value: '"Hannotate SC", "PingFang SC", sans-serif' },
-  // ── 特殊 ──
-  { label: "方正春晚龙马", value: '"FZChunWanLMJSTS", sans-serif' },
-  { label: "方正像素12", value: '"FZXS12", monospace' },
-  { label: "方正珍珠体", value: '"FZFW ZhenZhuTiS L", sans-serif' },
-  // ── 同正文 ──
-  { label: "同正文", value: '' },
-];
+/** Set a select's value, adding a temporary "[未安装]" option if value isn't in the list */
+export function setSelectValue(select: HTMLSelectElement, value: string): void {
+  select.value = value;
+  if (select.value === value) return;
+  // Value not in current options — add a temporary placeholder
+  const label = value.replace(/"/g, "").split(",")[0].trim();
+  select.createEl("option", { text: `${label} [未安装]`, value });
+  select.value = value;
+}
 
-const BODY_FONTS = [
-  // ── 黑体 ──
-  { label: "苹方", value: '"PingFang SC", "Noto Sans SC", sans-serif' },
-  { label: "冬青黑", value: '"Hiragino Sans GB", "PingFang SC", sans-serif' },
-  { label: "思源黑体", value: '"Source Han Sans SC", "Noto Sans SC", sans-serif' },
-  { label: "思源黑 Medium", value: '"Source Han Sans SC Medium", "Noto Sans SC", sans-serif' },
-  { label: "微软雅黑", value: '"Microsoft YaHei", "PingFang SC", sans-serif' },
-  { label: "方正兰亭黑", value: '"FZLanTingHeiS-R-GB", "PingFang SC", sans-serif' },
-  { label: "方正悠黑", value: '"FZYouHeiS 508R", "PingFang SC", sans-serif' },
-  { label: "方正筑紫黑 R", value: '"FZFW ZhuZi HeiS R", "PingFang SC", sans-serif' },
-  { label: "方正筑紫黑 M", value: '"FZFW ZhuZi HeiS M", "PingFang SC", sans-serif' },
-  { label: "汉仪旗黑 55S", value: '"HYQiHei 55S", "HYQiHei", sans-serif' },
-  { label: "汉仪旗黑 65S", value: '"HYQiHei 65S", "HYQiHei", sans-serif' },
-  { label: "霞鹜尚智黑", value: '"LXGW Fasmart Gothic", "PingFang SC", sans-serif' },
-  { label: "霞鹜漫黑", value: '"LXGW Marker Gothic", "PingFang SC", sans-serif' },
-  { label: "霞鹜新晰黑", value: '"LXGW Neo XiHei", "PingFang SC", sans-serif' },
-  // ── 宋体/明朝 ──
-  { label: "宋体 SC", value: '"Songti SC", serif' },
-  { label: "思源宋体", value: '"Noto Serif SC", "Songti SC", serif' },
-  { label: "方正书宋", value: '"FZShuSong-Z01S", "Songti SC", serif' },
-  { label: "方正屏显雅宋", value: '"FZPingXianYaSongS-R-GB", "Songti SC", serif' },
-  { label: "方正标雅宋", value: '"FZYaSongS-R-GB", "Songti SC", serif' },
-  { label: "方正细雅宋", value: '"FZYaSongS-L-GB", "Songti SC", serif' },
-  { label: "方正纤雅宋", value: '"FZYaSongS-EL-GB", "Songti SC", serif' },
-  { label: "方正大标宋", value: '"FZDaBiaoSong-B06S", "Songti SC", serif' },
-  { label: "方正粗宋", value: '"FZCuSong-B09S", "Songti SC", serif' },
-  { label: "方正筑紫明朝", value: '"FZFW ZhuZi MinchoS L", "Songti SC", serif' },
-  { label: "方正筑紫A老明朝", value: '"FZFW ZhuZi A Old Mincho R", "Songti SC", serif' },
-  { label: "霞鹜新致宋", value: '"LXGW Neo ZhiSong", "Songti SC", serif' },
-  { label: "霞鹜铭心宋", value: '"LXGW Heart Serif", "Songti SC", serif' },
-  // ── 仿宋 ──
-  { label: "方正仿宋", value: '"FZFangSong-Z02S", "STFangsong", serif' },
-  { label: "方正刻本仿宋", value: '"FZKeBenFangSongS-R-GB", "STFangsong", serif' },
-  // ── 圆体 ──
-  { label: "圆体", value: '"Yuanti SC", "PingFang SC", sans-serif' },
-  { label: "方正兰亭圆", value: '"FZLanTingYuanS-L-GB", "Yuanti SC", sans-serif' },
-  { label: "方正粗圆", value: '"FZCuYuan-M03S", "Yuanti SC", sans-serif' },
-  { label: "方正卡通", value: '"FZKaTong-M19S", "Wawati SC", sans-serif' },
-  { label: "娃娃体", value: '"Wawati SC", "PingFang SC", sans-serif' },
-  // ── 楷体/书法 ──
-  { label: "楷体 SC", value: '"Kaiti SC", "STKaiti", serif' },
-  { label: "方正楷体", value: '"FZKai-Z03S", "Kaiti SC", serif' },
-  { label: "方正新楷体", value: '"FZNewKai-Z03S", "Kaiti SC", serif' },
-  { label: "方正盛世楷书", value: '"FZShengShiKaiShuS-EB-GB", "Kaiti SC", serif' },
-  { label: "方正北魏楷书", value: '"FZBeiWeiKaiShu-Z15S", "Kaiti SC", serif' },
-  { label: "方正钟繇小楷", value: '"FZZhongYaoXiaoKaiS", "Kaiti SC", serif' },
-  { label: "霞鹜文楷", value: '"LXGW WenKai", "Kaiti SC", serif' },
-  { label: "霞鹜文楷 GB", value: '"LXGW WenKai GB", "Kaiti SC", serif' },
-  { label: "霞鹜 Bright", value: '"LXGW Bright", "LXGW WenKai", serif' },
-  { label: "华文行楷", value: '"Xingkai SC", "STXingkai", serif' },
-  // ── 手写/特殊 ──
-  { label: "字魂镇魂手书", value: '"zihunzhenhunshoushu", sans-serif' },
-  { label: "字小魂扶摇手书", value: '"zixiaohunfuyaoshoushu", sans-serif' },
-  { label: "字魂水云行楷", value: '"zihunshuiyunxingkai", serif' },
-  { label: "字魂相思明月楷", value: '"zihunxiangsimingyuekai", serif' },
-  { label: "字魂白鸽天行", value: '"zihunbaigetianxingti", sans-serif' },
-  { label: "字魂仙剑奇侠", value: '"zihunxianjianqixiati", sans-serif' },
-  { label: "方正FW珍珠体", value: '"FZFW ZhenZhuTiS L", sans-serif' },
-  // ── 系统 ──
-  { label: "系统默认", value: '-apple-system, "PingFang SC", sans-serif' },
-];
+/** Rebuild a font select's options from a font list */
+function rebuildFontOptions(select: HTMLSelectElement, fonts: FontEntry[], currentValue: string): void {
+  select.empty();
+  fonts.forEach(f => select.createEl("option", { text: f.label, value: f.value }));
+  setSelectValue(select, currentValue);
+}
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -343,13 +258,17 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   const coverHeadControls = coverTextHead.createDiv("nr-header-controls");
 
   const coverFontSelect = coverHeadControls.createEl("select", { cls: "dropdown" });
-  COVER_FONTS.forEach((f) => coverFontSelect.createEl("option", { text: f.label, value: f.value }));
-  coverFontSelect.value = host.plugin.settings.coverFontFamily;
+  rebuildFontOptions(coverFontSelect, getCoverFontList(host.plugin.settings.customFonts), host.plugin.settings.coverFontFamily);
   coverFontSelect.addEventListener("click", (e) => e.stopPropagation());
   coverFontSelect.addEventListener("change", () => { void (async () => {
     if (host.syncing) return;
     await host.updateSetting("coverFontFamily", coverFontSelect.value);
   })(); });
+
+  // Font manager gear button (cover) — will be wired up after fontSelect is created below
+  const coverFontGearBtn = coverHeadControls.createEl("button", { cls: "nr-btn nr-btn-sm nr-btn-text", text: "⚙" });
+  coverFontGearBtn.title = "管理自定义字体";
+  coverFontGearBtn.addEventListener("click", (e) => e.stopPropagation());
 
   const scaleInput = coverHeadControls.createEl("input", { cls: "nr-size-input", type: "text" });
   scaleInput.value = String(host.plugin.settings.coverFontScale);
@@ -683,14 +602,29 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
 
   const bodyControls = bodySection.createDiv("nr-header-controls");
   const fontSelect = bodyControls.createEl("select", { cls: "dropdown" });
-  BODY_FONTS.forEach((f) => {
-    fontSelect.createEl("option", { text: f.label, value: f.value });
-  });
-  fontSelect.value = host.plugin.settings.fontFamily;
+  rebuildFontOptions(fontSelect, getBodyFontList(host.plugin.settings.customFonts), host.plugin.settings.fontFamily);
   fontSelect.addEventListener("change", () => {
     if (host.syncing) return;
     void host.updateSetting("fontFamily", fontSelect.value);
   });
+
+  // Shared font manager opener (used by both cover and body gear buttons)
+  const openFontManager = () => {
+    new FontManagerModal(host.app, host.plugin.settings.customFonts, async (updated) => {
+      host.plugin.settings.customFonts = updated;
+      await host.plugin.saveSettings();
+      rebuildFontOptions(coverFontSelect, getCoverFontList(updated), host.plugin.settings.coverFontFamily);
+      rebuildFontOptions(fontSelect, getBodyFontList(updated), host.plugin.settings.fontFamily);
+    }).open();
+  };
+
+  // Font manager gear button (body)
+  const fontGearBtn = bodyControls.createEl("button", { cls: "nr-btn nr-btn-sm nr-btn-text", text: "⚙" });
+  fontGearBtn.title = "管理自定义字体";
+  fontGearBtn.addEventListener("click", openFontManager);
+
+  // Wire up cover gear button (created earlier, before fontSelect existed)
+  coverFontGearBtn.addEventListener("click", openFontManager);
 
   const sizeInput = bodyControls.createEl("input", { cls: "nr-size-input", type: "text" });
   sizeInput.value = String(host.plugin.settings.fontSize);
@@ -711,7 +645,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     sizeInput.value = String(val);
     void host.updateSetting("fontSize", val);
   }, { passive: false });
-  bodyControls.createEl("span", { cls: "nr-size-unit", text: "px" }); // eslint-disable-line obsidianmd/ui/sentence-case -- unit label
+  bodyControls.createEl("span", { cls: "nr-size-unit", text: "px" });
 
   // Preview area
   const previewContainer = contentEl.createDiv("nr-preview-area");

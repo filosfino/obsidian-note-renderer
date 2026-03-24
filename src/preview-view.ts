@@ -19,7 +19,7 @@ import {
 import type NoteRendererPlugin from "./main";
 import { PRESET_KEYS } from "./main";
 import type { NoteRendererSettings } from "./main";
-import { buildSettingsPanel, type PanelHost, type PanelRefs } from "./settings-panel";
+import { buildSettingsPanel, setSelectValue as setFontSelectValue, type PanelHost, type PanelRefs } from "./settings-panel";
 
 export class PreviewView extends ItemView implements PanelHost {
   plugin: NoteRendererPlugin;
@@ -295,8 +295,9 @@ export class PreviewView extends ItemView implements PanelHost {
     r.modeBtns.long.classList.toggle("nr-btn-active", s.pageMode === "long");
     r.modeBtns.card.classList.toggle("nr-btn-active", s.pageMode === "card");
     r.sizeInput.value = String(s.fontSize);
-    r.fontSelect.value = s.fontFamily;
-    r.coverFontSelect.value = s.coverFontFamily;
+    // Use helper to handle fonts not in the dropdown (e.g. from old presets)
+    setFontSelectValue(r.fontSelect, s.fontFamily);
+    setFontSelectValue(r.coverFontSelect, s.coverFontFamily);
     r.scaleInput.value = String(s.coverFontScale);
     r.lsInput.value = String(s.coverLetterSpacing);
     r.lhInput.value = (s.coverLineHeight / 10).toFixed(1);
@@ -327,7 +328,7 @@ export class PreviewView extends ItemView implements PanelHost {
   async handleSaveToNote(): Promise<void> {
     const file = this.app.workspace.getActiveFile();
     if (!file || file.extension !== "md") {
-      new Notice("No active markdown file"); // eslint-disable-line obsidianmd/ui/sentence-case
+      new Notice("No active markdown file");
       return;
     }
     const markdown = await this.app.vault.read(file);
@@ -341,7 +342,7 @@ export class PreviewView extends ItemView implements PanelHost {
   async handleRemoveFromNote(): Promise<void> {
     const file = this.app.workspace.getActiveFile();
     if (!file || file.extension !== "md") {
-      new Notice("No active markdown file"); // eslint-disable-line obsidianmd/ui/sentence-case
+      new Notice("No active markdown file");
       return;
     }
     const markdown = await this.app.vault.read(file);
