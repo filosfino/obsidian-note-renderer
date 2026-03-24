@@ -1,142 +1,8 @@
 # Note Renderer
 
-An Obsidian plugin that renders markdown notes into beautifully paginated images, optimized for publishing on Xiaohongshu (小红书).
-
-[中文文档](#中文文档) | English
-
-## Screenshots
-
-| Cover with image overlay | Body page with inline image | Cover auto-scaling |
-|:---:|:---:|:---:|
-| ![Cover preview](assets/cover-preview.jpeg) | ![Body preview](assets/body-preview.jpeg) | ![Auto-size](assets/cover-autosize.jpeg) |
-
-| Rich text layout | Light theme |
-|:---:|:---:|
-| ![Rich text](assets/rich-text.png) | ![Light theme](assets/light-theme.png) |
-
-More layout examples on my [Xiaohongshu profile](https://www.xiaohongshu.com/user/profile/61d2eb45000000001000cb00).
-
-## Features
-
-- **H2-based parsing**: Reads `## 标题` / `## 封面文字` / `## 封面图` / `## 正文` sections
-- **9 built-in themes**: paper, graphite, ink-gold, amber, cream, latte, sage, mist, rose
-- **Two page modes**: Long (3:5, 1080×1800) and Card (3:4, 1080×1440)
-- **Typography**: 50+ Chinese fonts, adjustable font size (24–72px), line height, letter spacing
-- **Cover design**: Rich markdown covers, background image overlay, auto-scaling text
-- **Cover effects**: Stroke (4 styles), glow, decorative banner, text shadow, X/Y offset
-- **Auto-pagination**: Intelligent page breaks at paragraph boundaries
-- **Manual pagination**: `---` horizontal rule for user-defined page breaks
-- **Preset system**: Save/load named rendering configurations
-- **Per-note config**: `## renderer_config` JSON block for per-article overrides
-- **Real-time preview**: Live sidebar preview with zoom and page navigation
-- **One-click export**: All pages → ZIP archive (sequential PNGs)
-- **Preview script**: Headless Chrome (puppeteer-core) renderer for CLI / AI-assisted layout review
-
-## Themes
-
-| Theme | Mood | Background | Accent |
-|-------|------|------------|--------|
-| paper | Minimal | White | None (weight only) |
-| graphite | Cool, restrained | Dark grey | White |
-| ink-gold | Ceremonial | Dark grey | Gold |
-| amber | Warm story | Warm grey | Warm gold |
-| cream | Soft daily | Cream white | Coral |
-| latte | Warm vintage | Coffee | Brown |
-| sage | Natural fresh | Grey-green | Sage |
-| mist | Cool literary | Misty blue | Blue-grey |
-| rose | Soft emotional | Dusty pink | Rose |
-
-## Note Structure
-
-The renderer reads the following H2 sections:
-
-| Section | Purpose | Required |
-|---------|---------|----------|
-| `## 标题` | Cover title text | No (falls back to H1) |
-| `## 封面文字` | Cover page content (supports rich markdown) | No |
-| `## 封面图` | Cover background image, use `![[image]]` embed | No |
-| `## 正文` | Body content, auto-paginated | Yes |
-
-`## 封面` is accepted as an alias for `## 封面文字`.
-
-### Cover Emphasis Syntax
-
-- `<mark>keyword</mark>` — Highlighter effect (semi-transparent color block)
-- `<u>keyword</u>` — Handwritten-style wavy underline
-- `<span style="...">` — Fully custom styling (overrides theme defaults)
-
-### Cover Text Auto-Scaling
-
-| Characters | Font Size |
-|-----------|-----------|
-| ≤4 | 128px |
-| ≤8 | 108px |
-| ≤12 | 88px |
-| ≤16 | 72px |
-| ≤24 | 60px |
-| >24 | 48px |
-
-Elements with inline styles are excluded from auto-scaling.
-
-## Preview Script
-
-Headless Chrome rendering preview, generates per-page screenshots for AI-assisted layout review.
-
-**Automatically reads Obsidian plugin config** (`.obsidian/plugins/note-renderer/data.json`) by default, no manual parameters needed. CLI arguments can override.
-
-```bash
-node scripts/preview.mjs <note.md> [options]
-```
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--template` | From plugin config | Theme name |
-| `--font-size` | From plugin config | Font size (px) |
-| `--font-family` | From plugin config | Font family |
-| `--mode` | From plugin config | Page ratio: long (3:5) / card (3:4) |
-| `--out` | /tmp/nr-preview | Output directory |
-
-Cover-only preview (faster):
-
-```bash
-node scripts/preview-cover.mjs <note.md> [--template cream]
-```
-
-## Development
-
-```bash
-npm run dev    # watch mode
-npm run build  # production build, outputs main.js
-```
-
-Build output is automatically copied to the plugin directory (configured in esbuild.config.mjs).
-
-## Page Dimensions
-
-| Parameter | Value |
-|-----------|-------|
-| Page width | 1080px |
-| Top padding | 120px |
-| Bottom padding | 90px |
-| Horizontal padding | 90px |
-| Content area (long) | 900×1590px |
-| Content area (card) | 900×1230px |
-
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=filosfino/obsidian-note-renderer&type=Date)](https://star-history.com/#filosfino/obsidian-note-renderer&Date)
-
-## Support
-
-If you find this plugin useful, buy me a coffee!
-
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/filosfino)
-
----
-
-# 中文文档
-
 Obsidian 插件，将 markdown 笔记渲染为分页图片，用于小红书图文发布。
+
+中文 | [English](#english)
 
 ## 效果展示
 
@@ -241,6 +107,8 @@ node scripts/preview-cover.mjs <note.md> [--template cream]
 ```bash
 npm run dev    # watch 模式
 npm run build  # 生产构建，输出到 main.js
+npm run lint   # eslint (obsidianmd 官方规则)
+npm run check  # tsc 类型检查
 ```
 
 构建产物自动输出到插件目录（通过 esbuild.config.mjs 配置）。
@@ -267,3 +135,135 @@ npm run build  # 生产构建，输出到 main.js
 <a href="https://ko-fi.com/filosfino"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Ko-fi" height="36"></a>
 
 <img src="assets/wechat-pay.png" alt="微信赞赏" width="200">
+
+---
+
+# English
+
+An Obsidian plugin that renders markdown notes into beautifully paginated images, optimized for publishing on Xiaohongshu (小红书).
+
+## Screenshots
+
+| Cover with image overlay | Body page with inline image | Cover auto-scaling |
+|:---:|:---:|:---:|
+| ![Cover preview](assets/cover-preview.jpeg) | ![Body preview](assets/body-preview.jpeg) | ![Auto-size](assets/cover-autosize.jpeg) |
+
+| Rich text layout | Light theme |
+|:---:|:---:|
+| ![Rich text](assets/rich-text.png) | ![Light theme](assets/light-theme.png) |
+
+More layout examples on my [Xiaohongshu profile](https://www.xiaohongshu.com/user/profile/61d2eb45000000001000cb00).
+
+## Features
+
+- **H2-based parsing**: Reads `## 标题` / `## 封面文字` / `## 封面图` / `## 正文` sections
+- **9 built-in themes**: paper, graphite, ink-gold, amber, cream, latte, sage, mist, rose
+- **Two page modes**: Long (3:5, 1080×1800) and Card (3:4, 1080×1440)
+- **Typography**: 50+ Chinese fonts, adjustable font size (24–72px), line height, letter spacing
+- **Cover design**: Rich markdown covers, background image overlay, auto-scaling text
+- **Cover effects**: Stroke (4 styles), glow, decorative banner, text shadow, X/Y offset
+- **Auto-pagination**: Intelligent page breaks at paragraph boundaries
+- **Manual pagination**: `---` horizontal rule for user-defined page breaks
+- **Preset system**: Save/load named rendering configurations
+- **Per-note config**: `## renderer_config` JSON block for per-article overrides
+- **Real-time preview**: Live sidebar preview with zoom and page navigation
+- **One-click export**: All pages → ZIP archive (sequential PNGs)
+- **Preview script**: Headless Chrome (puppeteer-core) renderer for CLI / AI-assisted layout review
+
+## Themes
+
+| Theme | Mood | Background | Accent |
+|-------|------|------------|--------|
+| paper | Minimal | White | None (weight only) |
+| graphite | Cool, restrained | Dark grey | White |
+| ink-gold | Ceremonial | Dark grey | Gold |
+| amber | Warm story | Warm grey | Warm gold |
+| cream | Soft daily | Cream white | Coral |
+| latte | Warm vintage | Coffee | Brown |
+| sage | Natural fresh | Grey-green | Sage |
+| mist | Cool literary | Misty blue | Blue-grey |
+| rose | Soft emotional | Dusty pink | Rose |
+
+## Note Structure
+
+The renderer reads the following H2 sections:
+
+| Section | Purpose | Required |
+|---------|---------|----------|
+| `## 标题` | Cover title text | No (falls back to H1) |
+| `## 封面文字` | Cover page content (supports rich markdown) | No |
+| `## 封面图` | Cover background image, use `![[image]]` embed | No |
+| `## 正文` | Body content, auto-paginated | Yes |
+
+`## 封面` is accepted as an alias for `## 封面文字`.
+
+### Cover Emphasis Syntax
+
+- `<mark>keyword</mark>` — Highlighter effect (semi-transparent color block)
+- `<u>keyword</u>` — Handwritten-style wavy underline
+- `<span style="...">` — Fully custom styling (overrides theme defaults)
+
+### Cover Text Auto-Scaling
+
+| Characters | Font Size |
+|-----------|-----------|
+| ≤4 | 128px |
+| ≤8 | 108px |
+| ≤12 | 88px |
+| ≤16 | 72px |
+| ≤24 | 60px |
+| >24 | 48px |
+
+Elements with inline styles are excluded from auto-scaling.
+
+## Preview Script
+
+Headless Chrome rendering preview, generates per-page screenshots for AI-assisted layout review.
+
+**Automatically reads Obsidian plugin config** (`.obsidian/plugins/note-renderer/data.json`) by default, no manual parameters needed. CLI arguments can override.
+
+```bash
+node scripts/preview.mjs <note.md> [options]
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--template` | From plugin config | Theme name |
+| `--font-size` | From plugin config | Font size (px) |
+| `--font-family` | From plugin config | Font family |
+| `--mode` | From plugin config | Page ratio: long (3:5) / card (3:4) |
+| `--out` | /tmp/nr-preview | Output directory |
+
+Cover-only preview (faster):
+
+```bash
+node scripts/preview-cover.mjs <note.md> [--template cream]
+```
+
+## Development
+
+```bash
+npm run dev    # watch mode
+npm run build  # production build, outputs main.js
+npm run lint   # eslint (obsidianmd official rules)
+npm run check  # tsc type checking
+```
+
+Build output is automatically copied to the plugin directory (configured in esbuild.config.mjs).
+
+## Page Dimensions
+
+| Parameter | Value |
+|-----------|-------|
+| Page width | 1080px |
+| Top padding | 120px |
+| Bottom padding | 90px |
+| Horizontal padding | 90px |
+| Content area (long) | 900×1590px |
+| Content area (card) | 900×1230px |
+
+## Support
+
+If you find this plugin useful, buy me a coffee!
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/filosfino)
