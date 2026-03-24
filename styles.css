@@ -5,6 +5,12 @@
   flex-direction: column;
   height: 100%;
   padding: 0;
+  margin: 0;
+}
+
+/* Remove Obsidian's default view padding */
+.workspace-leaf-content:has(.nr-view) .view-content {
+  padding: 0;
 }
 
 /* Toolbar */
@@ -34,26 +40,33 @@
   align-items: center;
   gap: 6px;
   padding: 4px 12px 8px;
-  border-bottom: 1px solid var(--background-modifier-border);
 }
 
-.nr-btn-sm {
+.nr-view .nr-btn-sm {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
+  min-height: 0;
   padding: 0;
+  margin: 0;
   border: 1px solid var(--background-modifier-border);
   border-radius: 4px;
   background: var(--background-primary);
   color: var(--text-normal);
   cursor: pointer;
-  font-size: 14px;
+  font-size: 12px;
   flex-shrink: 0;
+  box-shadow: none;
 }
 
-.nr-btn-sm:hover {
+.nr-view .nr-btn-sm .svg-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.nr-view .nr-btn-sm:hover {
   background: var(--background-modifier-hover);
 }
 
@@ -82,16 +95,13 @@
   font-size: 12px;
 }
 
-.nr-select-fixed {
-  width: 120px;
-  flex: none;
-  height: 26px;
-  padding: 0 6px;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 4px;
-  background: var(--background-primary);
-  color: var(--text-normal);
+/* All dropdowns: unified size */
+.nr-view .dropdown {
+  max-width: 160px;
+  height: 22px !important;
+  min-height: 0;
   font-size: 12px;
+  padding: 0 6px;
 }
 
 .nr-btn {
@@ -139,7 +149,7 @@
   overflow-x: hidden;
   display: flex;
   justify-content: center;
-  align-items: flex-end;
+  align-items: center;
   padding: 12px;
   background: var(--background-secondary);
   min-height: 0;
@@ -172,9 +182,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px;
-  gap: 8px;
-  border-top: 1px solid var(--background-modifier-border);
+  padding: 6px 8px;
+  gap: 6px;
 }
 
 .nr-nav-left {
@@ -218,17 +227,26 @@
   color: var(--text-normal);
 }
 
-.nr-nav-btn {
+.nr-view .nr-nav-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 24px;
+  height: 24px;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
   border: none;
   border-radius: 50%;
   background: var(--background-modifier-hover);
   color: var(--text-normal);
   cursor: pointer;
+  box-shadow: none;
+}
+
+.nr-view .nr-nav-btn .svg-icon {
+  width: 14px;
+  height: 14px;
 }
 
 .nr-nav-btn:hover {
@@ -273,4 +291,440 @@
 .nr-measurer {
   visibility: hidden;
   pointer-events: none;
+}
+
+/* ── V2: Compact top bar (preset) ── */
+.nr-top-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  min-height: 32px;
+}
+
+.nr-view .nr-top-bar .dropdown {
+  flex: 1;
+  min-width: 0;
+  height: 22px !important;
+  min-height: 0;
+  font-size: 12px;
+  padding: 0 6px;
+}
+
+.nr-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background: var(--background-primary);
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+
+.nr-icon-btn:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+.nr-icon-btn .svg-icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* ── V2: Quick bar (theme + mode) ── */
+.nr-quick-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  min-height: 32px;
+}
+
+.nr-view .nr-quick-bar .dropdown {
+  flex: 1;
+  min-width: 0;
+  height: 22px !important;
+  min-height: 0;
+  font-size: 12px;
+  padding: 0 6px;
+}
+
+/* ── V2: Accordion sections ── */
+.nr-section {
+}
+
+.nr-section-head {
+  display: flex;
+  align-items: center;
+  padding: 6px 10px;
+  min-height: 32px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.12s;
+}
+
+.nr-section-head:hover {
+  background: var(--background-modifier-hover);
+}
+
+.nr-section-title {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+}
+
+.nr-section-chevron {
+  font-size: 10px;
+  color: var(--text-faint);
+  transition: transform 0.2s;
+  margin-right: 4px;
+}
+
+.nr-section.open .nr-section-chevron {
+  transform: rotate(90deg);
+}
+
+.nr-section-body {
+  display: none;
+  padding: 0 10px 8px;
+}
+
+.nr-section.open .nr-section-body {
+  display: block;
+}
+
+/* ── V2: Header inline controls ── */
+.nr-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  margin-right: 4px;
+}
+
+.nr-view .nr-header-controls .dropdown {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  height: 22px !important;
+  min-height: 0;
+  padding: 0 6px;
+}
+
+.nr-view .nr-size-input {
+  width: 42px;
+  height: 22px !important;
+  min-height: 0;
+  text-align: center;
+  padding: 0 4px;
+  flex-shrink: 0;
+  font-size: 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  outline: none;
+  box-sizing: border-box;
+}
+
+.nr-size-input:hover,
+.nr-size-input:focus {
+  border-color: var(--interactive-accent);
+}
+
+.nr-size-unit {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* ── V2: Align icon group in header ── */
+.nr-header-align {
+  display: inline-flex;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  overflow: hidden;
+  height: 28px;
+  flex-shrink: 0;
+}
+
+.nr-header-align:hover {
+  border-color: var(--interactive-accent);
+}
+
+.nr-header-align button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.12s;
+}
+
+.nr-header-align button .svg-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.nr-header-align button:hover {
+  color: var(--text-normal);
+}
+
+.nr-header-align button.active {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-radius: 2px;
+}
+
+/* ── V2: Effect chip toggles ── */
+.nr-header-chips {
+  display: flex;
+  gap: 3px;
+  margin-left: auto;
+  margin-right: 4px;
+}
+
+.nr-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 11px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+  user-select: none;
+}
+
+.nr-chip:hover {
+  border-color: var(--interactive-accent);
+  color: var(--text-normal);
+}
+
+.nr-chip.active {
+  background: var(--interactive-accent);
+  border-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+/* ── V2: Flat row (non-collapsible, for 正文) ── */
+.nr-flat-row {
+  display: flex;
+  align-items: center;
+  padding: 6px 10px;
+  min-height: 32px;
+}
+
+.nr-flat-row .nr-header-controls {
+  margin-left: auto;
+  margin-right: 0;
+}
+
+/* ── V2: Effect sub-params container ── */
+.nr-sub-params {
+  margin-top: 4px;
+  padding: 6px 8px;
+}
+
+.nr-view .nr-sub-params .dropdown {
+  height: 22px !important;
+  min-height: 0;
+  font-size: 12px;
+  padding: 0 6px;
+}
+
+.nr-sub-params .nr-row + .nr-row {
+  margin-top: 3px;
+}
+
+.nr-sub-params .nr-row-label {
+  width: 28px;
+  font-size: 11px;
+}
+
+/* ── V2: Row inside section body ── */
+.nr-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+}
+
+.nr-row + .nr-row {
+  margin-top: 4px;
+}
+
+/* ── V2: Compact stepper (for sub-params) ── */
+.nr-stepper-compact {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+}
+
+.nr-stepper-compact button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0;
+  transition: all 0.12s;
+}
+
+.nr-stepper-compact button:first-child {
+  border-radius: 4px 0 0 4px;
+  border-right: none;
+}
+
+.nr-stepper-compact button:last-child {
+  border-radius: 0 4px 4px 0;
+  border-left: none;
+}
+
+.nr-stepper-compact button:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+.nr-stepper-val {
+  font-size: 12px;
+  color: var(--text-normal);
+  min-width: 40px;
+  height: 28px;
+  line-height: 28px;
+  text-align: center;
+  padding: 0 4px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  white-space: nowrap;
+}
+
+/* ── V2: Labeled input field (replaces stepper) ── */
+.nr-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.nr-field-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.nr-view .nr-field-input {
+  width: 42px;
+  height: 22px !important;
+  min-height: 0;
+  text-align: center;
+  padding: 0 4px;
+  font-size: 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  outline: none;
+  box-sizing: border-box;
+}
+
+.nr-view .nr-field-input:hover,
+.nr-view .nr-field-input:focus {
+  border-color: var(--interactive-accent);
+}
+
+.nr-field-unit {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* ── V2: Color dot ── */
+.nr-view .nr-color-dot {
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  min-height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--background-modifier-border);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color 0.15s;
+  padding: 0;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  background: none;
+  overflow: hidden;
+}
+
+.nr-view .nr-color-dot::-webkit-color-swatch-wrapper {
+  padding: 0;
+  margin: 0;
+}
+
+.nr-view .nr-color-dot::-webkit-color-swatch {
+  border: none;
+  border-radius: 50%;
+  margin: 0;
+}
+
+.nr-view .nr-color-dot::-moz-color-swatch {
+  border: none;
+  border-radius: 50%;
+}
+
+.nr-view .nr-color-dot:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.nr-color-dot::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.nr-color-dot::-webkit-color-swatch {
+  border: none;
+  border-radius: 50%;
+}
+
+.nr-color-dot:hover {
+  border-color: var(--interactive-accent);
+}
+
+/* ── V2: Text button ── */
+.nr-text-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 10px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: all 0.12s;
+}
+
+.nr-text-btn:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+.nr-text-btn.danger:hover {
+  color: var(--text-error, #f38ba8);
 }

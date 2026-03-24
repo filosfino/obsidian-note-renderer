@@ -84,9 +84,50 @@ function parseNoteRendererConfig(mdContent) {
 const mdRaw = readFileSync(mdPath, "utf-8");
 const noteRendererConfig = parseNoteRendererConfig(mdRaw);
 
+// Normalize shorthand keys in a renderer_config/settings object to canonical names.
+// Users may write "theme" instead of "activeTheme", "template" instead of "activeTheme", etc.
+function normalizeConfigKeys(cfg) {
+  if (!cfg || typeof cfg !== "object") return cfg;
+  const result = Object.assign({}, cfg);
+  // theme / template → activeTheme
+  if ("theme" in result && !("activeTheme" in result)) {
+    result.activeTheme = result.theme;
+    delete result.theme;
+  }
+  if ("template" in result && !("activeTheme" in result)) {
+    result.activeTheme = result.template;
+    delete result.template;
+  }
+  // activeTemplate → activeTheme (legacy migration)
+  if ("activeTemplate" in result && !("activeTheme" in result)) {
+    result.activeTheme = result.activeTemplate;
+    delete result.activeTemplate;
+  }
+  // font → fontFamily
+  if ("font" in result && !("fontFamily" in result)) {
+    result.fontFamily = result.font;
+    delete result.font;
+  }
+  // coverFont → coverFontFamily
+  if ("coverFont" in result && !("coverFontFamily" in result)) {
+    result.coverFontFamily = result.coverFont;
+    delete result.coverFont;
+  }
+  // mode → pageMode
+  if ("mode" in result && !("pageMode" in result)) {
+    result.pageMode = result.mode;
+    delete result.mode;
+  }
+  return result;
+}
+
 // Merge: noteRendererConfig > pluginSettings > hardcoded defaults
 // CLI args still take highest precedence (override everything)
-const effectiveSettings = Object.assign({}, pluginSettings, noteRendererConfig || {});
+const effectiveSettings = Object.assign(
+  {},
+  normalizeConfigKeys(pluginSettings),
+  normalizeConfigKeys(noteRendererConfig || {})
+);
 
 // CLI args override plugin settings, plugin settings override hardcoded defaults
 // Priority: CLI args > noteRendererConfig > pluginSettings > defaults
@@ -94,9 +135,24 @@ const themeName = getArg("theme", getArg("template", effectiveSettings.activeThe
 const fontSize = parseInt(getArg("font-size", String(effectiveSettings.fontSize || 42)));
 const fontFamily = getArg("font-family", effectiveSettings.fontFamily || '"PingFang SC", "Noto Sans SC", sans-serif');
 const coverFontFamily = getArg("cover-font", effectiveSettings.coverFontFamily || '"Yuanti SC", "PingFang SC", sans-serif');
+const coverFontScale = effectiveSettings.coverFontScale ?? 100;
+const coverFontColor = effectiveSettings.coverFontColor || "";
+const coverLetterSpacing = effectiveSettings.coverLetterSpacing ?? 5;
+const coverLineHeight = effectiveSettings.coverLineHeight ?? 13;
+const coverStrokeStyle = effectiveSettings.coverStrokeStyle || "none";
+const coverStrokePercent = (effectiveSettings.coverStrokePercent ?? 8) / 100;
+const coverStrokeOpacity = (effectiveSettings.coverStrokeOpacity ?? 90) / 100;
+const coverShadow = effectiveSettings.coverShadow ?? false;
+const coverShadowBlur = effectiveSettings.coverShadowBlur ?? 16;
+const coverShadowOffsetX = effectiveSettings.coverShadowOffsetX ?? 0;
+const coverShadowOffsetY = effectiveSettings.coverShadowOffsetY ?? 4;
+const coverTextAlignRaw = effectiveSettings.coverTextAlign || "left";
+const coverTextAlign = ["left", "center", "right"].includes(coverTextAlignRaw) ? coverTextAlignRaw : "left";
+const coverAlignItems = coverTextAlign === "center" ? "center" : coverTextAlign === "right" ? "flex-end" : "flex-start";
 const pluginPageMode = effectiveSettings.pageMode === "card" ? "card" : "long";
 const pageMode = getArg("mode", pluginPageMode);
 const outDir = getArg("out", "/tmp/nr-preview");
+const pageArg = getArg("page", null);
 const chromePath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 
 // ── Constants ──
@@ -163,14 +219,31 @@ function parseNote(md) {
 // ── Cover text autosize ──
 function autosizeStyle(text) {
   const len = text.replace(/<[^>]+>/g, "").trim().length;
-  let fs;
-  if (len <= 4) fs = 128;
-  else if (len <= 8) fs = 108;
-  else if (len <= 12) fs = 88;
-  else if (len <= 16) fs = 72;
-  else if (len <= 24) fs = 60;
-  else fs = 48;
-  return `font-size:${fs}px; font-weight:800; line-height:1.3;`;
+  const CONTENT_W = PAGE_WIDTH - PAGE_PADDING_H * 2;
+  const fillSize = Math.min(160, Math.max(72, Math.floor(CONTENT_W / (len * 1.05))));
+  const scaledSize = Math.round(fillSize * (coverFontScale / 100));
+  const lh = coverLineHeight / 10;
+  const ls = `${coverLetterSpacing / 100}em`;
+
+  let css = `font-size:${scaledSize}px; font-weight:800; line-height:${lh}; letter-spacing:${ls};`;
+
+  // Stroke
+  if (coverStrokeStyle !== "none" && coverStrokePercent > 0) {
+    const sw = Math.max(1, Math.round(scaledSize * coverStrokePercent));
+    css += ` -webkit-text-stroke: ${sw}px rgba(0,0,0,${coverStrokeOpacity}); paint-order: stroke fill;`;
+  }
+
+  // Shadow
+  if (coverShadow) {
+    css += ` text-shadow: ${coverShadowOffsetX}px ${coverShadowOffsetY}px ${coverShadowBlur}px rgba(0,0,0,0.6);`;
+  }
+
+  // Color
+  if (coverFontColor) {
+    css += ` color: ${coverFontColor};`;
+  }
+
+  return css;
 }
 
 // ── Build HTML ──
@@ -269,7 +342,7 @@ function buildCoverHtml() {
 
   // Cover image as background, text overlaid on top
   return `<img src="${coverImageUrl}" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;border-radius:16px;z-index:0;">
-<div style="position:relative;z-index:1;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;padding:${PAGE_PADDING_TOP}px ${PAGE_PADDING_H}px ${PAGE_PADDING_BOTTOM}px;">${textHtml}</div>`;
+<div style="position:relative;z-index:1;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:${coverAlignItems};text-align:${coverTextAlign};padding:${PAGE_PADDING_TOP}px ${PAGE_PADDING_H}px ${PAGE_PADDING_BOTTOM}px;">${textHtml}</div>`;
 }
 
 // Build the full HTML document
@@ -297,7 +370,8 @@ ${fontOverride}
   display: flex;
   flex-direction: column;
   justify-content: center;
-  align-items: flex-start;
+  align-items: ${coverAlignItems};
+  text-align: ${coverTextAlign};
   height: 100%;
   position: relative;
 }
@@ -485,13 +559,27 @@ await page.waitForFunction("window.__pagesReady === true", { timeout: 10000 });
 const pageCount = await page.evaluate(() => window.__pageCount);
 console.log(`Generated ${pageCount} pages`);
 
-// Screenshot each page
+// Screenshot pages (all or specific page)
 const pageElements = await page.$$("#pages > .nr-page");
-for (let i = 0; i < pageElements.length; i++) {
-  const pngPath = join(outDir, `page_${String(i).padStart(2, "0")}.png`);
-  await pageElements[i].screenshot({ path: pngPath });
-  console.log(`  ✓ ${pngPath}`);
-}
+const targetPage = pageArg !== null ? parseInt(pageArg) : null;
 
-await browser.close();
-console.log(`\nDone. ${pageCount} pages at ${outDir}/`);
+if (targetPage !== null) {
+  if (targetPage < 0 || targetPage >= pageElements.length) {
+    console.error(`Page ${targetPage} out of range (0-${pageElements.length - 1})`);
+    await browser.close();
+    process.exit(1);
+  }
+  const pngPath = join(outDir, `page_${String(targetPage).padStart(2, "0")}.png`);
+  await pageElements[targetPage].screenshot({ path: pngPath });
+  console.log(`  ✓ ${pngPath}`);
+  await browser.close();
+  console.log(`\nDone. Page ${targetPage} of ${pageCount} at ${outDir}/`);
+} else {
+  for (let i = 0; i < pageElements.length; i++) {
+    const pngPath = join(outDir, `page_${String(i).padStart(2, "0")}.png`);
+    await pageElements[i].screenshot({ path: pngPath });
+    console.log(`  ✓ ${pngPath}`);
+  }
+  await browser.close();
+  console.log(`\nDone. ${pageCount} pages at ${outDir}/`);
+}

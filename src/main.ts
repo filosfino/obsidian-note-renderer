@@ -11,7 +11,7 @@ import { THEME_SAGE } from "./themes/sage";
 import { THEME_MIST } from "./themes/mist";
 import { THEME_ROSE } from "./themes/rose";
 
-import type { PageMode, CoverStrokeStyle } from "./constants";
+import type { PageMode, CoverStrokeStyle, CoverTextAlign } from "./constants";
 
 // Preset: a named snapshot of all rendering parameters (theme + params)
 export interface RendererPreset {
@@ -32,11 +32,28 @@ export interface RendererPreset {
   coverLineHeight: number;
   coverOffsetX: number;
   coverOffsetY: number;
+  coverFontWeight: number;
   coverOverlay: boolean;
+  coverOverlayOpacity: number;
+  coverGrain: boolean;
+  coverGrainOpacity: number;
+  coverAurora: boolean;
+  coverAuroraOpacity: number;
+  coverBokeh: boolean;
+  coverBokehOpacity: number;
+  coverGrid: boolean;
+  coverGridOpacity: number;
+  coverVignette: boolean;
+  coverVignetteOpacity: number;
+  coverLightLeak: boolean;
+  coverLightLeakOpacity: number;
+  coverScanlines: boolean;
+  coverScanlinesOpacity: number;
   coverShadow: boolean;
   coverShadowBlur: number;
   coverShadowOffsetX: number;
   coverShadowOffsetY: number;
+  coverTextAlign: CoverTextAlign;
   pageMode: PageMode;
 }
 
@@ -60,11 +77,28 @@ export interface NoteRendererSettings {
   coverLineHeight: number;      // in 0.1 units (e.g. 13 = 1.3)
   coverOffsetX: number;         // cover text X offset in % of page width (-50 to 50)
   coverOffsetY: number;         // cover text Y offset in % of page height (-50 to 50)
-  coverOverlay: boolean;        // gradient overlay on cover image
+  coverFontWeight: number;      // cover text font weight (100-900)
+  coverOverlay: boolean;
+  coverOverlayOpacity: number;
+  coverGrain: boolean;
+  coverGrainOpacity: number;
+  coverAurora: boolean;
+  coverAuroraOpacity: number;
+  coverBokeh: boolean;
+  coverBokehOpacity: number;
+  coverGrid: boolean;
+  coverGridOpacity: number;
+  coverVignette: boolean;
+  coverVignetteOpacity: number;
+  coverLightLeak: boolean;
+  coverLightLeakOpacity: number;
+  coverScanlines: boolean;
+  coverScanlinesOpacity: number;
   coverShadow: boolean;
   coverShadowBlur: number;
   coverShadowOffsetX: number;
   coverShadowOffsetY: number;
+  coverTextAlign: CoverTextAlign;
   pageMode: PageMode;
 }
 
@@ -73,10 +107,18 @@ export const PRESET_KEYS: (keyof RendererPreset)[] = [
   "activeTheme", "fontSize", "fontFamily", "coverFontFamily",
   "coverStrokePercent", "coverStrokeStyle", "coverStrokeOpacity", "coverGlowSize",
   "coverBanner", "coverBannerColor", "coverBannerSkew", "coverFontColor",
-  "coverFontScale", "coverLetterSpacing", "coverLineHeight",
-  "coverOffsetX", "coverOffsetY", "coverOverlay",
+  "coverFontScale", "coverFontWeight", "coverLetterSpacing", "coverLineHeight",
+  "coverOffsetX", "coverOffsetY",
+  "coverOverlay", "coverOverlayOpacity",
+  "coverGrain", "coverGrainOpacity",
+  "coverAurora", "coverAuroraOpacity",
+  "coverBokeh", "coverBokehOpacity",
+  "coverGrid", "coverGridOpacity",
+  "coverVignette", "coverVignetteOpacity",
+  "coverLightLeak", "coverLightLeakOpacity",
+  "coverScanlines", "coverScanlinesOpacity",
   "coverShadow", "coverShadowBlur", "coverShadowOffsetX", "coverShadowOffsetY",
-  "pageMode",
+  "coverTextAlign", "pageMode",
 ];
 
 const DEFAULT_SETTINGS: NoteRendererSettings = {
@@ -99,11 +141,28 @@ const DEFAULT_SETTINGS: NoteRendererSettings = {
   coverLineHeight: 13,
   coverOffsetX: 0,
   coverOffsetY: 0,
+  coverFontWeight: 800,
   coverOverlay: true,
+  coverOverlayOpacity: 55,
+  coverGrain: false,
+  coverGrainOpacity: 8,
+  coverAurora: false,
+  coverAuroraOpacity: 30,
+  coverBokeh: false,
+  coverBokehOpacity: 12,
+  coverGrid: false,
+  coverGridOpacity: 6,
+  coverVignette: false,
+  coverVignetteOpacity: 50,
+  coverLightLeak: false,
+  coverLightLeakOpacity: 25,
+  coverScanlines: false,
+  coverScanlinesOpacity: 8,
   coverShadow: true,
   coverShadowBlur: 16,
   coverShadowOffsetX: 0,
   coverShadowOffsetY: 4,
+  coverTextAlign: "left",
   pageMode: "long",
 };
 
@@ -134,6 +193,42 @@ export default class NoteRendererPlugin extends Plugin {
         if (view instanceof PreviewView) {
           await view.refresh();
         }
+      },
+    });
+
+    this.addCommand({
+      id: "prev-page",
+      name: "Previous page",
+      callback: () => {
+        const view = this.app.workspace.getLeavesOfType(VIEW_TYPE)[0]?.view;
+        if (view instanceof PreviewView) view.goPage(-1);
+      },
+    });
+
+    this.addCommand({
+      id: "next-page",
+      name: "Next page",
+      callback: () => {
+        const view = this.app.workspace.getLeavesOfType(VIEW_TYPE)[0]?.view;
+        if (view instanceof PreviewView) view.goPage(1);
+      },
+    });
+
+    this.addCommand({
+      id: "export-current-page",
+      name: "Export current page",
+      callback: () => {
+        const view = this.app.workspace.getLeavesOfType(VIEW_TYPE)[0]?.view;
+        if (view instanceof PreviewView) view.handleExportCurrentPage();
+      },
+    });
+
+    this.addCommand({
+      id: "export-all",
+      name: "Export all pages (ZIP)",
+      callback: () => {
+        const view = this.app.workspace.getLeavesOfType(VIEW_TYPE)[0]?.view;
+        if (view instanceof PreviewView) view.handleExport();
       },
     });
 

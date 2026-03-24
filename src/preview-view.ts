@@ -5,13 +5,14 @@ import {
   TAbstractFile,
   Notice,
   Modal,
+  Menu,
   Setting,
   setIcon,
   debounce,
 } from "obsidian";
 import { VIEW_TYPE, PAGE_WIDTH, PAGE_HEIGHTS } from "./constants";
 import { renderNote, RenderedPages, RenderOptions } from "./renderer";
-import { exportPages } from "./exporter";
+import { exportPages, exportSinglePage } from "./exporter";
 import { parseRendererConfig } from "./parser";
 import type NoteRendererPlugin from "./main";
 import { PRESET_KEYS } from "./main";
@@ -34,6 +35,7 @@ export class PreviewView extends ItemView {
   // Current displayed clone + wrapper (for rescaling without re-rendering)
   private currentClone: HTMLElement | null = null;
   private currentWrapper: HTMLElement | null = null;
+  private coverCropOverlay: HTMLElement | null = null;
   private effectivePageMode: "long" | "card" = "long";
 
   // Save/Remove button DOM refs
@@ -64,10 +66,11 @@ export class PreviewView extends ItemView {
   private uiPresetSelect: HTMLSelectElement | null = null;
   private uiThemeSelect: HTMLSelectElement | null = null;
   private uiModeSelect: HTMLSelectElement | null = null;
-  private uiSizeLabel: HTMLElement | null = null;
+  private uiModeBtns: { long: HTMLElement; card: HTMLElement } | null = null;
+  private uiSizeInput: HTMLInputElement | null = null;
   private uiFontSelect: HTMLSelectElement | null = null;
   private uiCoverFontSelect: HTMLSelectElement | null = null;
-  private uiScaleLabel: HTMLElement | null = null;
+  private uiScaleInput: HTMLInputElement | null = null;
   private uiLsLabel: HTMLElement | null = null;
   private uiLhLabel: HTMLElement | null = null;
   private uiStrokeStyleSelect: HTMLSelectElement | null = null;
@@ -85,6 +88,7 @@ export class PreviewView extends ItemView {
   private bannerParamsRow: HTMLElement | null = null;
   private shadowParamsRow: HTMLElement | null = null;
   private lastStrokeStyle: string = "stroke";
+  private uiAlignBtns: { left: HTMLElement; center: HTMLElement; right: HTMLElement } | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: NoteRendererPlugin) {
     super(leaf);
@@ -108,11 +112,10 @@ export class PreviewView extends ItemView {
     contentEl.empty();
     contentEl.classList.add("nr-view");
 
-    // ── Row 1: 预设 ──
-    const presetBar = contentEl.createDiv("nr-font-bar");
+    // ── Top bar: 预设 (compact) ──
+    const presetBar = contentEl.createDiv("nr-top-bar");
     presetBar.createEl("span", { cls: "nr-row-label", text: "预设" });
-
-    const presetSelect = presetBar.createEl("select", { cls: "nr-select-fixed" });
+    const presetSelect = presetBar.createEl("select", { cls: "dropdown" });
     this.uiPresetSelect = presetSelect;
     this.rebuildPresetOptions();
     presetSelect.addEventListener("change", async () => {
@@ -127,9 +130,10 @@ export class PreviewView extends ItemView {
       await this.refresh();
     });
 
-    const presetSaveBtn = presetBar.createEl("button", { cls: "nr-btn nr-btn-sm", text: "存" });
+    const presetSaveBtn = presetBar.createEl("button", { cls: "nr-btn nr-btn-sm", text: "保存" });
+    presetSaveBtn.style.width = "auto";
+    presetSaveBtn.style.padding = "0 8px";
     presetSaveBtn.title = "保存当前配置为预设";
-    presetSaveBtn.style.minWidth = "36px";
     presetSaveBtn.addEventListener("click", () => {
       new InputModal(this.app, "保存预设", this.plugin.settings.activePreset || "", async (name) => {
         if (!name) return;
@@ -145,9 +149,10 @@ export class PreviewView extends ItemView {
       }).open();
     });
 
-    const presetDelBtn = presetBar.createEl("button", { cls: "nr-btn nr-btn-sm", text: "删" });
+    const presetDelBtn = presetBar.createEl("button", { cls: "nr-btn nr-btn-sm", text: "删除" });
+    presetDelBtn.style.width = "auto";
+    presetDelBtn.style.padding = "0 8px";
     presetDelBtn.title = "删除当前预设";
-    presetDelBtn.style.minWidth = "36px";
     presetDelBtn.addEventListener("click", () => {
       const name = this.plugin.settings.activePreset;
       if (!name) { new Notice("没有选中预设"); return; }
@@ -161,11 +166,10 @@ export class PreviewView extends ItemView {
       }).open();
     });
 
-    // ── Row 3: 主题 ──
-    const fontBar = contentEl.createDiv("nr-font-bar");
-    fontBar.createEl("span", { cls: "nr-row-label", text: "主题" });
-
-    const themeSelect = fontBar.createEl("select", { cls: "nr-select-fixed" });
+    // ── Quick bar: 主题 + 模式 ──
+    const quickBar = contentEl.createDiv("nr-quick-bar");
+    quickBar.createEl("span", { cls: "nr-row-label", text: "主题" });
+    const themeSelect = quickBar.createEl("select", { cls: "dropdown" });
     this.uiThemeSelect = themeSelect;
     this.plugin.getThemeNames().forEach((name) => {
       themeSelect.createEl("option", { text: name, value: name });
@@ -176,24 +180,53 @@ export class PreviewView extends ItemView {
       await this.updateSetting("activeTheme", themeSelect.value);
     });
 
-    const modeSelect = fontBar.createEl("select", { cls: "nr-select-fixed" });
+    // Mode toggle buttons (mutually exclusive, pushed right)
+    quickBar.createDiv().style.flex = "1";
+    const modeBtn35 = quickBar.createEl("button", {
+      cls: `nr-btn nr-btn-sm${this.plugin.settings.pageMode === "long" ? " nr-btn-active" : ""}`,
+      text: "3:5",
+    });
+    modeBtn35.style.width = "auto";
+    modeBtn35.style.padding = "0 8px";
+    const modeBtn34 = quickBar.createEl("button", {
+      cls: `nr-btn nr-btn-sm${this.plugin.settings.pageMode === "card" ? " nr-btn-active" : ""}`,
+      text: "3:4",
+    });
+    modeBtn34.style.width = "auto";
+    modeBtn34.style.padding = "0 8px";
+
+    const setMode = async (mode: "long" | "card") => {
+      if (this.syncing) return;
+      modeBtn35.classList.toggle("nr-btn-active", mode === "long");
+      modeBtn34.classList.toggle("nr-btn-active", mode === "card");
+      await this.updateSetting("pageMode", mode);
+    };
+    modeBtn35.addEventListener("click", () => setMode("long"));
+    modeBtn34.addEventListener("click", () => setMode("card"));
+
+    this.uiModeBtns = { long: modeBtn35, card: modeBtn34 };
+
+    // Keep a hidden select for syncUI compatibility
+    const modeSelect = document.createElement("select");
     this.uiModeSelect = modeSelect;
+    modeSelect.style.display = "none";
     modeSelect.createEl("option", { text: "长文 3:5", value: "long" });
     modeSelect.createEl("option", { text: "图文 3:4", value: "card" });
     modeSelect.value = this.plugin.settings.pageMode;
-    modeSelect.addEventListener("change", async () => {
-      if (this.syncing) return;
-      await this.updateSetting("pageMode", modeSelect.value as "long" | "card");
-    });
 
-    // ── Cover section ──
+    // ── Cover section (wraps two accordion sections) ──
     this.coverSection = contentEl.createDiv("nr-cover-section");
 
-    // ── Row 样式: label "样式" + [cover-font-select] + [color-picker] + [默认色] + [- 缩放% +] ──
-    const coverBar = this.coverSection.createDiv("nr-font-bar");
-    coverBar.createEl("span", { cls: "nr-row-label", text: "文字" });
+    // ── Section: 封面文字 (collapsible) ──
+    const coverTextSection = this.coverSection.createDiv("nr-section open");
+    const coverTextHead = coverTextSection.createDiv("nr-section-head");
+    coverTextHead.createEl("span", { cls: "nr-section-chevron", text: "▶" });
+    coverTextHead.createEl("span", { cls: "nr-section-title", text: "封面文字" });
 
-    const coverFontSelect = coverBar.createEl("select", { cls: "nr-select-fixed" });
+    // Header inline controls: font select + scale input + align icons
+    const coverHeadControls = coverTextHead.createDiv("nr-header-controls");
+
+    const coverFontSelect = coverHeadControls.createEl("select", { cls: "dropdown" });
     this.uiCoverFontSelect = coverFontSelect;
     [
       // ── 黑体/粗体 ──
@@ -236,176 +269,186 @@ export class PreviewView extends ItemView {
       { label: "同正文", value: '' },
     ].forEach((f) => coverFontSelect.createEl("option", { text: f.label, value: f.value }));
     coverFontSelect.value = this.plugin.settings.coverFontFamily;
+    coverFontSelect.addEventListener("click", (e) => e.stopPropagation());
     coverFontSelect.addEventListener("change", async () => {
       if (this.syncing) return;
       await this.updateSetting("coverFontFamily", coverFontSelect.value);
     });
 
-    // Cover font color
-    const colorInput = coverBar.createEl("input", { cls: "nr-color-input", type: "color" });
+    const scaleInput = coverHeadControls.createEl("input", { cls: "nr-size-input", type: "text" });
+    scaleInput.value = String(this.plugin.settings.coverFontScale);
+    this.uiScaleInput = scaleInput;
+    scaleInput.addEventListener("click", (e) => e.stopPropagation());
+    const applyScale = async () => {
+      if (this.syncing) return;
+      const val = Math.max(50, Math.min(300, parseInt(scaleInput.value) || 90));
+      scaleInput.value = String(val);
+      await this.updateSetting("coverFontScale", val);
+    };
+    scaleInput.addEventListener("blur", applyScale);
+    scaleInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); applyScale(); } });
+    scaleInput.addEventListener("wheel", (e) => {
+      if (document.activeElement !== scaleInput) return;
+      e.preventDefault();
+      const cur = parseInt(scaleInput.value) || 90;
+      const val = Math.max(50, Math.min(300, cur + (e.deltaY < 0 ? 10 : -10)));
+      scaleInput.value = String(val);
+      this.updateSetting("coverFontScale", val);
+    }, { passive: false });
+    coverHeadControls.createEl("span", { cls: "nr-size-unit", text: "%" });
+
+    // Align buttons (independent)
+    const alignDefs: { key: "left" | "center" | "right"; title: string; icon: string }[] = [
+      { key: "left",   title: "左对齐", icon: "align-left" },
+      { key: "center", title: "居中",   icon: "align-center" },
+      { key: "right",  title: "右对齐", icon: "align-right" },
+    ];
+    const alignBtns: Record<string, HTMLElement> = {};
+    alignDefs.forEach((def) => {
+      const btn = coverHeadControls.createEl("button", {
+        cls: `nr-btn nr-btn-sm${(this.plugin.settings.coverTextAlign ?? "left") === def.key ? " nr-btn-active" : ""}`,
+      });
+      btn.title = def.title;
+      setIcon(btn, def.icon);
+      btn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        if (this.syncing) return;
+        Object.values(alignBtns).forEach((b) => b.classList.remove("nr-btn-active"));
+        btn.classList.add("nr-btn-active");
+        await this.updateSetting("coverTextAlign", def.key);
+      });
+      alignBtns[def.key] = btn;
+    });
+    this.uiAlignBtns = alignBtns as any;
+
+    // Toggle section on head click (but not on controls)
+    const toggleSection = (target: HTMLElement) => {
+      const opening = !target.classList.contains("open");
+      if (opening) {
+        target.parentElement?.querySelectorAll(".nr-section.open").forEach((s) => {
+          if (s !== target) s.classList.remove("open");
+        });
+      }
+      target.classList.toggle("open");
+    };
+    coverTextHead.addEventListener("click", () => toggleSection(coverTextSection));
+
+    // ── Section body ──
+    const coverTextBody = coverTextSection.createDiv("nr-section-body");
+
+    // Text effect chips: 描边 / 色带 / 投影
+    this.lastStrokeStyle = this.plugin.settings.coverStrokeStyle !== "none" ? this.plugin.settings.coverStrokeStyle : "stroke";
+    const strokeEnabled = this.plugin.settings.coverStrokeStyle !== "none";
+
+    const textEffectRow = coverTextBody.createDiv("nr-row");
+    textEffectRow.createEl("span", { cls: "nr-row-label", text: "效果" });
+    const strokeToggle = textEffectRow.createEl("span", { cls: `nr-chip${strokeEnabled ? " active" : ""}`, text: "描边" });
+    this.uiStrokeToggle = strokeToggle;
+    const bannerToggle = textEffectRow.createEl("span", { cls: `nr-chip${this.plugin.settings.coverBanner ? " active" : ""}`, text: "色带" });
+    this.uiBannerToggle = bannerToggle;
+    const shadowToggle = textEffectRow.createEl("span", { cls: `nr-chip${this.plugin.settings.coverShadow ? " active" : ""}`, text: "投影" });
+    this.uiShadowToggle = shadowToggle;
+
+    // Combined row: color + weight + spacing + line height
+    const styleRow = coverTextBody.createDiv("nr-row");
+    styleRow.createEl("span", { cls: "nr-row-label", text: "样式" });
+
+    const colorInput = styleRow.createEl("input", { cls: "nr-color-dot", type: "color" });
     colorInput.value = this.plugin.settings.coverFontColor || "#e07c5a";
-    colorInput.title = "封面文字颜色";
+    colorInput.title = "封面文字颜色（双击重置为主题默认）";
     colorInput.addEventListener("input", async () => {
       await this.updateSetting("coverFontColor", colorInput.value);
     });
-
-    const colorReset = coverBar.createEl("button", { cls: "nr-btn nr-btn-sm nr-btn-wide", text: "默认色" });
-    colorReset.addEventListener("click", async () => {
+    colorInput.addEventListener("dblclick", async (e) => {
+      e.preventDefault();
       if (this.syncing) return;
       colorInput.value = "#e07c5a";
       await this.updateSetting("coverFontColor", "");
     });
 
-    // Cover font scale: - [value] +
-    const scaleStepper = coverBar.createDiv("nr-stepper");
-    const scaleDown = scaleStepper.createEl("button", { cls: "nr-btn nr-btn-sm", text: "−" });
-    const scaleLabel = scaleStepper.createDiv({ cls: "nr-font-size-label", text: `${this.plugin.settings.coverFontScale}%` });
-    this.uiScaleLabel = scaleLabel;
-    const scaleUp = scaleStepper.createEl("button", { cls: "nr-btn nr-btn-sm", text: "+" });
-    scaleDown.addEventListener("click", async () => {
+    const weightSelect = styleRow.createEl("select", { cls: "dropdown" });
+    weightSelect.style.width = "72px";
+    weightSelect.style.flex = "none";
+    [
+      { label: "极细 100", value: "100" },
+      { label: "细 200", value: "200" },
+      { label: "轻 300", value: "300" },
+      { label: "常规 400", value: "400" },
+      { label: "中 500", value: "500" },
+      { label: "半粗 600", value: "600" },
+      { label: "粗 700", value: "700" },
+      { label: "特粗 800", value: "800" },
+      { label: "极粗 900", value: "900" },
+    ].forEach((w) => weightSelect.createEl("option", { text: w.label, value: w.value }));
+    weightSelect.value = String(this.plugin.settings.coverFontWeight ?? 800);
+    weightSelect.addEventListener("change", async () => {
       if (this.syncing) return;
-      const val = Math.max(50, this.effective.coverFontScale - 10);
-      scaleLabel.textContent = `${val}%`;
-      await this.updateSetting("coverFontScale", val);
-    });
-    scaleUp.addEventListener("click", async () => {
-      if (this.syncing) return;
-      const val = Math.min(300, this.effective.coverFontScale + 10);
-      scaleLabel.textContent = `${val}%`;
-      await this.updateSetting("coverFontScale", val);
+      await this.updateSetting("coverFontWeight", parseInt(weightSelect.value));
     });
 
-    // ── Row 排版: label "排版" + [- 间距N +] + [- 行高N +] ──
-    const typographyBar = this.coverSection.createDiv("nr-font-bar");
-    typographyBar.createEl("span", { cls: "nr-row-label", text: "排版" });
+    // Helper: create labeled input field with scroll-wheel support
+    const makeField = (parent: HTMLElement, label: string, value: string, opts: { min: number; max: number; step?: number; unit?: string; transform?: (v: number) => string; parse?: (v: string) => number }, onUpdate: (val: number) => Promise<void>) => {
+      const group = parent.createDiv("nr-field");
+      if (label) group.createEl("span", { cls: "nr-field-label", text: label });
+      const input = group.createEl("input", { cls: "nr-field-input", type: "text" });
+      input.value = value;
+      if (opts.unit) group.createEl("span", { cls: "nr-field-unit", text: opts.unit });
+      const step = opts.step ?? 1;
+      const parse = opts.parse ?? ((v: string) => parseFloat(v) || 0);
+      const transform = opts.transform ?? String;
+      const applyVal = async (raw: number) => {
+        if (this.syncing) return;
+        const val = Math.max(opts.min, Math.min(opts.max, raw));
+        input.value = transform(val);
+        await onUpdate(val);
+      };
+      const apply = () => applyVal(parse(input.value));
+      input.addEventListener("blur", apply);
+      input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); apply(); } });
+      // Scroll wheel: adjust value when input is focused
+      input.addEventListener("wheel", (e) => {
+        if (document.activeElement !== input) return;
+        e.preventDefault();
+        const current = parse(input.value);
+        const delta = e.deltaY < 0 ? step : -step;
+        applyVal(current + delta);
+      }, { passive: false });
+      return input;
+    };
 
-    // Cover letter spacing: - [value] +
-    const lsStepper = typographyBar.createDiv("nr-stepper");
-    const lsDown = lsStepper.createEl("button", { cls: "nr-btn nr-btn-sm", text: "−" });
-    const lsLabel = lsStepper.createDiv({ cls: "nr-font-size-label", text: `间距${this.plugin.settings.coverLetterSpacing}` });
-    this.uiLsLabel = lsLabel;
-    const lsUp = lsStepper.createEl("button", { cls: "nr-btn nr-btn-sm", text: "+" });
-    lsDown.addEventListener("click", async () => {
-      if (this.syncing) return;
-      const val = Math.max(-5, this.effective.coverLetterSpacing - 1);
-      lsLabel.textContent = `间距${val}`;
-      await this.updateSetting("coverLetterSpacing", val);
-    });
-    lsUp.addEventListener("click", async () => {
-      if (this.syncing) return;
-      const val = Math.min(30, this.effective.coverLetterSpacing + 1);
-      lsLabel.textContent = `间距${val}`;
-      await this.updateSetting("coverLetterSpacing", val);
-    });
+    const lsInput = makeField(styleRow, "间距", String(this.plugin.settings.coverLetterSpacing),
+      { min: -5, max: 30 },
+      (val) => this.updateSetting("coverLetterSpacing", val));
+    this.uiLsLabel = lsInput as any;
 
-    // Cover line height: - [value] +
-    const lhStepper = typographyBar.createDiv("nr-stepper");
-    const lhDown = lhStepper.createEl("button", { cls: "nr-btn nr-btn-sm", text: "−" });
-    const lhLabel = lhStepper.createDiv({ cls: "nr-font-size-label", text: `行高${(this.plugin.settings.coverLineHeight / 10).toFixed(1)}` });
-    this.uiLhLabel = lhLabel;
-    const lhUp = lhStepper.createEl("button", { cls: "nr-btn nr-btn-sm", text: "+" });
-    lhDown.addEventListener("click", async () => {
-      if (this.syncing) return;
-      const val = Math.max(8, this.effective.coverLineHeight - 1);
-      lhLabel.textContent = `行高${(val / 10).toFixed(1)}`;
-      await this.updateSetting("coverLineHeight", val);
-    });
-    lhUp.addEventListener("click", async () => {
-      if (this.syncing) return;
-      const val = Math.min(25, this.effective.coverLineHeight + 1);
-      lhLabel.textContent = `行高${(val / 10).toFixed(1)}`;
-      await this.updateSetting("coverLineHeight", val);
-    });
+    const lhInput = makeField(styleRow, "行高", (this.plugin.settings.coverLineHeight / 10).toFixed(1),
+      { min: 0.8, max: 2.5, step: 0.1, transform: (v) => v.toFixed(1) },
+      (val) => this.updateSetting("coverLineHeight", Math.round(val * 10)));
+    this.uiLhLabel = lhInput as any;
 
-    // ── Row 位置: label "位置" + [- X% +] + [- Y% +] ──
-    const offsetBar = this.coverSection.createDiv("nr-font-bar");
-    offsetBar.createEl("span", { cls: "nr-row-label", text: "位置" });
+    // Position row
+    const posRow = coverTextBody.createDiv("nr-row");
+    posRow.createEl("span", { cls: "nr-row-label", text: "位置" });
 
-    const oxStepper = offsetBar.createDiv("nr-stepper");
-    const oxDown = oxStepper.createEl("button", { cls: "nr-btn nr-btn-sm", text: "−" });
-    const oxLabel = oxStepper.createDiv({ cls: "nr-font-size-label", text: `X${this.plugin.settings.coverOffsetX}%` });
-    this.uiOxLabel = oxLabel;
-    const oxUp = oxStepper.createEl("button", { cls: "nr-btn nr-btn-sm", text: "+" });
-    oxDown.addEventListener("click", async () => {
-      if (this.syncing) return;
-      const val = Math.max(-50, this.effective.coverOffsetX - 1);
-      oxLabel.textContent = `X${val}%`;
-      await this.updateSetting("coverOffsetX", val);
-    });
-    oxUp.addEventListener("click", async () => {
-      if (this.syncing) return;
-      const val = Math.min(50, this.effective.coverOffsetX + 1);
-      oxLabel.textContent = `X${val}%`;
-      await this.updateSetting("coverOffsetX", val);
-    });
+    const oxInput = makeField(posRow, "X", String(this.plugin.settings.coverOffsetX),
+      { min: -50, max: 50, unit: "%" },
+      (val) => this.updateSetting("coverOffsetX", val));
+    this.uiOxLabel = oxInput as any;
 
-    const oyStepper = offsetBar.createDiv("nr-stepper");
-    const oyDown = oyStepper.createEl("button", { cls: "nr-btn nr-btn-sm", text: "−" });
-    const oyLabel = oyStepper.createDiv({ cls: "nr-font-size-label", text: `Y${this.plugin.settings.coverOffsetY}%` });
-    this.uiOyLabel = oyLabel;
-    const oyUp = oyStepper.createEl("button", { cls: "nr-btn nr-btn-sm", text: "+" });
-    oyDown.addEventListener("click", async () => {
-      if (this.syncing) return;
-      const val = Math.max(-50, this.effective.coverOffsetY - 1);
-      oyLabel.textContent = `Y${val}%`;
-      await this.updateSetting("coverOffsetY", val);
-    });
-    oyUp.addEventListener("click", async () => {
-      if (this.syncing) return;
-      const val = Math.min(50, this.effective.coverOffsetY + 1);
-      oyLabel.textContent = `Y${val}%`;
-      await this.updateSetting("coverOffsetY", val);
-    });
+    const oyInput = makeField(posRow, "Y", String(this.plugin.settings.coverOffsetY),
+      { min: -50, max: 50, unit: "%" },
+      (val) => this.updateSetting("coverOffsetY", val))
+    this.uiOyLabel = oyInput as any;
 
-    // ── Row 效果: label "效果" + [遮罩 toggle] + [描边 toggle] + [色带 toggle] + [投影 toggle] ──
-    const effectRow = this.coverSection.createDiv("nr-font-bar");
-    effectRow.createEl("span", { cls: "nr-row-label", text: "效果" });
-
-    // 遮罩 toggle
-    const overlayToggle = effectRow.createEl("button", {
-      cls: `nr-btn nr-btn-sm nr-btn-wide${this.plugin.settings.coverOverlay ? " nr-btn-active" : ""}`,
-      text: "遮罩",
-    });
-    this.uiOverlayToggle = overlayToggle;
-    overlayToggle.addEventListener("click", async () => {
-      if (this.syncing) return;
-      const val = !this.effective.coverOverlay;
-      overlayToggle.classList.toggle("nr-btn-active", val);
-      await this.updateSetting("coverOverlay", val);
-    });
-
-    // 描边 toggle
-    this.lastStrokeStyle = this.plugin.settings.coverStrokeStyle !== "none" ? this.plugin.settings.coverStrokeStyle : "stroke";
-    const strokeEnabled = this.plugin.settings.coverStrokeStyle !== "none";
-
-    const strokeToggle = effectRow.createEl("button", {
-      cls: `nr-btn nr-btn-sm nr-btn-wide${strokeEnabled ? " nr-btn-active" : ""}`,
-      text: "描边",
-    });
-    this.uiStrokeToggle = strokeToggle;
-
-    // 色带 toggle
-    const bannerToggle = effectRow.createEl("button", {
-      cls: `nr-btn nr-btn-sm nr-btn-wide${this.plugin.settings.coverBanner ? " nr-btn-active" : ""}`,
-      text: "色带",
-    });
-    this.uiBannerToggle = bannerToggle;
-
-    // 投影 toggle
-    const shadowToggle = effectRow.createEl("button", {
-      cls: `nr-btn nr-btn-sm nr-btn-wide${this.plugin.settings.coverShadow ? " nr-btn-active" : ""}`,
-      text: "投影",
-    });
-    this.uiShadowToggle = shadowToggle;
-
-    // ── Row 描边参数: label "  " + [stroke-style-select] + [- 粗N +] + [- 透N +] + [- 光N +] ──
-    const strokeParamsRow = this.coverSection.createDiv("nr-font-bar");
+    // ── Stroke sub-params (in coverTextBody) ──
+    const strokeParamsRow = coverTextBody.createDiv("nr-row");
     this.strokeParamsRow = strokeParamsRow;
-    strokeParamsRow.createEl("span", { cls: "nr-row-label nr-sub-label", text: "描边" });
+    strokeParamsRow.createEl("span", { cls: "nr-row-label", text: "描边" });
     strokeParamsRow.style.display = strokeEnabled ? "" : "none";
 
-    // Stroke style select
-    const strokeStyleSelect = strokeParamsRow.createEl("select", { cls: "nr-select-fixed" });
+    const strokeStyleSelect = strokeParamsRow.createEl("select", { cls: "dropdown" });
+    strokeStyleSelect.style.width = "72px";
+    strokeStyleSelect.style.flex = "none";
     this.uiStrokeStyleSelect = strokeStyleSelect;
     [
       { label: "描边", value: "stroke" },
@@ -414,79 +457,44 @@ export class PreviewView extends ItemView {
     ].forEach((s) => strokeStyleSelect.createEl("option", { text: s.label, value: s.value }));
     strokeStyleSelect.value = strokeEnabled ? this.plugin.settings.coverStrokeStyle : this.lastStrokeStyle;
 
-    // Stroke percent: − [粗X] +
-    const strokeStepper = strokeParamsRow.createDiv("nr-stepper");
-    const strokeDown = strokeStepper.createEl("button", { cls: "nr-btn nr-btn-sm", text: "−" });
-    const strokeLabel = strokeStepper.createDiv({ cls: "nr-font-size-label", text: `粗${this.plugin.settings.coverStrokePercent}` });
-    this.uiStrokeLabel = strokeLabel;
-    const strokeUp = strokeStepper.createEl("button", { cls: "nr-btn nr-btn-sm", text: "+" });
-    strokeDown.addEventListener("click", async () => {
-      if (this.syncing) return;
-      const val = Math.max(0, this.effective.coverStrokePercent - 1);
-      strokeLabel.textContent = `粗${val}`;
-      await this.updateSetting("coverStrokePercent", val);
-    });
-    strokeUp.addEventListener("click", async () => {
-      if (this.syncing) return;
-      const val = Math.min(100, this.effective.coverStrokePercent + 1);
-      strokeLabel.textContent = `粗${val}`;
-      await this.updateSetting("coverStrokePercent", val);
-    });
+    const strokeInput = makeField(strokeParamsRow, "粗", String(this.plugin.settings.coverStrokePercent),
+      { min: 0, max: 100 },
+      (val) => this.updateSetting("coverStrokePercent", val));
+    this.uiStrokeLabel = strokeInput as any;
 
-    // Stroke opacity: − [透X] +
-    const opStepper = strokeParamsRow.createDiv("nr-stepper");
-    const opDown = opStepper.createEl("button", { cls: "nr-btn nr-btn-sm", text: "−" });
-    const opLabel = opStepper.createDiv({ cls: "nr-font-size-label", text: `透${this.plugin.settings.coverStrokeOpacity}` });
-    this.uiOpLabel = opLabel;
-    const opUp = opStepper.createEl("button", { cls: "nr-btn nr-btn-sm", text: "+" });
-    opDown.addEventListener("click", async () => {
-      if (this.syncing) return;
-      const val = Math.max(0, this.effective.coverStrokeOpacity - 10);
-      opLabel.textContent = `透${val}`;
-      await this.updateSetting("coverStrokeOpacity", val);
-    });
-    opUp.addEventListener("click", async () => {
-      if (this.syncing) return;
-      const val = Math.min(100, this.effective.coverStrokeOpacity + 10);
-      opLabel.textContent = `透${val}`;
-      await this.updateSetting("coverStrokeOpacity", val);
-    });
+    const opInput = makeField(strokeParamsRow, "透", String(this.plugin.settings.coverStrokeOpacity),
+      { min: 0, max: 100 },
+      (val) => this.updateSetting("coverStrokeOpacity", val));
+    this.uiOpLabel = opInput as any;
 
-    // Glow size: − [光X] +
-    const glowStepper = strokeParamsRow.createDiv("nr-stepper");
-    const glowDown = glowStepper.createEl("button", { cls: "nr-btn nr-btn-sm", text: "−" });
-    const glowLabel = glowStepper.createDiv({ cls: "nr-font-size-label", text: `光${this.plugin.settings.coverGlowSize}` });
-    this.uiGlowLabel = glowLabel;
-    const glowUp = glowStepper.createEl("button", { cls: "nr-btn nr-btn-sm", text: "+" });
-    glowDown.addEventListener("click", async () => {
+    const glowField = strokeParamsRow.createDiv("nr-field");
+    glowField.createEl("span", { cls: "nr-field-label", text: "光" });
+    const glowInput = glowField.createEl("input", { cls: "nr-field-input", type: "text" });
+    glowInput.value = String(this.plugin.settings.coverGlowSize);
+    this.uiGlowLabel = glowInput as any;
+    const applyGlow = async () => {
       if (this.syncing) return;
-      const val = Math.max(0, this.effective.coverGlowSize - 10);
-      glowLabel.textContent = `光${val}`;
+      const val = Math.max(0, Math.min(200, parseInt(glowInput.value) || 0));
+      glowInput.value = String(val);
       await this.updateSetting("coverGlowSize", val);
-    });
-    glowUp.addEventListener("click", async () => {
-      if (this.syncing) return;
-      const val = Math.min(200, this.effective.coverGlowSize + 10);
-      glowLabel.textContent = `光${val}`;
-      await this.updateSetting("coverGlowSize", val);
-    });
+    };
+    glowInput.addEventListener("blur", applyGlow);
+    glowInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); applyGlow(); } });
 
-    // Glow stepper visibility: only for "double" and "glow" styles
     const updateGlowVisibility = () => {
       const mode = strokeStyleSelect.value;
       const hasGlow = mode === "double" || mode === "glow";
-      glowStepper.style.display = hasGlow ? "" : "none";
+      glowField.style.display = hasGlow ? "" : "none";
     };
     updateGlowVisibility();
 
-    // Stroke style select change handler
     strokeStyleSelect.addEventListener("change", async () => {
       if (this.syncing) return;
       const style = strokeStyleSelect.value as any;
       this.lastStrokeStyle = style;
       const defaults: Record<string, number> = { stroke: 20, double: 5, glow: 6 };
       const newPercent = defaults[style] ?? 8;
-      strokeLabel.textContent = `粗${newPercent}`;
+      strokeInput.value = String(newPercent);
       updateGlowVisibility();
       if (this.editingNoteConfig) {
         await this.updateNoteConfig("coverStrokeStyle", style);
@@ -502,19 +510,16 @@ export class PreviewView extends ItemView {
       }
     });
 
-    // 描边 toggle handler
     strokeToggle.addEventListener("click", async () => {
       if (this.syncing) return;
       const currentStyle = this.effective.coverStrokeStyle;
       if (currentStyle !== "none") {
-        // Turn off: save current style, set to none
         this.lastStrokeStyle = currentStyle;
-        strokeToggle.classList.remove("nr-btn-active");
+        strokeToggle.classList.remove("active");
         strokeParamsRow.style.display = "none";
         await this.updateSetting("coverStrokeStyle", "none");
       } else {
-        // Turn on: restore last style
-        strokeToggle.classList.add("nr-btn-active");
+        strokeToggle.classList.add("active");
         strokeParamsRow.style.display = "";
         strokeStyleSelect.value = this.lastStrokeStyle;
         updateGlowVisibility();
@@ -522,39 +527,36 @@ export class PreviewView extends ItemView {
       }
     });
 
-    // ── Row 色带参数: label "  " + [color-picker] + [- 透明度% +] + [- 斜N +] ──
-    const bannerParamsRow = this.coverSection.createDiv("nr-font-bar");
+    // ── Banner sub-params (in coverTextBody) ──
+    const bannerParamsRow = coverTextBody.createDiv("nr-row");
     this.bannerParamsRow = bannerParamsRow;
-    bannerParamsRow.createEl("span", { cls: "nr-row-label nr-sub-label", text: "色带" });
+    bannerParamsRow.createEl("span", { cls: "nr-row-label", text: "色带" });
     bannerParamsRow.style.display = this.plugin.settings.coverBanner ? "" : "none";
 
-    // Parse rgba to hex for color picker
     const parseColor = (c: string) => {
       if (c.startsWith("#")) return c;
       const m = c.match(/[\d.]+/g);
       if (!m) return "#000000";
       return "#" + [0,1,2].map(i => Math.round(Number(m[i])).toString(16).padStart(2, "0")).join("");
     };
-    const bannerColorInput = bannerParamsRow.createEl("input", { type: "color" });
+    const bannerColorInput = bannerParamsRow.createEl("input", { cls: "nr-color-dot", type: "color" });
     bannerColorInput.value = parseColor(this.plugin.settings.coverBannerColor);
 
     const bannerAlpha = Math.round((parseFloat((this.plugin.settings.coverBannerColor.match(/[\d.]+/g) || [])[3] ?? "0.5") * 100));
     let currentAlpha = bannerAlpha / 100;
 
-    const bannerAlphaStepper = bannerParamsRow.createDiv("nr-stepper");
-    const bannerAlphaDown = bannerAlphaStepper.createEl("button", { cls: "nr-btn nr-btn-sm", text: "−" });
-    const bannerAlphaLabel = bannerAlphaStepper.createDiv({ cls: "nr-font-size-label", text: `${bannerAlpha}%` });
-    const bannerAlphaUp = bannerAlphaStepper.createEl("button", { cls: "nr-btn nr-btn-sm", text: "+" });
+    makeField(bannerParamsRow, "", String(bannerAlpha),
+      { min: 0, max: 100, unit: "%" },
+      async (val) => { currentAlpha = val / 100; await updateBannerColor(); });
 
-    const skewStepper = bannerParamsRow.createDiv("nr-stepper");
-    const skewDown = skewStepper.createEl("button", { cls: "nr-btn nr-btn-sm", text: "−" });
-    const skewLabel = skewStepper.createDiv({ cls: "nr-font-size-label", text: `斜${this.plugin.settings.coverBannerSkew}` });
-    const skewUp = skewStepper.createEl("button", { cls: "nr-btn nr-btn-sm", text: "+" });
+    makeField(bannerParamsRow, "斜", String(this.plugin.settings.coverBannerSkew),
+      { min: 0, max: 20 },
+      (val) => this.updateSetting("coverBannerSkew", val));
 
     bannerToggle.addEventListener("click", async () => {
       if (this.syncing) return;
       const val = !this.effective.coverBanner;
-      bannerToggle.classList.toggle("nr-btn-active", val);
+      bannerToggle.classList.toggle("active", val);
       bannerParamsRow.style.display = val ? "" : "none";
       await this.updateSetting("coverBanner", val);
     });
@@ -565,129 +567,107 @@ export class PreviewView extends ItemView {
       const g = parseInt(hex.slice(3,5), 16);
       const b = parseInt(hex.slice(5,7), 16);
       const rgba = `rgba(${r},${g},${b},${currentAlpha})`;
-      bannerAlphaLabel.textContent = `${Math.round(currentAlpha * 100)}%`;
       await this.updateSetting("coverBannerColor", rgba);
     };
     bannerColorInput.addEventListener("input", updateBannerColor);
-    bannerAlphaDown.addEventListener("click", async () => {
-      currentAlpha = Math.max(0, Math.round((currentAlpha - 0.1) * 10) / 10);
-      await updateBannerColor();
-    });
-    bannerAlphaUp.addEventListener("click", async () => {
-      currentAlpha = Math.min(1, Math.round((currentAlpha + 0.1) * 10) / 10);
-      await updateBannerColor();
-    });
-    skewDown.addEventListener("click", async () => {
-      if (this.syncing) return;
-      const val = Math.max(0, this.effective.coverBannerSkew - 1);
-      skewLabel.textContent = `斜${val}`;
-      await this.updateSetting("coverBannerSkew", val);
-    });
-    skewUp.addEventListener("click", async () => {
-      if (this.syncing) return;
-      const val = Math.min(20, this.effective.coverBannerSkew + 1);
-      skewLabel.textContent = `斜${val}`;
-      await this.updateSetting("coverBannerSkew", val);
-    });
 
-    // ── Row 投影参数: label "  " + [- 模糊N +] + [- XN +] + [- YN +] ──
-    const shadowParamsRow = this.coverSection.createDiv("nr-font-bar");
+    // ── Shadow sub-params (in coverTextBody) ──
+    const shadowParamsRow = coverTextBody.createDiv("nr-row");
     this.shadowParamsRow = shadowParamsRow;
-    shadowParamsRow.createEl("span", { cls: "nr-row-label nr-sub-label", text: "投影" });
+    shadowParamsRow.createEl("span", { cls: "nr-row-label", text: "投影" });
     shadowParamsRow.style.display = this.plugin.settings.coverShadow ? "" : "none";
 
     shadowToggle.addEventListener("click", async () => {
       if (this.syncing) return;
       const val = !this.effective.coverShadow;
-      shadowToggle.classList.toggle("nr-btn-active", val);
+      shadowToggle.classList.toggle("active", val);
       shadowParamsRow.style.display = val ? "" : "none";
       await this.updateSetting("coverShadow", val);
     });
 
-    // Shadow blur: - [value] +
-    const blurStepper = shadowParamsRow.createDiv("nr-stepper");
-    const blurDown = blurStepper.createEl("button", { cls: "nr-btn nr-btn-sm", text: "−" });
-    const blurLabel = blurStepper.createDiv({ cls: "nr-font-size-label", text: `模糊${this.plugin.settings.coverShadowBlur}` });
-    this.uiBlurLabel = blurLabel;
-    const blurUp = blurStepper.createEl("button", { cls: "nr-btn nr-btn-sm", text: "+" });
-    blurDown.addEventListener("click", async () => {
-      if (this.syncing) return;
-      const val = this.effective.coverShadowBlur - 5;
-      blurLabel.textContent = `模糊${val}`;
-      await this.updateSetting("coverShadowBlur", val);
-    });
-    blurUp.addEventListener("click", async () => {
-      if (this.syncing) return;
-      const val = this.effective.coverShadowBlur + 5;
-      blurLabel.textContent = `模糊${val}`;
-      await this.updateSetting("coverShadowBlur", val);
-    });
+    const blurInput = makeField(shadowParamsRow, "模糊", String(this.plugin.settings.coverShadowBlur),
+      { min: 0, max: 200 },
+      (val) => this.updateSetting("coverShadowBlur", val));
+    this.uiBlurLabel = blurInput as any;
 
-    // Shadow offset X: - [value] +
-    const offXStepper = shadowParamsRow.createDiv("nr-stepper");
-    const offXDown = offXStepper.createEl("button", { cls: "nr-btn nr-btn-sm", text: "−" });
-    const offXLabel = offXStepper.createDiv({ cls: "nr-font-size-label", text: `X${this.plugin.settings.coverShadowOffsetX}` });
-    const offXUp = offXStepper.createEl("button", { cls: "nr-btn nr-btn-sm", text: "+" });
-    offXDown.addEventListener("click", async () => {
-      if (this.syncing) return;
-      const val = this.effective.coverShadowOffsetX - 5;
-      offXLabel.textContent = `X${val}`;
-      await this.updateSetting("coverShadowOffsetX", val);
-    });
-    offXUp.addEventListener("click", async () => {
-      if (this.syncing) return;
-      const val = this.effective.coverShadowOffsetX + 5;
-      offXLabel.textContent = `X${val}`;
-      await this.updateSetting("coverShadowOffsetX", val);
-    });
+    makeField(shadowParamsRow, "X", String(this.plugin.settings.coverShadowOffsetX),
+      { min: -100, max: 100 },
+      (val) => this.updateSetting("coverShadowOffsetX", val));
 
-    // Shadow offset Y: - [value] +
-    const offYStepper = shadowParamsRow.createDiv("nr-stepper");
-    const offYDown = offYStepper.createEl("button", { cls: "nr-btn nr-btn-sm", text: "−" });
-    const offYLabel = offYStepper.createDiv({ cls: "nr-font-size-label", text: `Y${this.plugin.settings.coverShadowOffsetY}` });
-    const offYUp = offYStepper.createEl("button", { cls: "nr-btn nr-btn-sm", text: "+" });
-    offYDown.addEventListener("click", async () => {
-      if (this.syncing) return;
-      const val = this.effective.coverShadowOffsetY - 5;
-      offYLabel.textContent = `Y${val}`;
-      await this.updateSetting("coverShadowOffsetY", val);
-    });
-    offYUp.addEventListener("click", async () => {
-      if (this.syncing) return;
-      const val = this.effective.coverShadowOffsetY + 5;
-      offYLabel.textContent = `Y${val}`;
-      await this.updateSetting("coverShadowOffsetY", val);
-    });
+    makeField(shadowParamsRow, "Y", String(this.plugin.settings.coverShadowOffsetY),
+      { min: -100, max: 100 },
+      (val) => this.updateSetting("coverShadowOffsetY", val));
 
-    // ── Body section ──
-    this.bodySection = contentEl.createDiv("nr-body-section");
+    // ── Section: 效果 (decorative overlays only) ──
+    const effectSection = this.coverSection.createDiv("nr-section");
+    const effectHead = effectSection.createDiv("nr-section-head");
+    effectHead.createEl("span", { cls: "nr-section-chevron", text: "▶" });
+    effectHead.createEl("span", { cls: "nr-section-title", text: "效果" });
 
-    // ── Row: 字体 ──
-    const bodyFontBar = this.bodySection.createDiv("nr-font-bar");
-    bodyFontBar.createEl("span", { cls: "nr-row-label", text: "字体" });
+    const effectChips = effectHead.createDiv("nr-header-chips");
 
-    // Font size: - [value] +
-    const sizeStepper = bodyFontBar.createDiv("nr-stepper");
-    const sizeDown = sizeStepper.createEl("button", { cls: "nr-btn nr-btn-sm", text: "−" });
-    const sizeLabel = sizeStepper.createDiv({ cls: "nr-font-size-label", text: `${this.plugin.settings.fontSize}px` });
-    this.uiSizeLabel = sizeLabel;
-    const sizeUp = sizeStepper.createEl("button", { cls: "nr-btn nr-btn-sm", text: "+" });
+    const chipToggle = (parent: HTMLElement, label: string, key: string, active: boolean) => {
+      const chip = parent.createEl("span", { cls: `nr-chip${active ? " active" : ""}`, text: label });
+      chip.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        if (this.syncing) return;
+        const val = !(this.effective as any)[key];
+        chip.classList.toggle("active", val);
+        await this.updateSetting(key, val);
+      });
+      return chip;
+    };
 
-    sizeDown.addEventListener("click", async () => {
-      if (this.syncing) return;
-      const val = Math.max(24, this.effective.fontSize - 2);
-      sizeLabel.textContent = `${val}px`;
-      await this.updateSetting("fontSize", val);
-    });
-    sizeUp.addEventListener("click", async () => {
-      if (this.syncing) return;
-      const val = Math.min(72, this.effective.fontSize + 2);
-      sizeLabel.textContent = `${val}px`;
-      await this.updateSetting("fontSize", val);
-    });
+    const overlayToggle = chipToggle(effectChips, "遮罩", "coverOverlay", this.plugin.settings.coverOverlay);
+    this.uiOverlayToggle = overlayToggle;
+    chipToggle(effectChips, "暗角", "coverVignette", this.plugin.settings.coverVignette);
+    chipToggle(effectChips, "噪点", "coverGrain", this.plugin.settings.coverGrain);
+    chipToggle(effectChips, "极光", "coverAurora", this.plugin.settings.coverAurora);
+    chipToggle(effectChips, "散景", "coverBokeh", this.plugin.settings.coverBokeh);
+    chipToggle(effectChips, "网格", "coverGrid", this.plugin.settings.coverGrid);
+    chipToggle(effectChips, "漏光", "coverLightLeak", this.plugin.settings.coverLightLeak);
+    chipToggle(effectChips, "扫描线", "coverScanlines", this.plugin.settings.coverScanlines);
 
-    // Font family select
-    const fontSelect = bodyFontBar.createEl("select", { cls: "nr-select-fixed" });
+    effectHead.addEventListener("click", () => toggleSection(effectSection));
+
+    // ── Effect section body: opacity sub-params ──
+    const effectBody = effectSection.createDiv("nr-section-body");
+
+    const effectFields: { label: string; key: string; opKey: string; active: boolean; min: number; max: number; def: number }[] = [
+      { label: "遮罩", key: "coverOverlay", opKey: "coverOverlayOpacity", active: this.plugin.settings.coverOverlay, min: 0, max: 100, def: 55 },
+      { label: "暗角", key: "coverVignette", opKey: "coverVignetteOpacity", active: this.plugin.settings.coverVignette, min: 0, max: 100, def: 50 },
+      { label: "噪点", key: "coverGrain", opKey: "coverGrainOpacity", active: this.plugin.settings.coverGrain, min: 1, max: 50, def: 8 },
+      { label: "极光", key: "coverAurora", opKey: "coverAuroraOpacity", active: this.plugin.settings.coverAurora, min: 5, max: 80, def: 30 },
+      { label: "散景", key: "coverBokeh", opKey: "coverBokehOpacity", active: this.plugin.settings.coverBokeh, min: 1, max: 50, def: 12 },
+      { label: "网格", key: "coverGrid", opKey: "coverGridOpacity", active: this.plugin.settings.coverGrid, min: 1, max: 30, def: 6 },
+      { label: "漏光", key: "coverLightLeak", opKey: "coverLightLeakOpacity", active: this.plugin.settings.coverLightLeak, min: 5, max: 80, def: 25 },
+      { label: "扫描线", key: "coverScanlines", opKey: "coverScanlinesOpacity", active: this.plugin.settings.coverScanlines, min: 1, max: 30, def: 8 },
+    ];
+
+    for (const ef of effectFields) {
+      const row = effectBody.createDiv("nr-row");
+      row.createEl("span", { cls: "nr-row-label", text: ef.label });
+      row.style.display = ef.active ? "" : "none";
+      makeField(row, "强度", String((this.effective as any)[ef.opKey] ?? ef.def),
+        { min: ef.min, max: ef.max, unit: "%" },
+        (val) => this.updateSetting(ef.opKey, val));
+      // Wire chip toggle to show/hide this row
+      const chips = effectChips.querySelectorAll(".nr-chip");
+      for (const chip of chips) {
+        if (chip.textContent === ef.label) {
+          chip.addEventListener("click", () => {
+            row.style.display = chip.classList.contains("active") ? "" : "none";
+          });
+        }
+      }
+    }
+
+    // ── Body section: flat row (no accordion) ──
+    this.bodySection = contentEl.createDiv("nr-flat-row");
+    this.bodySection.createEl("span", { cls: "nr-section-title", text: "正文" });
+
+    const bodyControls = this.bodySection.createDiv("nr-header-controls");
+    const fontSelect = bodyControls.createEl("select", { cls: "dropdown" });
     this.uiFontSelect = fontSelect;
     const fonts = [
       // ── 黑体 ──
@@ -759,9 +739,47 @@ export class PreviewView extends ItemView {
       await this.updateSetting("fontFamily", fontSelect.value);
     });
 
+    const sizeInput = bodyControls.createEl("input", { cls: "nr-size-input", type: "text" });
+    sizeInput.value = String(this.plugin.settings.fontSize);
+    this.uiSizeInput = sizeInput;
+    const applySize = async () => {
+      if (this.syncing) return;
+      const val = Math.max(24, Math.min(72, parseInt(sizeInput.value) || 36));
+      sizeInput.value = String(val);
+      await this.updateSetting("fontSize", val);
+    };
+    sizeInput.addEventListener("blur", applySize);
+    sizeInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); applySize(); } });
+    sizeInput.addEventListener("wheel", (e) => {
+      if (document.activeElement !== sizeInput) return;
+      e.preventDefault();
+      const cur = parseInt(sizeInput.value) || 36;
+      const val = Math.max(24, Math.min(72, cur + (e.deltaY < 0 ? 2 : -2)));
+      sizeInput.value = String(val);
+      this.updateSetting("fontSize", val);
+    }, { passive: false });
+    bodyControls.createEl("span", { cls: "nr-size-unit", text: "px" });
+
     // Preview area
     this.previewContainer = contentEl.createDiv("nr-preview-area");
     this.pageDisplay = this.previewContainer.createDiv("nr-page-display");
+
+    // Right-click context menu on preview
+    this.previewContainer.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      const menu = new Menu();
+      menu.addItem((item) => {
+        item.setTitle("导出当前页")
+          .setIcon("download")
+          .onClick(() => this.handleExportCurrentPage());
+      });
+      menu.addItem((item) => {
+        item.setTitle("导出全部 (ZIP)")
+          .setIcon("archive")
+          .onClick(() => this.handleExport());
+      });
+      menu.showAtMouseEvent(e);
+    });
 
     // Navigation — 3-column layout
     const nav = contentEl.createDiv("nr-nav");
@@ -775,11 +793,12 @@ export class PreviewView extends ItemView {
       await this.refresh();
     });
 
-    // Center: pagination
+    // Center: pagination with single-page export
     const navCenter = nav.createDiv("nr-nav-center");
     const prevBtn = navCenter.createEl("button", { cls: "nr-nav-btn" });
     setIcon(prevBtn, "chevron-left");
     prevBtn.addEventListener("click", () => this.goPage(-1));
+
     this.pageIndicator = navCenter.createDiv("nr-page-indicator");
     const nextBtn = navCenter.createEl("button", { cls: "nr-nav-btn" });
     setIcon(nextBtn, "chevron-right");
@@ -802,8 +821,8 @@ export class PreviewView extends ItemView {
     navRight.createDiv({ cls: "nr-nav-separator" });
 
     const exportBtn = navRight.createEl("button", { cls: "nr-nav-btn" });
-    setIcon(exportBtn, "download");
-    exportBtn.title = "导出 ZIP";
+    exportBtn.title = "导出全部 ZIP";
+    setIcon(exportBtn, "archive");
     exportBtn.addEventListener("click", () => this.handleExport());
 
     // ResizeObserver — rescale on sidebar width change
@@ -932,16 +951,37 @@ export class PreviewView extends ItemView {
         coverBannerSkew: merged.coverBannerSkew,
         coverOffsetX: merged.coverOffsetX,
         coverOffsetY: merged.coverOffsetY,
+        coverFontWeight: merged.coverFontWeight,
         coverOverlay: merged.coverOverlay,
+        coverOverlayOpacity: merged.coverOverlayOpacity,
+        coverGrain: merged.coverGrain,
+        coverGrainOpacity: merged.coverGrainOpacity,
+        coverAurora: merged.coverAurora,
+        coverAuroraOpacity: merged.coverAuroraOpacity,
+        coverBokeh: merged.coverBokeh,
+        coverBokehOpacity: merged.coverBokehOpacity,
+        coverGrid: merged.coverGrid,
+        coverGridOpacity: merged.coverGridOpacity,
+        coverVignette: merged.coverVignette,
+        coverVignetteOpacity: merged.coverVignetteOpacity,
+        coverLightLeak: merged.coverLightLeak,
+        coverLightLeakOpacity: merged.coverLightLeakOpacity,
+        coverScanlines: merged.coverScanlines,
+        coverScanlinesOpacity: merged.coverScanlinesOpacity,
         coverShadow: merged.coverShadow,
         coverShadowBlur: merged.coverShadowBlur,
         coverShadowOffsetX: merged.coverShadowOffsetX,
         coverShadowOffsetY: merged.coverShadowOffsetY,
+        coverTextAlign: merged.coverTextAlign ?? "left",
         pageMode: merged.pageMode,
       }
     );
 
     this.pages = this.rendered.pages;
+    // Hide overlay chip when no cover image
+    if (this.uiOverlayToggle) {
+      this.uiOverlayToggle.style.display = this.rendered.hasCoverImage ? "" : "none";
+    }
     // Preserve current page if possible, otherwise reset to 0
     if (this.currentPage >= this.pages.length) {
       this.currentPage = 0;
@@ -980,8 +1020,12 @@ export class PreviewView extends ItemView {
     const noteConfig = parseRendererConfig(markdown);
     if (!noteConfig) return;
 
+    // Map internal key names to user-facing names for renderer_config
+    const keyMap: Record<string, string> = { activeTheme: "theme", activeTemplate: "theme" };
+    const noteKey = keyMap[key] || key;
+
     // Update the key in the parsed config
-    noteConfig[key] = value;
+    noteConfig[noteKey] = value;
 
     // Rebuild the JSON and replace in markdown
     const configJson = JSON.stringify(noteConfig, null, 2);
@@ -1011,35 +1055,83 @@ export class PreviewView extends ItemView {
     this.uiPresetSelect.value = this.plugin.settings.activePreset;
   }
 
+  /**
+   * Check if the effective settings differ from the currently active preset.
+   * Returns true if any PRESET_KEYS value in `s` differs from the saved preset.
+   */
+  private isPresetModified(s: NoteRendererSettings): boolean {
+    const presetName = this.plugin.settings.activePreset;
+    if (!presetName) return false;
+    const preset = this.plugin.settings.presets[presetName];
+    if (!preset) return false;
+    for (const key of PRESET_KEYS) {
+      const presetVal = (preset as Record<string, unknown>)[key];
+      const currentVal = (s as Record<string, unknown>)[key];
+      // JSON stringify for deep equality (handles objects/arrays, primitives)
+      if (JSON.stringify(presetVal) !== JSON.stringify(currentVal)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   /** Sync UI control display values to reflect effective settings (e.g. after renderer_config override). */
   private syncUiToSettings(s: NoteRendererSettings): void {
     this.syncing = true;
-    if (this.uiPresetSelect) this.uiPresetSelect.value = this.plugin.settings.activePreset;
+
+    // Preset selector: show "(modified)" if current settings differ from saved preset
+    if (this.uiPresetSelect) {
+      const presetName = this.plugin.settings.activePreset;
+      this.uiPresetSelect.value = presetName;
+      if (presetName && this.isPresetModified(s)) {
+        // Find and update the selected option's display text
+        const selectedOpt = this.uiPresetSelect.querySelector<HTMLOptionElement>(`option[value="${CSS.escape(presetName)}"]`);
+        if (selectedOpt && !selectedOpt.text.endsWith(" (modified)")) {
+          selectedOpt.text = `${presetName} (modified)`;
+        }
+      } else if (presetName) {
+        // Restore original text (in case it was previously marked modified)
+        const selectedOpt = this.uiPresetSelect.querySelector<HTMLOptionElement>(`option[value="${CSS.escape(presetName)}"]`);
+        if (selectedOpt && selectedOpt.text.endsWith(" (modified)")) {
+          selectedOpt.text = presetName;
+        }
+      }
+    }
     if (this.uiThemeSelect) this.uiThemeSelect.value = s.activeTheme;
     if (this.uiModeSelect) this.uiModeSelect.value = s.pageMode;
-    if (this.uiSizeLabel) this.uiSizeLabel.textContent = `${s.fontSize}px`;
+    if (this.uiModeBtns) {
+      this.uiModeBtns.long.classList.toggle("nr-btn-active", s.pageMode === "long");
+      this.uiModeBtns.card.classList.toggle("nr-btn-active", s.pageMode === "card");
+    }
+    if (this.uiSizeInput) this.uiSizeInput.value = String(s.fontSize);
     if (this.uiFontSelect) this.uiFontSelect.value = s.fontFamily;
     if (this.uiCoverFontSelect) this.uiCoverFontSelect.value = s.coverFontFamily;
-    if (this.uiScaleLabel) this.uiScaleLabel.textContent = `${s.coverFontScale}%`;
-    if (this.uiLsLabel) this.uiLsLabel.textContent = `间距${s.coverLetterSpacing}`;
-    if (this.uiLhLabel) this.uiLhLabel.textContent = `行高${(s.coverLineHeight / 10).toFixed(1)}`;
+    if (this.uiScaleInput) this.uiScaleInput.value = String(s.coverFontScale);
+    if (this.uiLsLabel) (this.uiLsLabel as any).value = String(s.coverLetterSpacing);
+    if (this.uiLhLabel) (this.uiLhLabel as any).value = (s.coverLineHeight / 10).toFixed(1);  // internal 13 → display "1.3"
     if (this.uiStrokeStyleSelect) this.uiStrokeStyleSelect.value = s.coverStrokeStyle;
-    if (this.uiStrokeLabel) this.uiStrokeLabel.textContent = `粗${s.coverStrokePercent}`;
-    if (this.uiOpLabel) this.uiOpLabel.textContent = `透${s.coverStrokeOpacity}`;
-    if (this.uiGlowLabel) this.uiGlowLabel.textContent = `光${s.coverGlowSize}`;
-    if (this.uiOverlayToggle) this.uiOverlayToggle.classList.toggle("nr-btn-active", s.coverOverlay);
-    if (this.uiOxLabel) this.uiOxLabel.textContent = `X${s.coverOffsetX}%`;
-    if (this.uiOyLabel) this.uiOyLabel.textContent = `Y${s.coverOffsetY}%`;
-    if (this.uiShadowToggle) this.uiShadowToggle.classList.toggle("nr-btn-active", s.coverShadow);
-    if (this.uiBlurLabel) this.uiBlurLabel.textContent = `模糊${s.coverShadowBlur}`;
-    if (this.uiBannerToggle) this.uiBannerToggle.classList.toggle("nr-btn-active", s.coverBanner);
+    if (this.uiStrokeLabel) (this.uiStrokeLabel as any).value = String(s.coverStrokePercent);
+    if (this.uiOpLabel) (this.uiOpLabel as any).value = String(s.coverStrokeOpacity);
+    if (this.uiGlowLabel) (this.uiGlowLabel as any).value = String(s.coverGlowSize);
+    if (this.uiOverlayToggle) this.uiOverlayToggle.classList.toggle("active", s.coverOverlay);
+    if (this.uiOxLabel) (this.uiOxLabel as any).value = String(s.coverOffsetX);
+    if (this.uiOyLabel) (this.uiOyLabel as any).value = String(s.coverOffsetY);
+    if (this.uiShadowToggle) this.uiShadowToggle.classList.toggle("active", s.coverShadow);
+    if (this.uiBlurLabel) (this.uiBlurLabel as any).value = String(s.coverShadowBlur);
+    if (this.uiBannerToggle) this.uiBannerToggle.classList.toggle("active", s.coverBanner);
     if (this.uiStrokeToggle) {
       const on = s.coverStrokeStyle !== "none";
-      this.uiStrokeToggle.classList.toggle("nr-btn-active", on);
+      this.uiStrokeToggle.classList.toggle("active", on);
     }
     if (this.strokeParamsRow) this.strokeParamsRow.style.display = s.coverStrokeStyle !== "none" ? "" : "none";
     if (this.bannerParamsRow) this.bannerParamsRow.style.display = s.coverBanner ? "" : "none";
     if (this.shadowParamsRow) this.shadowParamsRow.style.display = s.coverShadow ? "" : "none";
+    if (this.uiAlignBtns) {
+      const align = s.coverTextAlign ?? "left";
+      this.uiAlignBtns.left.classList.toggle("nr-btn-active", align === "left");
+      this.uiAlignBtns.center.classList.toggle("nr-btn-active", align === "center");
+      this.uiAlignBtns.right.classList.toggle("nr-btn-active", align === "right");
+    }
     this.syncing = false;
   }
 
@@ -1053,7 +1145,7 @@ export class PreviewView extends ItemView {
     const markdown = await this.app.vault.read(file);
     const s = this.plugin.settings;
     const configJson = JSON.stringify({
-      activeTheme: s.activeTheme,
+      theme: s.activeTheme,
       fontSize: s.fontSize,
       fontFamily: s.fontFamily,
       coverFontFamily: s.coverFontFamily,
@@ -1075,6 +1167,7 @@ export class PreviewView extends ItemView {
       coverOverlay: s.coverOverlay,
       coverShadowOffsetX: s.coverShadowOffsetX,
       coverShadowOffsetY: s.coverShadowOffsetY,
+      coverTextAlign: s.coverTextAlign ?? "left",
       pageMode: s.pageMode,
     }, null, 2);
     const configSection = `\n## renderer_config\n\n\`\`\`json\n${configJson}\n\`\`\`\n`;
@@ -1110,10 +1203,30 @@ export class PreviewView extends ItemView {
 
     const page = this.pages[this.currentPage];
     this.currentWrapper = this.pageDisplay.createDiv("nr-page-wrapper");
+    this.currentWrapper.style.position = "relative";
 
     this.currentClone = page.cloneNode(true) as HTMLElement;
     this.currentClone.style.transformOrigin = "top left";
     this.currentWrapper.appendChild(this.currentClone);
+
+    // 3:4 crop overlay on cover page in long mode — dim the top/bottom strips that get cropped in feed
+    this.coverCropOverlay = null;
+    if (this.currentPage === 0 && this.effectivePageMode === "long") {
+      const topStrip = document.createElement("div");
+      topStrip.style.cssText = `position: absolute; left: 0; top: 0; width: 100%; background: rgba(255,60,60,0.15); border-bottom: 2px dashed rgba(255,60,60,0.6); pointer-events: none; z-index: 100;`;
+
+      const bottomStrip = document.createElement("div");
+      bottomStrip.style.cssText = `position: absolute; left: 0; width: 100%; background: rgba(255,60,60,0.15); border-top: 2px dashed rgba(255,60,60,0.6); pointer-events: none; z-index: 100;`;
+
+      this.currentWrapper.appendChild(topStrip);
+      this.currentWrapper.appendChild(bottomStrip);
+
+      // Use a dummy container to hold refs
+      const ref = document.createElement("div");
+      (ref as any)._topStrip = topStrip;
+      (ref as any)._bottomStrip = bottomStrip;
+      this.coverCropOverlay = ref;
+    }
 
     this.rescale();
 
@@ -1133,11 +1246,25 @@ export class PreviewView extends ItemView {
     if (!this.currentClone || !this.currentWrapper || !this.previewContainer) return;
 
     const pageHeight = PAGE_HEIGHTS[this.effectivePageMode];
-    const areaWidth = this.previewContainer.clientWidth;
+    const areaWidth = Math.min(this.previewContainer.clientWidth, 460);
     const scale = (areaWidth - 24) / PAGE_WIDTH;
     this.currentClone.style.transform = `scale(${scale})`;
     this.currentWrapper.style.width = `${PAGE_WIDTH * scale}px`;
     this.currentWrapper.style.height = `${pageHeight * scale}px`;
+
+    if (this.coverCropOverlay) {
+      const cropH = PAGE_HEIGHTS["card"];
+      const stripH = (pageHeight - cropH) / 2;
+      const scaledStripH = stripH * scale;
+      const scaledPageH = pageHeight * scale;
+      const topStrip = (this.coverCropOverlay as any)._topStrip as HTMLElement;
+      const bottomStrip = (this.coverCropOverlay as any)._bottomStrip as HTMLElement;
+      if (topStrip) topStrip.style.height = `${scaledStripH}px`;
+      if (bottomStrip) {
+        bottomStrip.style.top = `${scaledPageH - scaledStripH}px`;
+        bottomStrip.style.height = `${scaledStripH}px`;
+      }
+    }
   }
 
   private showEmpty(msg: string): void {
@@ -1149,7 +1276,7 @@ export class PreviewView extends ItemView {
     if (this.pageIndicator) this.pageIndicator.textContent = "";
   }
 
-  private goPage(delta: number): void {
+  goPage(delta: number): void {
     const next = this.currentPage + delta;
     if (next >= 0 && next < this.pages.length) {
       this.currentPage = next;
@@ -1157,7 +1284,34 @@ export class PreviewView extends ItemView {
     }
   }
 
-  private async handleExport(): Promise<void> {
+  async handleExportCurrentPage(): Promise<void> {
+    if (this.pages.length === 0 || !this.pages[this.currentPage]) {
+      new Notice("Nothing to export");
+      return;
+    }
+
+    const file = this.app.workspace.getActiveFile();
+    const baseName = file ? file.basename : "note";
+    const pageNum = String(this.currentPage + 1).padStart(2, "0");
+    const pngName = `${baseName}_${pageNum}`;
+
+    new Notice("Exporting page...");
+    try {
+      const blob = await exportSinglePage(this.pages[this.currentPage], pngName);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${pngName}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+      new Notice(`Exported page ${this.currentPage + 1}`);
+    } catch (e) {
+      console.error("Export failed:", e);
+      new Notice("Export failed — check console");
+    }
+  }
+
+  async handleExport(): Promise<void> {
     if (this.pages.length === 0) {
       new Notice("Nothing to export");
       return;

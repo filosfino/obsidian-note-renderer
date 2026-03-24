@@ -21,18 +21,27 @@ export function renderMarkdownToHtml(
     const pipeIndex = raw.lastIndexOf("|");
     let name = raw;
     let sizeAttr = "";
+    let isFullPage = false;
     if (pipeIndex !== -1) {
       const sizePart = raw.slice(pipeIndex + 1).trim();
-      const sizeMatch = sizePart.match(/^(\d+)(?:x(\d+))?$/);
-      if (sizeMatch) {
+      if (sizePart === "full") {
         name = raw.slice(0, pipeIndex).trim();
-        sizeAttr = ` width="${sizeMatch[1]}"`;
-        if (sizeMatch[2]) {
-          sizeAttr += ` height="${sizeMatch[2]}"`;
+        isFullPage = true;
+      } else {
+        const sizeMatch = sizePart.match(/^(\d+)(?:x(\d+))?$/);
+        if (sizeMatch) {
+          name = raw.slice(0, pipeIndex).trim();
+          sizeAttr = ` width="${sizeMatch[1]}"`;
+          if (sizeMatch[2]) {
+            sizeAttr += ` height="${sizeMatch[2]}"`;
+          }
         }
       }
     }
     const src = resolveImage ? resolveImage(name) : name;
+    if (isFullPage) {
+      return `\n\n<img src="${src}" alt="${name}" class="nr-full-page">\n\n`;
+    }
     if (sizeAttr) {
       return `\n\n<img src="${src}" alt="${name}"${sizeAttr}>\n\n`;
     }

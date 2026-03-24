@@ -8,6 +8,38 @@ import JSZip from "jszip";
  * at its full resolution for accurate capture. The height is read
  * from each page's inline style to support both 3:5 and 3:4 modes.
  */
+/**
+ * Export a single page element as a PNG blob (no zip).
+ */
+export async function exportSinglePage(
+  page: HTMLElement,
+  _filename: string
+): Promise<Blob> {
+  const offscreen = document.createElement("div");
+  offscreen.style.cssText = "position: fixed; left: -9999px; top: 0;";
+  document.body.appendChild(offscreen);
+
+  const clone = page.cloneNode(true) as HTMLElement;
+  clone.style.borderRadius = "0";
+  offscreen.appendChild(clone);
+
+  const pageWidth = parseInt(clone.style.width) || 1080;
+  const pageHeight = parseInt(clone.style.height) || 1800;
+
+  const blob = await toBlob(clone, {
+    width: pageWidth,
+    height: pageHeight,
+    pixelRatio: 1,
+    cacheBust: true,
+  });
+
+  clone.remove();
+  offscreen.remove();
+
+  if (!blob) throw new Error("Failed to render page");
+  return blob;
+}
+
 export async function exportPages(
   pages: HTMLElement[],
   filename: string
@@ -21,6 +53,7 @@ export async function exportPages(
 
   for (let i = 0; i < pages.length; i++) {
     const page = pages[i].cloneNode(true) as HTMLElement;
+    page.style.borderRadius = "0";
     offscreen.appendChild(page);
 
     // Read actual dimensions from the page's inline style

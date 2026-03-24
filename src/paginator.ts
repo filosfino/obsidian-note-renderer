@@ -3,6 +3,7 @@ import { CONTENT_HEIGHT as DEFAULT_CONTENT_HEIGHT } from "./constants";
 export interface Page {
   elements: HTMLElement[];
   isCover: boolean;
+  isFullPage: boolean;
 }
 
 /**
@@ -42,10 +43,22 @@ export function paginateBody(container: HTMLElement, contentHeight: number = DEF
     // HR = forced page break
     if (el.tagName === "HR") {
       if (currentPage.length > 0) {
-        pages.push({ elements: currentPage, isCover: false });
+        pages.push({ elements: currentPage, isCover: false, isFullPage: false });
         currentPage = [];
         currentHeight = 0;
       }
+      continue;
+    }
+
+    // Full-page image: flush current page, then add image as its own full-page
+    const fullPageImg = el.querySelector?.("img.nr-full-page") || (el.tagName === "IMG" && el.classList.contains("nr-full-page") ? el : null);
+    if (fullPageImg) {
+      if (currentPage.length > 0) {
+        pages.push({ elements: currentPage, isCover: false, isFullPage: false });
+        currentPage = [];
+        currentHeight = 0;
+      }
+      pages.push({ elements: [el], isCover: false, isFullPage: true });
       continue;
     }
 
@@ -54,14 +67,14 @@ export function paginateBody(container: HTMLElement, contentHeight: number = DEF
     // Oversized element alone → own page
     if (elHeight > CONTENT_HEIGHT && currentPage.length === 0) {
       el.classList.add("nr-oversized");
-      pages.push({ elements: [el], isCover: false });
+      pages.push({ elements: [el], isCover: false, isFullPage: false });
       currentHeight = 0;
       continue;
     }
 
     // Would overflow → start new page
     if (currentHeight + elHeight > CONTENT_HEIGHT && currentPage.length > 0) {
-      pages.push({ elements: currentPage, isCover: false });
+      pages.push({ elements: currentPage, isCover: false, isFullPage: false });
       currentPage = [];
       currentHeight = 0;
     }
@@ -71,7 +84,7 @@ export function paginateBody(container: HTMLElement, contentHeight: number = DEF
   }
 
   if (currentPage.length > 0) {
-    pages.push({ elements: currentPage, isCover: false });
+    pages.push({ elements: currentPage, isCover: false, isFullPage: false });
   }
 
   return pages;

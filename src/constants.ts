@@ -26,5 +26,8 @@ export type CoverStyle = "fill";
 // Cover stroke styles for text-on-image
 export type CoverStrokeStyle = "none" | "stroke" | "double" | "shadow" | "glow";
 
+// Cover text alignment
+export type CoverTextAlign = "left" | "center" | "right";
+
 export const VIEW_TYPE = "note-renderer-preview";
 export const PLUGIN_ID = "note-renderer";

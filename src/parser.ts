@@ -42,10 +42,35 @@ export function parseRendererConfig(markdown: string): Record<string, unknown> |
   try {
     const parsed = JSON.parse(jsonMatch[1]);
     if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
-      // Migrate legacy key: activeTemplate → activeTheme
+      // Normalize shorthand / legacy keys to canonical names
+      // theme / template → activeTheme
+      if ("theme" in parsed && !("activeTheme" in parsed)) {
+        parsed.activeTheme = parsed.theme;
+        delete parsed.theme;
+      }
+      if ("template" in parsed && !("activeTheme" in parsed)) {
+        parsed.activeTheme = parsed.template;
+        delete parsed.template;
+      }
+      // Legacy migration: activeTemplate → activeTheme
       if ("activeTemplate" in parsed && !("activeTheme" in parsed)) {
         parsed.activeTheme = parsed.activeTemplate;
         delete parsed.activeTemplate;
+      }
+      // font → fontFamily
+      if ("font" in parsed && !("fontFamily" in parsed)) {
+        parsed.fontFamily = parsed.font;
+        delete parsed.font;
+      }
+      // coverFont → coverFontFamily
+      if ("coverFont" in parsed && !("coverFontFamily" in parsed)) {
+        parsed.coverFontFamily = parsed.coverFont;
+        delete parsed.coverFont;
+      }
+      // mode → pageMode
+      if ("mode" in parsed && !("pageMode" in parsed)) {
+        parsed.pageMode = parsed.mode;
+        delete parsed.mode;
       }
       return parsed as Record<string, unknown>;
     }
