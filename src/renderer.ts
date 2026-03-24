@@ -1,3 +1,4 @@
+/* eslint-disable obsidianmd/no-forbidden-elements -- embedded <style> required for offscreen html-to-image capture; global styles.css cannot reach these elements */
 import { App, Component, sanitizeHTMLToDom } from "obsidian";
 import { PAGE_WIDTH, CONTENT_WIDTH, PAGE_PADDING_H, PAGE_PADDING_TOP, PAGE_PADDING_BOTTOM, PAGE_HEIGHTS, getContentHeight } from "./constants";
 import { applyCoverEffects } from "./effects";
@@ -356,7 +357,7 @@ function autosizeCoverText(container: HTMLElement, opts: CoverTextOptions): void
   }
 }
 
-function createPageDiv(extraClass: string, css: string, pageHeight: number): HTMLElement {
+function createPageDiv(extraClass: string, css: string, _pageHeight: number): HTMLElement {
   const pageDiv = document.createElement("div");
   pageDiv.classList.add("nr-page", extraClass);
 

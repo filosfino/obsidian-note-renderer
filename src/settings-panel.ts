@@ -711,7 +711,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     sizeInput.value = String(val);
     void host.updateSetting("fontSize", val);
   }, { passive: false });
-  bodyControls.createEl("span", { cls: "nr-size-unit", text: "px" });
+  bodyControls.createEl("span", { cls: "nr-size-unit", text: "px" }); // eslint-disable-line obsidianmd/ui/sentence-case -- unit label
 
   // Preview area
   const previewContainer = contentEl.createDiv("nr-preview-area");
@@ -727,7 +727,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
         .onClick(() => { void host.handleExportCurrentPage(); });
     });
     menu.addItem((item) => {
-      item.setTitle("导出全部 (ZIP)")
+      item.setTitle("导出全部 (zip)")
         .setIcon("archive")
         .onClick(() => { void host.handleExport(); });
     });
@@ -766,7 +766,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   navRight.createDiv({ cls: "nr-nav-separator" });
 
   const exportBtn = navRight.createEl("button", { cls: "nr-nav-btn" });
-  exportBtn.title = "导出全部 ZIP";
+  exportBtn.title = "导出全部 zip";
   setIcon(exportBtn, "archive");
   exportBtn.addEventListener("click", () => { void host.handleExport(); });
 

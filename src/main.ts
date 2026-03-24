@@ -93,7 +93,7 @@ export default class NoteRendererPlugin extends Plugin {
 
     this.addCommand({
       id: "export-all",
-      name: "Export all pages (ZIP)",
+      name: "Export all pages (zip)",
       callback: async () => {
         const view = this.app.workspace.getLeavesOfType(VIEW_TYPE)[0]?.view;
         if (view instanceof PreviewView) await view.handleExport();

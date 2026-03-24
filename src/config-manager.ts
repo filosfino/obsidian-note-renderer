@@ -48,6 +48,7 @@ export function mergeConfigs(
 
     if (key === "coverEffects" && typeof value === "object") {
       // Deep merge: note overrides individual effects, rest kept from global
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- value is narrowed from unknown
       for (const [name, params] of Object.entries(value as Record<string, EffectParams>)) {
         if (name in merged.coverEffects) {
           merged.coverEffects[name] = { ...merged.coverEffects[name], ...params };

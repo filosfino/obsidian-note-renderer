@@ -327,7 +327,7 @@ export class PreviewView extends ItemView implements PanelHost {
   async handleSaveToNote(): Promise<void> {
     const file = this.app.workspace.getActiveFile();
     if (!file || file.extension !== "md") {
-      new Notice("No active markdown file");
+      new Notice("No active markdown file"); // eslint-disable-line obsidianmd/ui/sentence-case
       return;
     }
     const markdown = await this.app.vault.read(file);
@@ -341,7 +341,7 @@ export class PreviewView extends ItemView implements PanelHost {
   async handleRemoveFromNote(): Promise<void> {
     const file = this.app.workspace.getActiveFile();
     if (!file || file.extension !== "md") {
-      new Notice("No active markdown file");
+      new Notice("No active markdown file"); // eslint-disable-line obsidianmd/ui/sentence-case
       return;
     }
     const markdown = await this.app.vault.read(file);
