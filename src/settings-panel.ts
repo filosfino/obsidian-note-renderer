@@ -158,7 +158,12 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   const presetBar = contentEl.createDiv("nr-top-bar");
   presetBar.createEl("span", { cls: "nr-row-label", text: "预设" });
   const presetSelect = presetBar.createEl("select", { cls: "dropdown" });
-  host.rebuildPresetOptions();
+  // Populate preset options directly (refs not yet available, can't call host.rebuildPresetOptions)
+  presetSelect.createEl("option", { text: "(无预设)", value: "" });
+  for (const name of host.plugin.getPresetNames()) {
+    presetSelect.createEl("option", { text: name, value: name });
+  }
+  presetSelect.value = host.plugin.settings.activePreset;
   presetSelect.addEventListener("change", () => { void (async () => {
     if (host.syncing) return;
     const name = presetSelect.value;
@@ -178,7 +183,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
       if (!name) return;
       const preset: Record<string, unknown> = {};
       for (const key of PRESET_KEYS) {
-        preset[key] = (host.effective as Record<string, unknown>)[key];
+        preset[key] = (host.effective as unknown as Record<string, unknown>)[key];
       }
       host.plugin.settings.presets[name] = preset as Partial<import("./main").RendererPreset>;
       host.plugin.settings.activePreset = name;
@@ -441,8 +446,8 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
       await host.updateNoteConfig("coverStrokePercent", newPercent);
       await host.refresh();
     } else {
-      host.plugin.settings.coverStrokeStyle = style;
-      host.plugin.settings.coverStrokePercent = newPercent;
+      (host.plugin.settings as unknown as Record<string, unknown>).coverStrokeStyle = style;
+      (host.plugin.settings as unknown as Record<string, unknown>).coverStrokePercent = newPercent;
       host.plugin.settings.activePreset = "";
       if (presetSelect) presetSelect.value = "";
       await host.plugin.saveSettings();

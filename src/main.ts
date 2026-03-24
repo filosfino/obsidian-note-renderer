@@ -171,7 +171,7 @@ export default class NoteRendererPlugin extends Plugin {
   savePreset(name: string): void {
     const preset: Record<string, unknown> = {};
     for (const key of RENDER_KEYS) {
-      preset[key] = (this.settings as Record<string, unknown>)[key];
+      preset[key] = (this.settings as unknown as Record<string, unknown>)[key];
     }
     this.settings.presets[name] = preset as RendererPreset;
     this.settings.activePreset = name;
@@ -182,8 +182,8 @@ export default class NoteRendererPlugin extends Plugin {
     const preset = this.settings.presets[name];
     if (!preset) return;
     for (const key of RENDER_KEYS) {
-      const val = (preset as Record<string, unknown>)[key];
-      (this.settings as Record<string, unknown>)[key] = val !== undefined ? val : (RENDER_DEFAULTS as Record<string, unknown>)[key];
+      const val = (preset as unknown as Record<string, unknown>)[key];
+      (this.settings as unknown as Record<string, unknown>)[key] = val !== undefined ? val : (RENDER_DEFAULTS as unknown as Record<string, unknown>)[key];
     }
     this.settings.activePreset = name;
   }

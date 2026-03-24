@@ -55,7 +55,7 @@ export function mergeConfigs(
         }
       }
     } else {
-      (merged as Record<string, unknown>)[key] = value;
+      (merged as unknown as Record<string, unknown>)[key] = value;
     }
   }
   return merged;

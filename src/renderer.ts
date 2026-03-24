@@ -1,5 +1,5 @@
 import { App, Component, sanitizeHTMLToDom } from "obsidian";
-import { PAGE_WIDTH, CONTENT_WIDTH, PAGE_PADDING_H, PAGE_PADDING_TOP, PAGE_PADDING_BOTTOM, PAGE_HEIGHTS, getContentHeight } from "./constants";
+import { PAGE_WIDTH, CONTENT_WIDTH, PAGE_PADDING_H, PAGE_PADDING_TOP, PAGE_PADDING_BOTTOM, PAGE_HEIGHTS, getContentHeight, type PageMode } from "./constants";
 import { applyCoverEffects } from "./effects";
 import { paginateBody } from "./paginator";
 import { parseNoteStructure } from "./parser";
@@ -25,8 +25,9 @@ export async function renderNote(
   const structure = parseNoteStructure(markdown);
   const cleanups: (() => void)[] = [];
   const resolveImage = createVaultImageResolver(app);
-  const pageHeight = PAGE_HEIGHTS[options.pageMode];
-  const contentHeight = getContentHeight(options.pageMode);
+  const pageMode = options.pageMode as PageMode;
+  const pageHeight = PAGE_HEIGHTS[pageMode];
+  const contentHeight = getContentHeight(pageMode);
 
   const coverFont = options.coverFontFamily || options.fontFamily;
   const coverColor = options.coverFontColor || "";

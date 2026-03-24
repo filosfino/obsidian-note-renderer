@@ -112,7 +112,7 @@ export class PreviewView extends ItemView implements PanelHost {
     await this.refresh();
   }
 
-  onClose(): void {
+  async onClose(): Promise<void> {
     this.rendered?.cleanup();
     this.resizeObserver?.disconnect();
     if (this.fileChangeHandler) {
@@ -173,7 +173,7 @@ export class PreviewView extends ItemView implements PanelHost {
     // Sync UI controls to reflect the effective (possibly overridden) settings
     this.syncUiToSettings(merged);
 
-    this.effectivePageMode = merged.pageMode;
+    this.effectivePageMode = merged.pageMode as "long" | "card";
     const themeCss = await this.plugin.loadTheme(merged.activeTheme);
 
     this.rendered?.cleanup();
@@ -260,8 +260,8 @@ export class PreviewView extends ItemView implements PanelHost {
     const preset = this.plugin.settings.presets[presetName];
     if (!preset) return false;
     for (const key of PRESET_KEYS) {
-      const presetVal = (preset as Record<string, unknown>)[key];
-      const currentVal = (s as Record<string, unknown>)[key];
+      const presetVal = (preset as unknown as Record<string, unknown>)[key];
+      const currentVal = (s as unknown as Record<string, unknown>)[key];
       if (JSON.stringify(presetVal) !== JSON.stringify(currentVal)) {
         return true;
       }
@@ -333,6 +333,7 @@ export class PreviewView extends ItemView implements PanelHost {
     }
     const markdown = await this.app.vault.read(file);
     const options = extractRenderOptions(this.plugin.settings as unknown as Record<string, unknown>);
+
     const updated = saveFullNoteConfig(markdown, options);
     await this.app.vault.modify(file, updated);
     new Notice("已存入笔记");
