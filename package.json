@@ -24,7 +24,6 @@
   "dependencies": {
     "html-to-image": "^1.11.11",
     "jszip": "^3.10.1",
-    "marked": "^17.0.4",
-    "puppeteer-core": "^24.40.0"
+    "marked": "^17.0.4"
   }
 }
