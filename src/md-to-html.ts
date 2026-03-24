@@ -22,11 +22,17 @@ export function renderMarkdownToHtml(
     let name = raw;
     let sizeAttr = "";
     let isFullPage = false;
+    let fullPageFit: "contain" | "cover" = "contain";
     if (pipeIndex !== -1) {
       const sizePart = raw.slice(pipeIndex + 1).trim();
-      if (sizePart === "full") {
+      if (sizePart === "full" || sizePart === "contain") {
         name = raw.slice(0, pipeIndex).trim();
         isFullPage = true;
+        fullPageFit = "contain";
+      } else if (sizePart === "cover") {
+        name = raw.slice(0, pipeIndex).trim();
+        isFullPage = true;
+        fullPageFit = "cover";
       } else {
         const sizeMatch = sizePart.match(/^(\d+)(?:x(\d+))?$/);
         if (sizeMatch) {
@@ -40,7 +46,8 @@ export function renderMarkdownToHtml(
     }
     const src = resolveImage ? resolveImage(name) : name;
     if (isFullPage) {
-      return `\n\n<img src="${src}" alt="${name}" class="nr-full-page">\n\n`;
+      const fitClass = fullPageFit === "cover" ? "nr-full-page nr-full-cover" : "nr-full-page";
+      return `\n\n<img src="${src}" alt="${name}" class="${fitClass}">\n\n`;
     }
     if (sizeAttr) {
       return `\n\n<img src="${src}" alt="${name}"${sizeAttr}>\n\n`;

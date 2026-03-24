@@ -29,7 +29,7 @@ export async function exportSinglePage(
   const blob = await toBlob(clone, {
     width: pageWidth,
     height: pageHeight,
-    pixelRatio: 1,
+    pixelRatio: 2,
     cacheBust: true,
   });
 
@@ -63,7 +63,7 @@ export async function exportPages(
     const blob = await toBlob(page, {
       width: pageWidth,
       height: pageHeight,
-      pixelRatio: 1,
+      pixelRatio: 2,
       cacheBust: true,
     });
 

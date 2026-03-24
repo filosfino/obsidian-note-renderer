@@ -361,11 +361,13 @@
 .nr-section-head {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   padding: 6px 10px;
   min-height: 32px;
   cursor: pointer;
   user-select: none;
   transition: background 0.12s;
+  gap: 3px 0;
 }
 
 .nr-section-head:hover {
@@ -489,9 +491,11 @@
 /* ── V2: Effect chip toggles ── */
 .nr-header-chips {
   display: flex;
+  flex-wrap: wrap;
   gap: 3px;
   margin-left: auto;
   margin-right: 4px;
+  justify-content: flex-end;
 }
 
 .nr-chip {

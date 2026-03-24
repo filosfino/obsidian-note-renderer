@@ -11,160 +11,27 @@ import { THEME_SAGE } from "./themes/sage";
 import { THEME_MIST } from "./themes/mist";
 import { THEME_ROSE } from "./themes/rose";
 
-import type { PageMode, CoverStrokeStyle, CoverTextAlign } from "./constants";
+import { RENDER_DEFAULTS, RENDER_KEYS, type RenderOptions } from "./schema";
 
-// Preset: a named snapshot of all rendering parameters (theme + params)
-export interface RendererPreset {
-  activeTheme: string;
-  fontSize: number;
-  fontFamily: string;
-  coverFontFamily: string;
-  coverStrokePercent: number;
-  coverStrokeStyle: CoverStrokeStyle;
-  coverStrokeOpacity: number;
-  coverGlowSize: number;
-  coverBanner: boolean;
-  coverBannerColor: string;
-  coverBannerSkew: number;
-  coverFontColor: string;
-  coverFontScale: number;
-  coverLetterSpacing: number;
-  coverLineHeight: number;
-  coverOffsetX: number;
-  coverOffsetY: number;
-  coverFontWeight: number;
-  coverOverlay: boolean;
-  coverOverlayOpacity: number;
-  coverGrain: boolean;
-  coverGrainOpacity: number;
-  coverAurora: boolean;
-  coverAuroraOpacity: number;
-  coverBokeh: boolean;
-  coverBokehOpacity: number;
-  coverGrid: boolean;
-  coverGridOpacity: number;
-  coverVignette: boolean;
-  coverVignetteOpacity: number;
-  coverLightLeak: boolean;
-  coverLightLeakOpacity: number;
-  coverScanlines: boolean;
-  coverScanlinesOpacity: number;
-  coverShadow: boolean;
-  coverShadowBlur: number;
-  coverShadowOffsetX: number;
-  coverShadowOffsetY: number;
-  coverTextAlign: CoverTextAlign;
-  pageMode: PageMode;
+// ── Types (derived from schema) ──────────────────────────────────────────────
+
+export type RendererPreset = RenderOptions;
+
+export interface NoteRendererSettings extends RenderOptions {
+  activePreset: string;
+  presets: Record<string, Partial<RendererPreset>>;
 }
 
-export interface NoteRendererSettings {
-  activeTheme: string;
-  activePreset: string;                       // "" = no preset selected
-  presets: Record<string, RendererPreset>;     // name → config snapshot
-  fontSize: number;
-  fontFamily: string;
-  coverFontFamily: string;
-  coverStrokePercent: number;
-  coverStrokeStyle: CoverStrokeStyle;
-  coverStrokeOpacity: number;   // stroke alpha 0-100 (90 = rgba 0.9)
-  coverGlowSize: number;        // glow multiplier 0-200 (60 = 0.6x stroke width)
-  coverBanner: boolean;         // independent banner toggle
-  coverBannerColor: string;     // banner mode background color
-  coverBannerSkew: number;      // parallelogram skew percentage (0 = rectangle, 15 = steep)
-  coverFontColor: string;       // empty = use theme default
-  coverFontScale: number;       // font size multiplier (100 = auto, 150 = 1.5x)
-  coverLetterSpacing: number;   // in 0.01em units (e.g. 5 = 0.05em)
-  coverLineHeight: number;      // in 0.1 units (e.g. 13 = 1.3)
-  coverOffsetX: number;         // cover text X offset in % of page width (-50 to 50)
-  coverOffsetY: number;         // cover text Y offset in % of page height (-50 to 50)
-  coverFontWeight: number;      // cover text font weight (100-900)
-  coverOverlay: boolean;
-  coverOverlayOpacity: number;
-  coverGrain: boolean;
-  coverGrainOpacity: number;
-  coverAurora: boolean;
-  coverAuroraOpacity: number;
-  coverBokeh: boolean;
-  coverBokehOpacity: number;
-  coverGrid: boolean;
-  coverGridOpacity: number;
-  coverVignette: boolean;
-  coverVignetteOpacity: number;
-  coverLightLeak: boolean;
-  coverLightLeakOpacity: number;
-  coverScanlines: boolean;
-  coverScanlinesOpacity: number;
-  coverShadow: boolean;
-  coverShadowBlur: number;
-  coverShadowOffsetX: number;
-  coverShadowOffsetY: number;
-  coverTextAlign: CoverTextAlign;
-  pageMode: PageMode;
-}
-
-// Keys that are part of a preset (excludes meta fields like activePreset and presets)
-export const PRESET_KEYS: (keyof RendererPreset)[] = [
-  "activeTheme", "fontSize", "fontFamily", "coverFontFamily",
-  "coverStrokePercent", "coverStrokeStyle", "coverStrokeOpacity", "coverGlowSize",
-  "coverBanner", "coverBannerColor", "coverBannerSkew", "coverFontColor",
-  "coverFontScale", "coverFontWeight", "coverLetterSpacing", "coverLineHeight",
-  "coverOffsetX", "coverOffsetY",
-  "coverOverlay", "coverOverlayOpacity",
-  "coverGrain", "coverGrainOpacity",
-  "coverAurora", "coverAuroraOpacity",
-  "coverBokeh", "coverBokehOpacity",
-  "coverGrid", "coverGridOpacity",
-  "coverVignette", "coverVignetteOpacity",
-  "coverLightLeak", "coverLightLeakOpacity",
-  "coverScanlines", "coverScanlinesOpacity",
-  "coverShadow", "coverShadowBlur", "coverShadowOffsetX", "coverShadowOffsetY",
-  "coverTextAlign", "pageMode",
-];
+// Preset keys = all render keys (auto-derived)
+export const PRESET_KEYS = RENDER_KEYS;
 
 const DEFAULT_SETTINGS: NoteRendererSettings = {
-  activeTheme: "cream",
+  ...RENDER_DEFAULTS,
   activePreset: "",
   presets: {},
-  fontSize: 42,
-  fontFamily: '"PingFang SC", "Noto Sans SC", sans-serif',
-  coverFontFamily: '"Yuanti SC", "PingFang SC", sans-serif',
-  coverStrokePercent: 20,
-  coverStrokeStyle: "stroke",
-  coverStrokeOpacity: 90,
-  coverGlowSize: 60,
-  coverBanner: false,
-  coverBannerColor: "rgba(0,0,0,0.5)",
-  coverBannerSkew: 6,
-  coverFontColor: "",
-  coverFontScale: 100,
-  coverLetterSpacing: 5,
-  coverLineHeight: 13,
-  coverOffsetX: 0,
-  coverOffsetY: 0,
-  coverFontWeight: 800,
-  coverOverlay: true,
-  coverOverlayOpacity: 55,
-  coverGrain: false,
-  coverGrainOpacity: 8,
-  coverAurora: false,
-  coverAuroraOpacity: 30,
-  coverBokeh: false,
-  coverBokehOpacity: 12,
-  coverGrid: false,
-  coverGridOpacity: 6,
-  coverVignette: false,
-  coverVignetteOpacity: 50,
-  coverLightLeak: false,
-  coverLightLeakOpacity: 25,
-  coverScanlines: false,
-  coverScanlinesOpacity: 8,
-  coverShadow: true,
-  coverShadowBlur: 16,
-  coverShadowOffsetX: 0,
-  coverShadowOffsetY: 4,
-  coverTextAlign: "left",
-  pageMode: "long",
 };
+
+// ── Plugin ───────────────────────────────────────────────────────────────────
 
 export default class NoteRendererPlugin extends Plugin {
   settings: NoteRendererSettings = DEFAULT_SETTINGS;
@@ -299,19 +166,20 @@ export default class NoteRendererPlugin extends Plugin {
   /** Snapshot current settings (excluding meta fields) as a named preset. */
   savePreset(name: string): void {
     const preset: Record<string, unknown> = {};
-    for (const key of PRESET_KEYS) {
+    for (const key of RENDER_KEYS) {
       preset[key] = (this.settings as Record<string, unknown>)[key];
     }
     this.settings.presets[name] = preset as RendererPreset;
     this.settings.activePreset = name;
   }
 
-  /** Apply a preset's values to current settings. */
+  /** Apply a preset's values to current settings. Falls back to defaults for missing keys. */
   loadPreset(name: string): void {
     const preset = this.settings.presets[name];
     if (!preset) return;
-    for (const key of PRESET_KEYS) {
-      (this.settings as Record<string, unknown>)[key] = preset[key];
+    for (const key of RENDER_KEYS) {
+      const val = (preset as Record<string, unknown>)[key];
+      (this.settings as Record<string, unknown>)[key] = val !== undefined ? val : (RENDER_DEFAULTS as Record<string, unknown>)[key];
     }
     this.settings.activePreset = name;
   }

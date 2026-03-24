@@ -1,55 +1,16 @@
 import { App, Component, sanitizeHTMLToDom } from "obsidian";
-import { PAGE_WIDTH, CONTENT_WIDTH, PAGE_PADDING_H, PAGE_PADDING_TOP, PAGE_PADDING_BOTTOM, PAGE_HEIGHTS, getContentHeight, type PageMode, type CoverStrokeStyle, type CoverTextAlign } from "./constants";
+import { PAGE_WIDTH, CONTENT_WIDTH, PAGE_PADDING_H, PAGE_PADDING_TOP, PAGE_PADDING_BOTTOM, PAGE_HEIGHTS, getContentHeight } from "./constants";
 import { paginateBody, Page } from "./paginator";
 import { parseNoteStructure } from "./parser";
 import { renderMarkdownToHtml, createVaultImageResolver } from "./md-to-html";
+import type { RenderOptions } from "./schema";
+
+export type { RenderOptions };
 
 export interface RenderedPages {
   pages: HTMLElement[];
   cleanup: () => void;
   hasCoverImage: boolean;
-}
-
-export interface RenderOptions {
-  fontSize: number;
-  fontFamily: string;
-  coverFontFamily: string;
-  coverFontColor: string;
-  coverFontScale: number;
-  coverLetterSpacing: number;
-  coverLineHeight: number;
-  coverStrokePercent: number;
-  coverStrokeStyle: CoverStrokeStyle;
-  coverStrokeOpacity: number;
-  coverGlowSize: number;
-  coverOffsetX: number;
-  coverOffsetY: number;
-  coverFontWeight: number;
-  coverOverlay: boolean;
-  coverOverlayOpacity: number;
-  coverGrain: boolean;
-  coverGrainOpacity: number;
-  coverAurora: boolean;
-  coverAuroraOpacity: number;
-  coverBokeh: boolean;
-  coverBokehOpacity: number;
-  coverGrid: boolean;
-  coverGridOpacity: number;
-  coverVignette: boolean;
-  coverVignetteOpacity: number;
-  coverLightLeak: boolean;
-  coverLightLeakOpacity: number;
-  coverScanlines: boolean;
-  coverScanlinesOpacity: number;
-  coverBanner: boolean;
-  coverBannerColor: string;
-  coverBannerSkew: number;
-  coverShadow: boolean;
-  coverShadowBlur: number;
-  coverShadowOffsetX: number;
-  coverShadowOffsetY: number;
-  coverTextAlign: CoverTextAlign;
-  pageMode: PageMode;
 }
 
 export async function renderNote(
@@ -220,6 +181,22 @@ ${coverColorCss}
   coverPage.style.position = "relative";
   coverPage.style.overflow = "hidden";
 
+  // Detect theme brightness from CSS background color
+  const isDark = (() => {
+    const bgMatch = themeCss.match(/\.nr-page\s*\{[^}]*background:\s*#([0-9a-fA-F]{3,6})/);
+    if (!bgMatch) return true; // default assume dark
+    const hex = bgMatch[1].length === 3
+      ? bgMatch[1].split("").map(c => c + c).join("")
+      : bgMatch[1];
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+    return (r * 0.299 + g * 0.587 + b * 0.114) < 128;
+  })();
+  // Effect colors: light particles on dark bg, dark particles on light bg
+  const effectColor = isDark ? "rgba(255,255,255," : "rgba(0,0,0,";
+  const effectBlend = isDark ? "screen" : "multiply";
+
   // Grain: SVG feTurbulence noise overlay
   if (options.coverGrain) {
     const grainOp = (options.coverGrainOpacity ?? 8) / 100;
@@ -233,11 +210,14 @@ ${coverColorCss}
   if (options.coverAurora) {
     const auroraOp = (options.coverAuroraOpacity ?? 30) / 100;
     const aurora = document.createElement("div");
-    aurora.style.cssText = `position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2;opacity:${auroraOp};mix-blend-mode:screen;overflow:hidden;`;
+    aurora.style.cssText = `position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2;opacity:${auroraOp};mix-blend-mode:${effectBlend};overflow:hidden;`;
+    const auroraColors = isDark
+      ? ["rgba(120,80,220,0.8)", "rgba(40,160,180,0.7)", "rgba(200,80,120,0.5)"]
+      : ["rgba(100,60,180,0.6)", "rgba(30,130,150,0.5)", "rgba(180,60,100,0.4)"];
     aurora.innerHTML = `
-      <div style="position:absolute;width:60%;height:50%;top:10%;left:-10%;background:radial-gradient(circle,rgba(120,80,220,0.8),transparent 70%);filter:blur(80px);"></div>
-      <div style="position:absolute;width:50%;height:40%;top:50%;right:-5%;background:radial-gradient(circle,rgba(40,160,180,0.7),transparent 70%);filter:blur(70px);"></div>
-      <div style="position:absolute;width:40%;height:35%;bottom:5%;left:20%;background:radial-gradient(circle,rgba(200,80,120,0.5),transparent 70%);filter:blur(60px);"></div>
+      <div style="position:absolute;width:60%;height:50%;top:10%;left:-10%;background:radial-gradient(circle,${auroraColors[0]},transparent 70%);filter:blur(80px);"></div>
+      <div style="position:absolute;width:50%;height:40%;top:50%;right:-5%;background:radial-gradient(circle,${auroraColors[1]},transparent 70%);filter:blur(70px);"></div>
+      <div style="position:absolute;width:40%;height:35%;bottom:5%;left:20%;background:radial-gradient(circle,${auroraColors[2]},transparent 70%);filter:blur(60px);"></div>
     `;
     coverPage.appendChild(aurora);
   }
@@ -255,7 +235,7 @@ ${coverColorCss}
       const y = Math.round(seed[(i + 5) % 16] * pageHeight);
       const size = 20 + Math.round(seed[(i + 3) % 16] * 60);
       const alpha = 0.3 + seed[(i + 7) % 16] * 0.5;
-      circles.push(`${x}px ${y}px 0 ${size}px rgba(255,255,255,${alpha.toFixed(2)})`);
+      circles.push(`${x}px ${y}px 0 ${size}px ${effectColor}${alpha.toFixed(2)})`);
     }
     bokeh.innerHTML = `<div style="position:absolute;width:1px;height:1px;top:0;left:0;border-radius:50%;box-shadow:${circles.join(",")};"></div>`;
     coverPage.appendChild(bokeh);
@@ -265,7 +245,8 @@ ${coverColorCss}
   if (options.coverGrid) {
     const gridOp = (options.coverGridOpacity ?? 6) / 100;
     const grid = document.createElement("div");
-    grid.style.cssText = `position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2;opacity:${gridOp};background-image:repeating-linear-gradient(0deg,rgba(255,255,255,0.3) 0px,rgba(255,255,255,0.3) 1px,transparent 1px,transparent 60px),repeating-linear-gradient(90deg,rgba(255,255,255,0.3) 0px,rgba(255,255,255,0.3) 1px,transparent 1px,transparent 60px);`;
+    const lineColor = effectColor + "0.3)";
+    grid.style.cssText = `position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2;opacity:${gridOp};background-image:repeating-linear-gradient(0deg,${lineColor} 0px,${lineColor} 1px,transparent 1px,transparent 60px),repeating-linear-gradient(90deg,${lineColor} 0px,${lineColor} 1px,transparent 1px,transparent 60px);`;
     coverPage.appendChild(grid);
   }
 
@@ -281,10 +262,13 @@ ${coverColorCss}
   if (options.coverLightLeak) {
     const leakOp = (options.coverLightLeakOpacity ?? 25) / 100;
     const leak = document.createElement("div");
-    leak.style.cssText = `position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2;opacity:${leakOp};mix-blend-mode:screen;overflow:hidden;`;
+    leak.style.cssText = `position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2;opacity:${leakOp};mix-blend-mode:${effectBlend};overflow:hidden;`;
+    const leakColors = isDark
+      ? ["rgba(255,180,80,0.9)", "rgba(255,120,100,0.7)"]
+      : ["rgba(200,140,50,0.7)", "rgba(200,80,60,0.5)"];
     leak.innerHTML = `
-      <div style="position:absolute;width:50%;height:50%;top:-10%;right:-10%;background:radial-gradient(circle,rgba(255,180,80,0.9),transparent 70%);filter:blur(60px);"></div>
-      <div style="position:absolute;width:40%;height:40%;bottom:-5%;left:-5%;background:radial-gradient(circle,rgba(255,120,100,0.7),transparent 70%);filter:blur(50px);"></div>
+      <div style="position:absolute;width:50%;height:50%;top:-10%;right:-10%;background:radial-gradient(circle,${leakColors[0]},transparent 70%);filter:blur(60px);"></div>
+      <div style="position:absolute;width:40%;height:40%;bottom:-5%;left:-5%;background:radial-gradient(circle,${leakColors[1]},transparent 70%);filter:blur(50px);"></div>
     `;
     coverPage.appendChild(leak);
   }
@@ -293,8 +277,56 @@ ${coverColorCss}
   if (options.coverScanlines) {
     const scanOp = (options.coverScanlinesOpacity ?? 8) / 100;
     const scan = document.createElement("div");
-    scan.style.cssText = `position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2;opacity:${scanOp};background:repeating-linear-gradient(to bottom,transparent 0px,transparent 2px,rgba(0,0,0,0.5) 2px,rgba(0,0,0,0.5) 4px);`;
+    const scanColor = effectColor + "0.5)";
+    scan.style.cssText = `position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2;opacity:${scanOp};background:repeating-linear-gradient(to bottom,transparent 0px,transparent 2px,${scanColor} 2px,${scanColor} 4px);`;
     coverPage.appendChild(scan);
+  }
+
+  // Particle network: nodes + connecting lines (constellation / molecular structure)
+  if (options.coverNetwork) {
+    const netOp = (options.coverNetworkOpacity ?? 15) / 100;
+    const cols = 10;
+    const rows = Math.round(cols * pageHeight / PAGE_WIDTH);
+    const cellW = PAGE_WIDTH / cols;
+    const cellH = pageHeight / rows;
+    const threshold = Math.max(cellW, cellH) * 1.6;
+
+    // Deterministic pseudo-random using simple seed
+    let seed = 42;
+    const rand = () => { seed = (seed * 16807 + 0) % 2147483647; return seed / 2147483647; };
+
+    // Generate jittered grid nodes
+    const nodes: { x: number; y: number }[] = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const x = (c + 0.5) * cellW + (rand() - 0.5) * cellW * 0.8;
+        const y = (r + 0.5) * cellH + (rand() - 0.5) * cellH * 0.8;
+        nodes.push({ x, y });
+      }
+    }
+
+    // Build SVG with lines then circles
+    let svgContent = "";
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i + 1; j < nodes.length; j++) {
+        const dx = nodes[j].x - nodes[i].x;
+        const dy = nodes[j].y - nodes[i].y;
+        const d = Math.sqrt(dx * dx + dy * dy);
+        if (d < threshold) {
+          const lineOp = Math.pow(1 - d / threshold, 1.5).toFixed(2);
+          svgContent += `<line x1="${nodes[i].x}" y1="${nodes[i].y}" x2="${nodes[j].x}" y2="${nodes[j].y}" stroke="currentColor" stroke-width="1" opacity="${lineOp}"/>`;
+        }
+      }
+    }
+    for (const n of nodes) {
+      svgContent += `<circle cx="${n.x}" cy="${n.y}" r="${2 + rand() * 2}" fill="currentColor" opacity="${(0.4 + rand() * 0.3).toFixed(2)}"/>`;
+    }
+
+    const network = document.createElement("div");
+    const netColor = isDark ? "rgba(200,200,200,1)" : "rgba(80,80,80,1)";
+    network.style.cssText = `position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2;opacity:${netOp};color:${netColor};`;
+    network.innerHTML = `<svg width="${PAGE_WIDTH}" height="${pageHeight}" xmlns="http://www.w3.org/2000/svg">${svgContent}</svg>`;
+    coverPage.appendChild(network);
   }
 
   // Apply cover text offset — shift child elements, not the container (which has the gradient overlay)
@@ -528,10 +560,11 @@ async function renderBodyPages(
         const clone = el.cloneNode(true) as HTMLElement;
         const img = clone.querySelector("img.nr-full-page") || (clone.tagName === "IMG" ? clone : null);
         if (img) {
+          const isCover = (img as HTMLElement).classList.contains("nr-full-cover");
           (img as HTMLElement).style.cssText = `
             width: 100%;
             height: 100%;
-            object-fit: contain;
+            object-fit: ${isCover ? "cover" : "contain"};
             display: block;
           `;
         }

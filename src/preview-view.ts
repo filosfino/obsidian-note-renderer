@@ -11,9 +11,10 @@ import {
   debounce,
 } from "obsidian";
 import { VIEW_TYPE, PAGE_WIDTH, PAGE_HEIGHTS } from "./constants";
-import { renderNote, RenderedPages, RenderOptions } from "./renderer";
+import { renderNote, RenderedPages } from "./renderer";
 import { exportPages, exportSinglePage } from "./exporter";
 import { parseRendererConfig } from "./parser";
+import { extractRenderOptions, RENDER_KEYS, INTERNAL_TO_NOTE_KEY, toNoteConfigKeys } from "./schema";
 import type NoteRendererPlugin from "./main";
 import { PRESET_KEYS } from "./main";
 import type { NoteRendererSettings } from "./main";
@@ -89,6 +90,7 @@ export class PreviewView extends ItemView {
   private shadowParamsRow: HTMLElement | null = null;
   private lastStrokeStyle: string = "stroke";
   private uiAlignBtns: { left: HTMLElement; center: HTMLElement; right: HTMLElement } | null = null;
+  private _effectParamRows: Record<string, HTMLElement> = {};
 
   constructor(leaf: WorkspaceLeaf, plugin: NoteRendererPlugin) {
     super(leaf);
@@ -627,6 +629,7 @@ export class PreviewView extends ItemView {
     chipToggle(effectChips, "网格", "coverGrid", this.plugin.settings.coverGrid);
     chipToggle(effectChips, "漏光", "coverLightLeak", this.plugin.settings.coverLightLeak);
     chipToggle(effectChips, "扫描线", "coverScanlines", this.plugin.settings.coverScanlines);
+    chipToggle(effectChips, "网络", "coverNetwork", this.plugin.settings.coverNetwork);
 
     effectHead.addEventListener("click", () => toggleSection(effectSection));
 
@@ -642,12 +645,15 @@ export class PreviewView extends ItemView {
       { label: "网格", key: "coverGrid", opKey: "coverGridOpacity", active: this.plugin.settings.coverGrid, min: 1, max: 30, def: 6 },
       { label: "漏光", key: "coverLightLeak", opKey: "coverLightLeakOpacity", active: this.plugin.settings.coverLightLeak, min: 5, max: 80, def: 25 },
       { label: "扫描线", key: "coverScanlines", opKey: "coverScanlinesOpacity", active: this.plugin.settings.coverScanlines, min: 1, max: 30, def: 8 },
+      { label: "网络", key: "coverNetwork", opKey: "coverNetworkOpacity", active: this.plugin.settings.coverNetwork, min: 5, max: 50, def: 15 },
     ];
 
+    const effectParamRows: Record<string, HTMLElement> = {};
     for (const ef of effectFields) {
       const row = effectBody.createDiv("nr-row");
       row.createEl("span", { cls: "nr-row-label", text: ef.label });
       row.style.display = ef.active ? "" : "none";
+      effectParamRows[ef.key] = row;
       makeField(row, "强度", String((this.effective as any)[ef.opKey] ?? ef.def),
         { min: ef.min, max: ef.max, unit: "%" },
         (val) => this.updateSetting(ef.opKey, val));
@@ -661,6 +667,7 @@ export class PreviewView extends ItemView {
         }
       }
     }
+    this._effectParamRows = effectParamRows;
 
     // ── Body section: flat row (no accordion) ──
     this.bodySection = contentEl.createDiv("nr-flat-row");
@@ -934,53 +941,17 @@ export class PreviewView extends ItemView {
       file.path,
       themeCss,
       this.plugin,
-      {
-        fontSize: merged.fontSize,
-        fontFamily: merged.fontFamily,
-        coverFontFamily: merged.coverFontFamily,
-        coverFontScale: merged.coverFontScale,
-        coverFontColor: merged.coverFontColor,
-        coverLetterSpacing: merged.coverLetterSpacing,
-        coverLineHeight: merged.coverLineHeight,
-        coverStrokePercent: merged.coverStrokePercent,
-        coverStrokeStyle: merged.coverStrokeStyle,
-        coverStrokeOpacity: merged.coverStrokeOpacity,
-        coverGlowSize: merged.coverGlowSize,
-        coverBanner: merged.coverBanner,
-        coverBannerColor: merged.coverBannerColor,
-        coverBannerSkew: merged.coverBannerSkew,
-        coverOffsetX: merged.coverOffsetX,
-        coverOffsetY: merged.coverOffsetY,
-        coverFontWeight: merged.coverFontWeight,
-        coverOverlay: merged.coverOverlay,
-        coverOverlayOpacity: merged.coverOverlayOpacity,
-        coverGrain: merged.coverGrain,
-        coverGrainOpacity: merged.coverGrainOpacity,
-        coverAurora: merged.coverAurora,
-        coverAuroraOpacity: merged.coverAuroraOpacity,
-        coverBokeh: merged.coverBokeh,
-        coverBokehOpacity: merged.coverBokehOpacity,
-        coverGrid: merged.coverGrid,
-        coverGridOpacity: merged.coverGridOpacity,
-        coverVignette: merged.coverVignette,
-        coverVignetteOpacity: merged.coverVignetteOpacity,
-        coverLightLeak: merged.coverLightLeak,
-        coverLightLeakOpacity: merged.coverLightLeakOpacity,
-        coverScanlines: merged.coverScanlines,
-        coverScanlinesOpacity: merged.coverScanlinesOpacity,
-        coverShadow: merged.coverShadow,
-        coverShadowBlur: merged.coverShadowBlur,
-        coverShadowOffsetX: merged.coverShadowOffsetX,
-        coverShadowOffsetY: merged.coverShadowOffsetY,
-        coverTextAlign: merged.coverTextAlign ?? "left",
-        pageMode: merged.pageMode,
-      }
+      extractRenderOptions(merged as unknown as Record<string, unknown>),
     );
 
     this.pages = this.rendered.pages;
-    // Hide overlay chip when no cover image
+    // Hide overlay chip + params when no cover image
     if (this.uiOverlayToggle) {
-      this.uiOverlayToggle.style.display = this.rendered.hasCoverImage ? "" : "none";
+      const show = this.rendered.hasCoverImage;
+      this.uiOverlayToggle.style.display = show ? "" : "none";
+      if (this._effectParamRows["coverOverlay"]) {
+        this._effectParamRows["coverOverlay"].style.display = show && this.effective.coverOverlay ? "" : "none";
+      }
     }
     // Preserve current page if possible, otherwise reset to 0
     if (this.currentPage >= this.pages.length) {
@@ -1021,8 +992,7 @@ export class PreviewView extends ItemView {
     if (!noteConfig) return;
 
     // Map internal key names to user-facing names for renderer_config
-    const keyMap: Record<string, string> = { activeTheme: "theme", activeTemplate: "theme" };
-    const noteKey = keyMap[key] || key;
+    const noteKey = (INTERNAL_TO_NOTE_KEY as Record<string, string>)[key] || key;
 
     // Update the key in the parsed config
     noteConfig[noteKey] = value;
@@ -1143,33 +1113,9 @@ export class PreviewView extends ItemView {
       return;
     }
     const markdown = await this.app.vault.read(file);
-    const s = this.plugin.settings;
-    const configJson = JSON.stringify({
-      theme: s.activeTheme,
-      fontSize: s.fontSize,
-      fontFamily: s.fontFamily,
-      coverFontFamily: s.coverFontFamily,
-      coverFontScale: s.coverFontScale,
-      coverFontColor: s.coverFontColor,
-      coverLetterSpacing: s.coverLetterSpacing,
-      coverLineHeight: s.coverLineHeight,
-      coverStrokePercent: s.coverStrokePercent,
-      coverStrokeStyle: s.coverStrokeStyle,
-      coverStrokeOpacity: s.coverStrokeOpacity,
-      coverGlowSize: s.coverGlowSize,
-      coverBanner: s.coverBanner,
-      coverBannerColor: s.coverBannerColor,
-      coverBannerSkew: s.coverBannerSkew,
-      coverShadow: s.coverShadow,
-      coverShadowBlur: s.coverShadowBlur,
-      coverOffsetX: s.coverOffsetX,
-      coverOffsetY: s.coverOffsetY,
-      coverOverlay: s.coverOverlay,
-      coverShadowOffsetX: s.coverShadowOffsetX,
-      coverShadowOffsetY: s.coverShadowOffsetY,
-      coverTextAlign: s.coverTextAlign ?? "left",
-      pageMode: s.pageMode,
-    }, null, 2);
+    const options = extractRenderOptions(this.plugin.settings as unknown as Record<string, unknown>);
+    const noteConfig = toNoteConfigKeys(options as unknown as Record<string, unknown>);
+    const configJson = JSON.stringify(noteConfig, null, 2);
     const configSection = `\n## renderer_config\n\n\`\`\`json\n${configJson}\n\`\`\`\n`;
     const newContent = insertRendererConfigSection(markdown, configSection);
     await this.app.vault.modify(file, newContent);
