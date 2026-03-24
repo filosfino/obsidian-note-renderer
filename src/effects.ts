@@ -41,7 +41,25 @@ function renderGrain(container: HTMLElement, params: EffectParams): void {
   const op = params.opacity / 100;
   const id = `nr-grain-${Date.now()}`;
   const el = createOverlay({ opacity: String(op), mixBlendMode: "overlay" });
-  el.innerHTML = `<svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg"><filter id="${id}"><feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch"/></filter><rect width="100%" height="100%" filter="url(#${id})"/></svg>`;
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("width", "100%");
+  svg.setAttribute("height", "100%");
+  const filter = document.createElementNS(NS, "filter");
+  filter.setAttribute("id", id);
+  const turb = document.createElementNS(NS, "feTurbulence");
+  turb.setAttribute("type", "fractalNoise");
+  turb.setAttribute("baseFrequency", "0.65");
+  turb.setAttribute("numOctaves", "3");
+  turb.setAttribute("stitchTiles", "stitch");
+  filter.appendChild(turb);
+  svg.appendChild(filter);
+  const rect = document.createElementNS(NS, "rect");
+  rect.setAttribute("width", "100%");
+  rect.setAttribute("height", "100%");
+  rect.setAttribute("filter", `url(#${id})`);
+  svg.appendChild(rect);
+  el.appendChild(svg);
   container.appendChild(el);
 }
 
@@ -51,11 +69,16 @@ function renderAurora(container: HTMLElement, params: EffectParams, ctx: EffectC
     ? ["rgba(120,80,220,0.8)", "rgba(40,160,180,0.7)", "rgba(200,80,120,0.5)"]
     : ["rgba(100,60,180,0.6)", "rgba(30,130,150,0.5)", "rgba(180,60,100,0.4)"];
   const el = createOverlay({ opacity: String(op), mixBlendMode: ctx.effectBlend, overflow: "hidden" });
-  el.innerHTML = `
-    <div style="position:absolute;width:60%;height:50%;top:10%;left:-10%;background:radial-gradient(circle,${colors[0]},transparent 70%);filter:blur(80px);"></div>
-    <div style="position:absolute;width:50%;height:40%;top:50%;right:-5%;background:radial-gradient(circle,${colors[1]},transparent 70%);filter:blur(70px);"></div>
-    <div style="position:absolute;width:40%;height:35%;bottom:5%;left:20%;background:radial-gradient(circle,${colors[2]},transparent 70%);filter:blur(60px);"></div>
-  `;
+  const blobs: { w: string; h: string; styles: Record<string, string>; color: string; blur: string }[] = [
+    { w: "60%", h: "50%", styles: { top: "10%", left: "-10%" }, color: colors[0], blur: "80px" },
+    { w: "50%", h: "40%", styles: { top: "50%", right: "-5%" }, color: colors[1], blur: "70px" },
+    { w: "40%", h: "35%", styles: { bottom: "5%", left: "20%" }, color: colors[2], blur: "60px" },
+  ];
+  for (const b of blobs) {
+    const div = document.createElement("div");
+    div.setCssStyles({ position: "absolute", width: b.w, height: b.h, ...b.styles, background: `radial-gradient(circle,${b.color},transparent 70%)`, filter: `blur(${b.blur})` });
+    el.appendChild(div);
+  }
   container.appendChild(el);
 }
 
@@ -71,7 +94,9 @@ function renderBokeh(container: HTMLElement, params: EffectParams, ctx: EffectCo
     const alpha = 0.3 + seed[(i + 7) % 16] * 0.5;
     circles.push(`${x}px ${y}px 0 ${size}px ${ctx.effectColor}${alpha.toFixed(2)})`);
   }
-  el.innerHTML = `<div style="position:absolute;width:1px;height:1px;top:0;left:0;border-radius:50%;box-shadow:${circles.join(",")};"></div>`;
+  const dot = document.createElement("div");
+  dot.setCssStyles({ position: "absolute", width: "1px", height: "1px", top: "0", left: "0", borderRadius: "50%", boxShadow: circles.join(",") });
+  el.appendChild(dot);
   container.appendChild(el);
 }
 
@@ -94,10 +119,15 @@ function renderLightLeak(container: HTMLElement, params: EffectParams, ctx: Effe
     ? ["rgba(255,180,80,0.9)", "rgba(255,120,100,0.7)"]
     : ["rgba(200,140,50,0.7)", "rgba(200,80,60,0.5)"];
   const el = createOverlay({ opacity: String(op), mixBlendMode: ctx.effectBlend, overflow: "hidden" });
-  el.innerHTML = `
-    <div style="position:absolute;width:50%;height:50%;top:-10%;right:-10%;background:radial-gradient(circle,${colors[0]},transparent 70%);filter:blur(60px);"></div>
-    <div style="position:absolute;width:40%;height:40%;bottom:-5%;left:-5%;background:radial-gradient(circle,${colors[1]},transparent 70%);filter:blur(50px);"></div>
-  `;
+  const leaks: { w: string; h: string; styles: Record<string, string>; color: string; blur: string }[] = [
+    { w: "50%", h: "50%", styles: { top: "-10%", right: "-10%" }, color: colors[0], blur: "60px" },
+    { w: "40%", h: "40%", styles: { bottom: "-5%", left: "-5%" }, color: colors[1], blur: "50px" },
+  ];
+  for (const l of leaks) {
+    const div = document.createElement("div");
+    div.setCssStyles({ position: "absolute", width: l.w, height: l.h, ...l.styles, background: `radial-gradient(circle,${l.color},transparent 70%)`, filter: `blur(${l.blur})` });
+    el.appendChild(div);
+  }
   container.appendChild(el);
 }
 
@@ -128,7 +158,11 @@ function renderNetwork(container: HTMLElement, params: EffectParams, ctx: Effect
     }
   }
 
-  let svgContent = "";
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("width", String(ctx.pageWidth));
+  svg.setAttribute("height", String(ctx.pageHeight));
+
   for (let i = 0; i < nodes.length; i++) {
     for (let j = i + 1; j < nodes.length; j++) {
       const dx = nodes[j].x - nodes[i].x;
@@ -136,17 +170,31 @@ function renderNetwork(container: HTMLElement, params: EffectParams, ctx: Effect
       const d = Math.sqrt(dx * dx + dy * dy);
       if (d < threshold) {
         const lineOp = Math.pow(1 - d / threshold, 1.5).toFixed(2);
-        svgContent += `<line x1="${nodes[i].x}" y1="${nodes[i].y}" x2="${nodes[j].x}" y2="${nodes[j].y}" stroke="currentColor" stroke-width="1" opacity="${lineOp}"/>`;
+        const line = document.createElementNS(NS, "line");
+        line.setAttribute("x1", String(nodes[i].x));
+        line.setAttribute("y1", String(nodes[i].y));
+        line.setAttribute("x2", String(nodes[j].x));
+        line.setAttribute("y2", String(nodes[j].y));
+        line.setAttribute("stroke", "currentColor");
+        line.setAttribute("stroke-width", "1");
+        line.setAttribute("opacity", lineOp);
+        svg.appendChild(line);
       }
     }
   }
   for (const n of nodes) {
-    svgContent += `<circle cx="${n.x}" cy="${n.y}" r="${2 + rand() * 2}" fill="currentColor" opacity="${(0.4 + rand() * 0.3).toFixed(2)}"/>`;
+    const circle = document.createElementNS(NS, "circle");
+    circle.setAttribute("cx", String(n.x));
+    circle.setAttribute("cy", String(n.y));
+    circle.setAttribute("r", String(2 + rand() * 2));
+    circle.setAttribute("fill", "currentColor");
+    circle.setAttribute("opacity", (0.4 + rand() * 0.3).toFixed(2));
+    svg.appendChild(circle);
   }
 
   const netColor = ctx.isDark ? "rgba(200,200,200,1)" : "rgba(80,80,80,1)";
   const el = createOverlay({ opacity: String(op), color: netColor });
-  el.innerHTML = `<svg width="${ctx.pageWidth}" height="${ctx.pageHeight}" xmlns="http://www.w3.org/2000/svg">${svgContent}</svg>`;
+  el.appendChild(svg);
   container.appendChild(el);
 }
 

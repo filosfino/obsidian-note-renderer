@@ -13,8 +13,6 @@
  * 2. Add rendering logic in effects.ts
  */
 
-import type { CoverStrokeStyle, CoverTextAlign, PageMode } from "./constants";
-
 // ── Field schema types ──────────────────────────────────────────────────────
 
 interface NumericField {
@@ -183,7 +181,7 @@ export function validateNoteConfig(raw: Record<string, unknown>): Partial<Render
       result[canonicalKey] = clampToSchema(value, schema);
     } else if (schema.type === "string" && schema.enum && typeof value === "string") {
       // Validate enum values
-      if ((schema.enum as readonly string[]).includes(value)) {
+      if (schema.enum.includes(value)) {
         result[canonicalKey] = value;
       }
     } else {

@@ -1,7 +1,6 @@
 import { Notice, Menu, setIcon } from "obsidian";
 import type { App } from "obsidian";
 import { FIELD_SCHEMAS, EFFECT_SCHEMAS, RENDER_DEFAULTS, getFieldSchema } from "./schema";
-import type { FieldSchema } from "./schema";
 import { InputModal, ConfirmModal } from "./modals";
 import { PRESET_KEYS } from "./main";
 import type NoteRendererPlugin from "./main";
@@ -221,7 +220,7 @@ function makeField(
     input.value = transform(val);
     await onUpdate(val);
   };
-  const apply = () => applyVal(parse(input.value));
+  const apply = () => { void applyVal(parse(input.value)); };
   input.addEventListener("blur", apply);
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); apply(); } });
   input.addEventListener("wheel", (e) => {
@@ -229,7 +228,7 @@ function makeField(
     e.preventDefault();
     const current = parse(input.value);
     const delta = e.deltaY < 0 ? step : -step;
-    applyVal(current + delta);
+    void applyVal(current + delta);
   }, { passive: false });
   return input;
 }
@@ -245,7 +244,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   presetBar.createEl("span", { cls: "nr-row-label", text: "预设" });
   const presetSelect = presetBar.createEl("select", { cls: "dropdown" });
   host.rebuildPresetOptions();
-  presetSelect.addEventListener("change", async () => {
+  presetSelect.addEventListener("change", () => { void (async () => {
     if (host.syncing) return;
     const name = presetSelect.value;
     if (name) {
@@ -255,12 +254,12 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     }
     await host.plugin.saveSettings();
     await host.refresh();
-  });
+  })(); });
 
   const presetSaveBtn = presetBar.createEl("button", { cls: "nr-btn nr-btn-sm nr-btn-text", text: "保存" });
   presetSaveBtn.title = "保存当前配置为预设";
   presetSaveBtn.addEventListener("click", () => {
-    new InputModal(host.app, "保存预设", host.plugin.settings.activePreset || "", async (name) => {
+    new InputModal(host.app, "保存预设", host.plugin.settings.activePreset || "", (name) => {
       if (!name) return;
       const preset: Record<string, unknown> = {};
       for (const key of PRESET_KEYS) {
@@ -268,7 +267,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
       }
       host.plugin.settings.presets[name] = preset as Partial<import("./main").RendererPreset>;
       host.plugin.settings.activePreset = name;
-      await host.plugin.saveSettings();
+      void host.plugin.saveSettings();
       host.rebuildPresetOptions();
       new Notice(`预设「${name}」已保存`);
     }).open();
@@ -279,13 +278,15 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   presetDelBtn.addEventListener("click", () => {
     const name = host.plugin.settings.activePreset;
     if (!name) { new Notice("没有选中预设"); return; }
-    new ConfirmModal(host.app, `删除预设「${name}」？`, async (confirmed) => {
+    new ConfirmModal(host.app, `删除预设「${name}」？`, (confirmed) => {
       if (!confirmed) return;
       host.plugin.deletePreset(name);
-      await host.plugin.saveSettings();
-      host.rebuildPresetOptions();
-      new Notice(`预设「${name}」已删除`);
-      await host.refresh();
+      void (async () => {
+        await host.plugin.saveSettings();
+        host.rebuildPresetOptions();
+        new Notice(`预设「${name}」已删除`);
+        await host.refresh();
+      })();
     }).open();
   });
 
@@ -297,10 +298,10 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     themeSelect.createEl("option", { text: name, value: name });
   });
   themeSelect.value = host.plugin.settings.activeTheme;
-  themeSelect.addEventListener("change", async () => {
+  themeSelect.addEventListener("change", () => { void (async () => {
     if (host.syncing) return;
     await host.updateSetting("activeTheme", themeSelect.value);
-  });
+  })(); });
 
   // Mode toggle buttons (mutually exclusive, pushed right)
   quickBar.createDiv({ cls: "nr-flex-spacer" });
@@ -319,8 +320,8 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     modeBtn34.classList.toggle("nr-btn-active", mode === "card");
     await host.updateSetting("pageMode", mode);
   };
-  modeBtn35.addEventListener("click", () => setMode("long"));
-  modeBtn34.addEventListener("click", () => setMode("card"));
+  modeBtn35.addEventListener("click", () => { void setMode("long"); });
+  modeBtn34.addEventListener("click", () => { void setMode("card"); });
 
   // Keep a hidden select for syncUI compatibility
   const modeSelect = document.createElement("select");
@@ -345,12 +346,12 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   COVER_FONTS.forEach((f) => coverFontSelect.createEl("option", { text: f.label, value: f.value }));
   coverFontSelect.value = host.plugin.settings.coverFontFamily;
   coverFontSelect.addEventListener("click", (e) => e.stopPropagation());
-  coverFontSelect.addEventListener("change", async () => {
+  coverFontSelect.addEventListener("change", () => { void (async () => {
     if (host.syncing) return;
     await host.updateSetting("coverFontFamily", coverFontSelect.value);
-  });
+  })(); });
 
-  const scaleInput = coverHeadControls.createEl("input", { cls: "nr-size-input", type: "text" }) as HTMLInputElement;
+  const scaleInput = coverHeadControls.createEl("input", { cls: "nr-size-input", type: "text" });
   scaleInput.value = String(host.plugin.settings.coverFontScale);
   scaleInput.addEventListener("click", (e) => e.stopPropagation());
   const cfs = FIELD_SCHEMAS.coverFontScale;
@@ -360,15 +361,15 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     scaleInput.value = String(val);
     await host.updateSetting("coverFontScale", val);
   };
-  scaleInput.addEventListener("blur", applyScale);
-  scaleInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); applyScale(); } });
+  scaleInput.addEventListener("blur", () => { void applyScale(); });
+  scaleInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); void applyScale(); } });
   scaleInput.addEventListener("wheel", (e) => {
     if (document.activeElement !== scaleInput) return;
     e.preventDefault();
     const cur = parseInt(scaleInput.value) || cfs.default;
     const val = Math.max(cfs.min, Math.min(cfs.max, cur + (e.deltaY < 0 ? (cfs.step ?? 10) : -(cfs.step ?? 10))));
     scaleInput.value = String(val);
-    host.updateSetting("coverFontScale", val);
+    void host.updateSetting("coverFontScale", val);
   }, { passive: false });
   coverHeadControls.createEl("span", { cls: "nr-size-unit", text: "%" });
 
@@ -385,12 +386,12 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     });
     btn.title = def.title;
     setIcon(btn, def.icon);
-    btn.addEventListener("click", async (e) => {
+    btn.addEventListener("click", (e) => {
       e.stopPropagation();
       if (host.syncing) return;
       Object.values(alignBtns).forEach((b) => b.classList.remove("nr-btn-active"));
       btn.classList.add("nr-btn-active");
-      await host.updateSetting("coverTextAlign", def.key);
+      void host.updateSetting("coverTextAlign", def.key);
     });
     alignBtns[def.key] = btn;
   });
@@ -417,14 +418,14 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   const colorInput = styleRow.createEl("input", { cls: "nr-color-dot", type: "color" });
   colorInput.value = host.plugin.settings.coverFontColor || "#e07c5a";
   colorInput.title = "封面文字颜色（双击重置为主题默认）";
-  colorInput.addEventListener("input", async () => {
-    await host.updateSetting("coverFontColor", colorInput.value);
+  colorInput.addEventListener("input", () => {
+    void host.updateSetting("coverFontColor", colorInput.value);
   });
-  colorInput.addEventListener("dblclick", async (e) => {
+  colorInput.addEventListener("dblclick", (e) => {
     e.preventDefault();
     if (host.syncing) return;
     colorInput.value = "#e07c5a";
-    await host.updateSetting("coverFontColor", "");
+    void host.updateSetting("coverFontColor", "");
   });
 
   const weightSelect = styleRow.createEl("select", { cls: "dropdown nr-dropdown-narrow" });
@@ -440,9 +441,9 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     { label: "极粗 900", value: "900" },
   ].forEach((w) => weightSelect.createEl("option", { text: w.label, value: w.value }));
   weightSelect.value = String(host.plugin.settings.coverFontWeight ?? 800);
-  weightSelect.addEventListener("change", async () => {
+  weightSelect.addEventListener("change", () => {
     if (host.syncing) return;
-    await host.updateSetting("coverFontWeight", parseInt(weightSelect.value));
+    void host.updateSetting("coverFontWeight", parseInt(weightSelect.value));
   });
 
   const lsInput = makeField(host, styleRow, "间距", String(host.plugin.settings.coverLetterSpacing),
@@ -489,7 +490,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
 
   const glowField = strokeParamsRow.createDiv("nr-field");
   glowField.createEl("span", { cls: "nr-field-label", text: "光" });
-  const glowInput = glowField.createEl("input", { cls: "nr-field-input", type: "text" }) as HTMLInputElement;
+  const glowInput = glowField.createEl("input", { cls: "nr-field-input", type: "text" });
   glowInput.value = String(host.plugin.settings.coverGlowSize);
   const applyGlow = async () => {
     if (host.syncing) return;
@@ -498,8 +499,8 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     glowInput.value = String(val);
     await host.updateSetting("coverGlowSize", val);
   };
-  glowInput.addEventListener("blur", applyGlow);
-  glowInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); applyGlow(); } });
+  glowInput.addEventListener("blur", () => { void applyGlow(); });
+  glowInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); void applyGlow(); } });
 
   const updateGlowVisibility = () => {
     const mode = strokeStyleSelect.value;
@@ -508,7 +509,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   };
   updateGlowVisibility();
 
-  strokeStyleSelect.addEventListener("change", async () => {
+  strokeStyleSelect.addEventListener("change", () => { void (async () => {
     if (host.syncing) return;
     const style = strokeStyleSelect.value as import("./constants").CoverStrokeStyle;
     host.lastStrokeStyle = style;
@@ -528,9 +529,9 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
       await host.plugin.saveSettings();
       await host.refresh();
     }
-  });
+  })(); });
 
-  strokeToggle.addEventListener("click", async () => {
+  strokeToggle.addEventListener("click", () => { void (async () => {
     if (host.syncing) return;
     const currentStyle = host.effective.coverStrokeStyle;
     if (currentStyle !== "none") {
@@ -545,7 +546,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
       updateGlowVisibility();
       await host.updateSetting("coverStrokeStyle", host.lastStrokeStyle as import("./constants").CoverStrokeStyle);
     }
-  });
+  })(); });
 
   // ── Banner sub-params (in coverTextBody) ──
   const bannerParamsRow = coverTextBody.createDiv("nr-row");
@@ -572,12 +573,12 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     schemaOpts("coverBannerSkew"),
     (val) => host.updateSetting("coverBannerSkew", val));
 
-  bannerToggle.addEventListener("click", async () => {
+  bannerToggle.addEventListener("click", () => {
     if (host.syncing) return;
     const val = !host.effective.coverBanner;
     bannerToggle.classList.toggle("active", val);
     bannerParamsRow.classList.toggle("nr-hidden", !val);
-    await host.updateSetting("coverBanner", val);
+    void host.updateSetting("coverBanner", val);
   });
 
   const updateBannerColor = async () => {
@@ -588,19 +589,19 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     const rgba = `rgba(${r},${g},${b},${currentAlpha})`;
     await host.updateSetting("coverBannerColor", rgba);
   };
-  bannerColorInput.addEventListener("input", updateBannerColor);
+  bannerColorInput.addEventListener("input", () => { void updateBannerColor(); });
 
   // ── Shadow sub-params (in coverTextBody) ──
   const shadowParamsRow = coverTextBody.createDiv("nr-row");
   shadowParamsRow.createEl("span", { cls: "nr-row-label", text: "投影" });
   shadowParamsRow.classList.toggle("nr-hidden", !host.plugin.settings.coverShadow);
 
-  shadowToggle.addEventListener("click", async () => {
+  shadowToggle.addEventListener("click", () => {
     if (host.syncing) return;
     const val = !host.effective.coverShadow;
     shadowToggle.classList.toggle("active", val);
     shadowParamsRow.classList.toggle("nr-hidden", !val);
-    await host.updateSetting("coverShadow", val);
+    void host.updateSetting("coverShadow", val);
   });
 
   const blurInput = makeField(host, shadowParamsRow, "模糊", String(host.plugin.settings.coverShadowBlur),
@@ -626,14 +627,14 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   const effects = host.plugin.settings.coverEffects ?? RENDER_DEFAULTS.coverEffects;
   const chipToggle = (parent: HTMLElement, label: string, effectName: string, active: boolean) => {
     const chip = parent.createEl("span", { cls: `nr-chip${active ? " active" : ""}`, text: label });
-    chip.addEventListener("click", async (e) => {
+    chip.addEventListener("click", (e) => {
       e.stopPropagation();
       if (host.syncing) return;
       const current = host.effective.coverEffects[effectName];
       const newEnabled = !current?.enabled;
       chip.classList.toggle("active", newEnabled);
       const updated = { ...host.effective.coverEffects, [effectName]: { ...current, enabled: newEnabled } };
-      await host.updateSetting("coverEffects", updated);
+      void host.updateSetting("coverEffects", updated);
     });
     return chip;
   };
@@ -686,12 +687,12 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     fontSelect.createEl("option", { text: f.label, value: f.value });
   });
   fontSelect.value = host.plugin.settings.fontFamily;
-  fontSelect.addEventListener("change", async () => {
+  fontSelect.addEventListener("change", () => {
     if (host.syncing) return;
-    await host.updateSetting("fontFamily", fontSelect.value);
+    void host.updateSetting("fontFamily", fontSelect.value);
   });
 
-  const sizeInput = bodyControls.createEl("input", { cls: "nr-size-input", type: "text" }) as HTMLInputElement;
+  const sizeInput = bodyControls.createEl("input", { cls: "nr-size-input", type: "text" });
   sizeInput.value = String(host.plugin.settings.fontSize);
   const fs = FIELD_SCHEMAS.fontSize;
   const applySize = async () => {
@@ -700,15 +701,15 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     sizeInput.value = String(val);
     await host.updateSetting("fontSize", val);
   };
-  sizeInput.addEventListener("blur", applySize);
-  sizeInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); applySize(); } });
+  sizeInput.addEventListener("blur", () => { void applySize(); });
+  sizeInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); void applySize(); } });
   sizeInput.addEventListener("wheel", (e) => {
     if (document.activeElement !== sizeInput) return;
     e.preventDefault();
     const cur = parseInt(sizeInput.value) || fs.default;
     const val = Math.max(fs.min, Math.min(fs.max, cur + (e.deltaY < 0 ? (fs.step ?? 2) : -(fs.step ?? 2))));
     sizeInput.value = String(val);
-    host.updateSetting("fontSize", val);
+    void host.updateSetting("fontSize", val);
   }, { passive: false });
   bodyControls.createEl("span", { cls: "nr-size-unit", text: "px" });
 
@@ -723,12 +724,12 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     menu.addItem((item) => {
       item.setTitle("导出当前页")
         .setIcon("download")
-        .onClick(() => host.handleExportCurrentPage());
+        .onClick(() => { void host.handleExportCurrentPage(); });
     });
     menu.addItem((item) => {
       item.setTitle("导出全部 (ZIP)")
         .setIcon("archive")
-        .onClick(() => host.handleExport());
+        .onClick(() => { void host.handleExport(); });
     });
     menu.showAtMouseEvent(e);
   });
@@ -756,18 +757,18 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
 
   const saveToNoteBtn = navRight.createEl("button", { cls: "nr-btn nr-btn-sm nr-save-note-btn", text: "存入笔记" });
   saveToNoteBtn.title = "保存当前配置到笔记";
-  saveToNoteBtn.addEventListener("click", () => host.handleSaveToNote());
+  saveToNoteBtn.addEventListener("click", () => { void host.handleSaveToNote(); });
 
   const removeFromNoteBtn = navRight.createEl("button", { cls: "nr-btn nr-btn-sm nr-remove-note-btn", text: "移除" });
   removeFromNoteBtn.title = "移除笔记中的渲染配置";
-  removeFromNoteBtn.addEventListener("click", () => host.handleRemoveFromNote());
+  removeFromNoteBtn.addEventListener("click", () => { void host.handleRemoveFromNote(); });
 
   navRight.createDiv({ cls: "nr-nav-separator" });
 
   const exportBtn = navRight.createEl("button", { cls: "nr-nav-btn" });
   exportBtn.title = "导出全部 ZIP";
   setIcon(exportBtn, "archive");
-  exportBtn.addEventListener("click", () => host.handleExport());
+  exportBtn.addEventListener("click", () => { void host.handleExport(); });
 
   return {
     presetSelect,

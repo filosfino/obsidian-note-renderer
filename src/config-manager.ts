@@ -163,8 +163,8 @@ function migrateFlatEffects(raw: Record<string, unknown>): void {
   for (const [flatKey, effectName] of Object.entries(flatToEffect)) {
     const opKey = `${flatKey}Opacity`;
     effects[effectName] = {
-      enabled: typeof raw[flatKey] === "boolean" ? raw[flatKey] as boolean : defaults[effectName].enabled,
-      opacity: typeof raw[opKey] === "number" ? raw[opKey] as number : defaults[effectName].opacity,
+      enabled: typeof raw[flatKey] === "boolean" ? raw[flatKey] : defaults[effectName].enabled,
+      opacity: typeof raw[opKey] === "number" ? raw[opKey] : defaults[effectName].opacity,
     };
     delete raw[flatKey];
     delete raw[opKey];

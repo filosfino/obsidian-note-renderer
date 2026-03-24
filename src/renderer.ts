@@ -338,8 +338,6 @@ function autosizeCoverText(container: HTMLElement, opts: CoverTextOptions): void
       continue;
     }
 
-    const text = htmlEl.textContent?.trim() ?? "";
-    const len = text.length;
     const fontSize = fillSize;
 
     const scaledSize = Math.round(fontSize * (fontScale / 100));

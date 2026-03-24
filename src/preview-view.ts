@@ -77,10 +77,10 @@ export class PreviewView extends ItemView implements PanelHost {
     this.refs = buildSettingsPanel(this, contentEl);
 
     // Mode indicator click handler (needs view-level state)
-    this.refs.modeIndicator.addEventListener("click", async () => {
+    this.refs.modeIndicator.addEventListener("click", () => {
       if (!this.hasNoteConfig) return;
       this.forceGlobalConfig = !this.forceGlobalConfig;
-      await this.refresh();
+      void this.refresh();
     });
 
     // ResizeObserver — rescale on sidebar width change
@@ -112,7 +112,7 @@ export class PreviewView extends ItemView implements PanelHost {
     await this.refresh();
   }
 
-  async onClose(): Promise<void> {
+  onClose(): void {
     this.rendered?.cleanup();
     this.resizeObserver?.disconnect();
     if (this.fileChangeHandler) {
