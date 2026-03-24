@@ -49,7 +49,7 @@ export default class NoteRendererPlugin extends Plugin {
     this.addCommand({
       id: "open-preview",
       name: "Open preview",
-      callback: () => this.activateView(),
+      callback: async () => { await this.activateView(); },
     });
 
     this.addCommand({
@@ -85,22 +85,22 @@ export default class NoteRendererPlugin extends Plugin {
     this.addCommand({
       id: "export-current-page",
       name: "Export current page",
-      callback: () => {
+      callback: async () => {
         const view = this.app.workspace.getLeavesOfType(VIEW_TYPE)[0]?.view;
-        if (view instanceof PreviewView) view.handleExportCurrentPage();
+        if (view instanceof PreviewView) await view.handleExportCurrentPage();
       },
     });
 
     this.addCommand({
       id: "export-all",
       name: "Export all pages (ZIP)",
-      callback: () => {
+      callback: async () => {
         const view = this.app.workspace.getLeavesOfType(VIEW_TYPE)[0]?.view;
-        if (view instanceof PreviewView) view.handleExport();
+        if (view instanceof PreviewView) await view.handleExport();
       },
     });
 
-    this.addRibbonIcon("image", "Note renderer", () => this.activateView());
+    this.addRibbonIcon("image", "Note renderer", async () => { await this.activateView(); });
   }
 
   onunload(): void {

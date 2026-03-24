@@ -60,7 +60,51 @@ export async function renderNote(
 }
 ${coverColorCss}
 `;
-  const fullCss = themeCss + fontOverrideCss;
+  const pageCss = `
+.nr-page {
+  width: ${PAGE_WIDTH}px;
+  box-sizing: border-box;
+  overflow: hidden;
+  position: relative;
+}
+.nr-page-cover, .nr-page-body {
+  height: ${pageHeight}px;
+  padding: ${PAGE_PADDING_TOP}px ${PAGE_PADDING_H}px ${PAGE_PADDING_BOTTOM}px;
+}
+.nr-page-full {
+  height: ${pageHeight}px;
+  padding: 0;
+}
+.nr-cover-bg-image {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  border-radius: 16px;
+  z-index: 0;
+}
+.nr-cover-has-image .nr-cover-content {
+  position: relative;
+  z-index: 1;
+  padding: ${PAGE_PADDING_TOP}px ${PAGE_PADDING_H}px ${PAGE_PADDING_BOTTOM}px;
+}
+.nr-cover-has-image { padding: 0; }
+.nr-full-page-img {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.nr-full-page-img.nr-full-cover { object-fit: cover; }
+.nr-full-page-img:not(.nr-full-cover) { object-fit: contain; }
+.nr-effect-overlay {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: 2;
+}
+`;
+  const fullCss = themeCss + fontOverrideCss + pageCss;
 
   const pages: HTMLElement[] = [];
 
@@ -148,32 +192,18 @@ ${coverColorCss}
       const imgEl = document.createElement("img");
       imgEl.src = imgMatch[1];
       imgEl.classList.add("nr-cover-bg-image");
-      imgEl.style.cssText = `
-        position: absolute;
-        top: 0; left: 0;
-        width: 100%; height: 100%;
-        object-fit: cover;
-        border-radius: 16px;
-        z-index: 0;
-      `;
       // Insert image before cover content
       const content = coverPage.querySelector(".nr-cover-content") as HTMLElement;
-      if (content) {
-        content.style.position = "relative";
-        content.style.zIndex = "1";
-      }
-      coverPage.style.padding = "0";
       coverPage.appendChild(imgEl);
       if (content) {
         coverPage.appendChild(content); // re-append on top
-        content.style.padding = `${PAGE_PADDING_TOP}px ${PAGE_PADDING_H}px ${PAGE_PADDING_BOTTOM}px`;
         // Adjust overlay opacity
         const overlayEffect = options.coverEffects?.overlay;
         if (overlayEffect && !overlayEffect.enabled) {
-          content.style.background = "none";
+          content.setCssStyles({ background: "none" });
         } else if (overlayEffect && overlayEffect.opacity !== 55) {
           const op = overlayEffect.opacity / 100;
-          content.style.background = `linear-gradient(to top, rgba(0,0,0,${op}) 0%, rgba(0,0,0,${op * 0.36}) 50%, transparent 100%)`;
+          content.setCssStyles({ background: `linear-gradient(to top, rgba(0,0,0,${op}) 0%, rgba(0,0,0,${op * 0.36}) 50%, transparent 100%)` });
         }
       }
     }
@@ -194,7 +224,7 @@ ${coverColorCss}
       const pxY = Math.round(pageHeight * offsetY / 100);
       for (const child of Array.from(coverContent.children)) {
         const el = child as HTMLElement;
-        if (el.style) el.style.transform = `translate(${pxX}px, ${pxY}px)`;
+        if (el.setCssStyles) el.setCssStyles({ transform: `translate(${pxX}px, ${pxY}px)` });
       }
     }
   }
@@ -290,14 +320,14 @@ function autosizeCoverText(container: HTMLElement, opts: CoverTextOptions): void
 
     // User-controlled inline styles: apply fontScale to existing fontSize, skip auto-sizing
     if (htmlEl.querySelector("[style]") || htmlEl.getAttribute("style")) {
-      if (!htmlEl.style.fontWeight) htmlEl.style.fontWeight = "800";
-      if (!htmlEl.style.lineHeight) htmlEl.style.lineHeight = "1.3";
+      if (!htmlEl.style.fontWeight) htmlEl.setCssStyles({ fontWeight: "800" });
+      if (!htmlEl.style.lineHeight) htmlEl.setCssStyles({ lineHeight: "1.3" });
       // Apply fontScale to element and its styled children
       if (fontScale !== 100) {
         const applyScale = (el: HTMLElement) => {
           if (el.style.fontSize) {
             const origSize = parseInt(el.style.fontSize);
-            if (origSize > 0) el.style.fontSize = `${Math.round(origSize * fontScale / 100)}px`;
+            if (origSize > 0) el.setCssStyles({ fontSize: `${Math.round(origSize * fontScale / 100)}px` });
           }
           for (const child of Array.from(el.children)) {
             if ((child as HTMLElement).style) applyScale(child as HTMLElement);
@@ -313,10 +343,12 @@ function autosizeCoverText(container: HTMLElement, opts: CoverTextOptions): void
     const fontSize = fillSize;
 
     const scaledSize = Math.round(fontSize * (fontScale / 100));
-    htmlEl.style.fontSize = `${scaledSize}px`;
-    htmlEl.style.fontWeight = "800";
-    htmlEl.style.lineHeight = String(lineHeight / 10);
-    htmlEl.style.letterSpacing = `${letterSpacing / 100}em`;
+    htmlEl.setCssStyles({
+      fontSize: `${scaledSize}px`,
+      fontWeight: "800",
+      lineHeight: String(lineHeight / 10),
+      letterSpacing: `${letterSpacing / 100}em`,
+    });
 
     // Pre-compute stroke width for cover-on-image
     if (strokePercent > 0) {
@@ -329,18 +361,8 @@ function autosizeCoverText(container: HTMLElement, opts: CoverTextOptions): void
 function createPageDiv(extraClass: string, css: string, pageHeight: number): HTMLElement {
   const pageDiv = document.createElement("div");
   pageDiv.classList.add("nr-page", extraClass);
-  pageDiv.style.cssText = `
-    width: ${PAGE_WIDTH}px;
-    height: ${pageHeight}px;
-    padding: ${PAGE_PADDING_TOP}px ${PAGE_PADDING_H}px ${PAGE_PADDING_BOTTOM}px;
-    box-sizing: border-box;
-    overflow: hidden;
-    position: relative;
-  `;
 
-  const styleEl = document.createElement("style");
-  styleEl.textContent = css;
-  pageDiv.appendChild(styleEl);
+  pageDiv.createEl("style", { text: css });
 
   return pageDiv;
 }
@@ -358,20 +380,15 @@ async function renderBodyPages(
 
   // Create hidden measurer at full resolution
   const measurer = document.createElement("div");
-  measurer.classList.add("nr-measurer");
-  measurer.style.cssText = `
-    position: fixed;
-    left: -9999px;
-    top: 0;
-    width: ${PAGE_WIDTH}px;
-    padding: ${PAGE_PADDING_TOP}px ${PAGE_PADDING_H}px ${PAGE_PADDING_BOTTOM}px;
-    box-sizing: border-box;
-  `;
+  measurer.classList.add("nr-measurer", "nr-offscreen");
+  measurer.setCssStyles({
+    width: `${PAGE_WIDTH}px`,
+    padding: `${PAGE_PADDING_TOP}px ${PAGE_PADDING_H}px ${PAGE_PADDING_BOTTOM}px`,
+    boxSizing: "border-box",
+  });
   document.body.appendChild(measurer);
 
-  const measureStyle = document.createElement("style");
-  measureStyle.textContent = css;
-  measurer.appendChild(measureStyle);
+  measurer.createEl("style", { text: css });
 
   // Wrap in .nr-page .nr-page-content for CSS selectors to match
   const pageShell = document.createElement("div");
@@ -398,47 +415,23 @@ async function renderBodyPages(
 
     if (page.isFullPage) {
       pageDiv.classList.add("nr-page", "nr-page-full");
-      pageDiv.style.cssText = `
-        width: ${PAGE_WIDTH}px;
-        height: ${pageHeight}px;
-        padding: 0;
-        box-sizing: border-box;
-        overflow: hidden;
-        position: relative;
-      `;
 
-      const pageStyle = document.createElement("style");
-      pageStyle.textContent = css;
-      pageDiv.appendChild(pageStyle);
+      pageDiv.createEl("style", { text: css });
 
       for (const el of page.elements) {
         const clone = el.cloneNode(true) as HTMLElement;
         const img = clone.querySelector("img.nr-full-page") || (clone.tagName === "IMG" ? clone : null);
         if (img) {
           const isCover = (img as HTMLElement).classList.contains("nr-full-cover");
-          (img as HTMLElement).style.cssText = `
-            width: 100%;
-            height: 100%;
-            object-fit: ${isCover ? "cover" : "contain"};
-            display: block;
-          `;
+          (img as HTMLElement).classList.add("nr-full-page-img");
+          if (isCover) (img as HTMLElement).classList.add("nr-full-cover");
         }
         pageDiv.appendChild(clone);
       }
     } else {
       pageDiv.classList.add("nr-page", "nr-page-body");
-      pageDiv.style.cssText = `
-        width: ${PAGE_WIDTH}px;
-        height: ${pageHeight}px;
-        padding: ${PAGE_PADDING_TOP}px ${PAGE_PADDING_H}px ${PAGE_PADDING_BOTTOM}px;
-        box-sizing: border-box;
-        overflow: hidden;
-        position: relative;
-      `;
 
-      const pageStyle = document.createElement("style");
-      pageStyle.textContent = css;
-      pageDiv.appendChild(pageStyle);
+      pageDiv.createEl("style", { text: css });
 
       const pageContent = document.createElement("div");
       pageContent.classList.add("nr-page-content");

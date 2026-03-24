@@ -65,7 +65,7 @@ export class PreviewView extends ItemView implements PanelHost {
   }
 
   getDisplayText(): string {
-    return "Note Renderer";
+    return "Note renderer";
   }
 
   getIcon(): string {
@@ -148,8 +148,8 @@ export class PreviewView extends ItemView implements PanelHost {
 
     // Update save/remove button visibility (based on actual note config existence, not force toggle)
     if (this.refs) {
-      this.refs.saveToNoteBtn.style.display = noteConfig ? "none" : "";
-      this.refs.removeFromNoteBtn.style.display = noteConfig ? "" : "none";
+      this.refs.saveToNoteBtn.classList.toggle("nr-hidden", !!noteConfig);
+      this.refs.removeFromNoteBtn.classList.toggle("nr-hidden", !noteConfig);
     }
 
     // Update mode indicator — show which config is being used for rendering
@@ -158,15 +158,15 @@ export class PreviewView extends ItemView implements PanelHost {
       if (!noteConfig) {
         mi.textContent = "⚙️ 全局配置";
         mi.title = "";
-        mi.style.cursor = "default";
+        mi.classList.toggle("nr-clickable", false);
       } else if (this.forceGlobalConfig) {
         mi.textContent = "⚙️ 全局配置";
         mi.title = "点击切回笔记配置";
-        mi.style.cursor = "pointer";
+        mi.classList.toggle("nr-clickable", true);
       } else {
         mi.textContent = "📌 笔记配置";
         mi.title = "点击查看全局配置效果";
-        mi.style.cursor = "pointer";
+        mi.classList.toggle("nr-clickable", true);
       }
     }
 
@@ -190,9 +190,9 @@ export class PreviewView extends ItemView implements PanelHost {
     // Hide overlay chip + params when no cover image
     if (this.refs) {
       const show = this.rendered.hasCoverImage;
-      this.refs.overlayToggle.style.display = show ? "" : "none";
+      this.refs.overlayToggle.classList.toggle("nr-hidden", !show);
       if (this.refs.effectParamRows["overlay"]) {
-        this.refs.effectParamRows["overlay"].style.display = show && this.effective.coverEffects?.overlay?.enabled ? "" : "none";
+        this.refs.effectParamRows["overlay"].classList.toggle("nr-hidden", !(show && this.effective.coverEffects?.overlay?.enabled));
       }
     }
     // Preserve current page if possible, otherwise reset to 0
@@ -312,9 +312,9 @@ export class PreviewView extends ItemView implements PanelHost {
     r.bannerToggle.classList.toggle("active", s.coverBanner);
     const strokeOn = s.coverStrokeStyle !== "none";
     r.strokeToggle.classList.toggle("active", strokeOn);
-    r.strokeParamsRow.style.display = strokeOn ? "" : "none";
-    r.bannerParamsRow.style.display = s.coverBanner ? "" : "none";
-    r.shadowParamsRow.style.display = s.coverShadow ? "" : "none";
+    r.strokeParamsRow.classList.toggle("nr-hidden", !strokeOn);
+    r.bannerParamsRow.classList.toggle("nr-hidden", !s.coverBanner);
+    r.shadowParamsRow.classList.toggle("nr-hidden", !s.coverShadow);
     const align = s.coverTextAlign ?? "left";
     r.alignBtns.left.classList.toggle("nr-btn-active", align === "left");
     r.alignBtns.center.classList.toggle("nr-btn-active", align === "center");
@@ -364,20 +364,19 @@ export class PreviewView extends ItemView implements PanelHost {
 
     const page = this.pages[this.currentPage];
     this.currentWrapper = this.refs.pageDisplay.createDiv("nr-page-wrapper");
-    this.currentWrapper.style.position = "relative";
 
     this.currentClone = page.cloneNode(true) as HTMLElement;
-    this.currentClone.style.transformOrigin = "top left";
+    this.currentClone.classList.add("nr-page-clone");
     this.currentWrapper.appendChild(this.currentClone);
 
     // 3:4 crop overlay on cover page in long mode — dim the top/bottom strips that get cropped in feed
     this.coverCropOverlay = null;
     if (this.currentPage === 0 && this.effectivePageMode === "long") {
       const topStrip = document.createElement("div");
-      topStrip.style.cssText = `position: absolute; left: 0; top: 0; width: 100%; background: rgba(255,60,60,0.15); border-bottom: 2px dashed rgba(255,60,60,0.6); pointer-events: none; z-index: 100;`;
+      topStrip.classList.add("nr-crop-strip", "nr-crop-strip-top");
 
       const bottomStrip = document.createElement("div");
-      bottomStrip.style.cssText = `position: absolute; left: 0; width: 100%; background: rgba(255,60,60,0.15); border-top: 2px dashed rgba(255,60,60,0.6); pointer-events: none; z-index: 100;`;
+      bottomStrip.classList.add("nr-crop-strip", "nr-crop-strip-bottom");
 
       this.currentWrapper.appendChild(topStrip);
       this.currentWrapper.appendChild(bottomStrip);
@@ -390,8 +389,8 @@ export class PreviewView extends ItemView implements PanelHost {
     this.refs.pageIndicator.textContent = `${this.currentPage + 1} / ${this.pages.length}`;
 
     // Show/hide sections based on current page
-    this.refs.coverSection.style.display = this.currentPage === 0 ? "" : "none";
-    this.refs.bodySection.style.display = this.currentPage === 0 ? "none" : "";
+    this.refs.coverSection.classList.toggle("nr-hidden", this.currentPage !== 0);
+    this.refs.bodySection.classList.toggle("nr-hidden", this.currentPage === 0);
   }
 
   /** Rescale the current page clone to fit the container width */
@@ -401,18 +400,16 @@ export class PreviewView extends ItemView implements PanelHost {
     const pageHeight = PAGE_HEIGHTS[this.effectivePageMode];
     const areaWidth = Math.min(this.refs.previewContainer.clientWidth, 460);
     const scale = (areaWidth - 24) / PAGE_WIDTH;
-    this.currentClone.style.transform = `scale(${scale})`;
-    this.currentWrapper.style.width = `${PAGE_WIDTH * scale}px`;
-    this.currentWrapper.style.height = `${pageHeight * scale}px`;
+    this.currentClone.setCssStyles({ transform: `scale(${scale})` });
+    this.currentWrapper.setCssStyles({ width: `${PAGE_WIDTH * scale}px`, height: `${pageHeight * scale}px` });
 
     if (this.coverCropOverlay) {
       const cropH = PAGE_HEIGHTS["card"];
       const stripH = (pageHeight - cropH) / 2;
       const scaledStripH = stripH * scale;
       const scaledPageH = pageHeight * scale;
-      this.coverCropOverlay.topStrip.style.height = `${scaledStripH}px`;
-      this.coverCropOverlay.bottomStrip.style.top = `${scaledPageH - scaledStripH}px`;
-      this.coverCropOverlay.bottomStrip.style.height = `${scaledStripH}px`;
+      this.coverCropOverlay.topStrip.setCssStyles({ height: `${scaledStripH}px` });
+      this.coverCropOverlay.bottomStrip.setCssStyles({ top: `${scaledPageH - scaledStripH}px`, height: `${scaledStripH}px` });
     }
   }
 

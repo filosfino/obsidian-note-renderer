@@ -16,11 +16,11 @@ export async function exportSinglePage(
   _filename: string
 ): Promise<Blob> {
   const offscreen = document.createElement("div");
-  offscreen.style.cssText = "position: fixed; left: -9999px; top: 0;";
+  offscreen.classList.add("nr-offscreen");
   document.body.appendChild(offscreen);
 
   const clone = page.cloneNode(true) as HTMLElement;
-  clone.style.borderRadius = "0";
+  clone.classList.add("nr-export-page");
   offscreen.appendChild(clone);
 
   const pageWidth = parseInt(clone.style.width) || 1080;
@@ -48,12 +48,12 @@ export async function exportPages(
 
   // Mount pages offscreen for rendering
   const offscreen = document.createElement("div");
-  offscreen.style.cssText = "position: fixed; left: -9999px; top: 0;";
+  offscreen.classList.add("nr-offscreen");
   document.body.appendChild(offscreen);
 
   for (let i = 0; i < pages.length; i++) {
     const page = pages[i].cloneNode(true) as HTMLElement;
-    page.style.borderRadius = "0";
+    page.classList.add("nr-export-page");
     offscreen.appendChild(page);
 
     // Read actual dimensions from the page's inline style

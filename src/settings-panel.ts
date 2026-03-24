@@ -243,9 +243,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     await host.refresh();
   });
 
-  const presetSaveBtn = presetBar.createEl("button", { cls: "nr-btn nr-btn-sm", text: "保存" });
-  presetSaveBtn.style.width = "auto";
-  presetSaveBtn.style.padding = "0 8px";
+  const presetSaveBtn = presetBar.createEl("button", { cls: "nr-btn nr-btn-sm nr-btn-text", text: "保存" });
   presetSaveBtn.title = "保存当前配置为预设";
   presetSaveBtn.addEventListener("click", () => {
     new InputModal(host.app, "保存预设", host.plugin.settings.activePreset || "", async (name) => {
@@ -262,9 +260,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     }).open();
   });
 
-  const presetDelBtn = presetBar.createEl("button", { cls: "nr-btn nr-btn-sm", text: "删除" });
-  presetDelBtn.style.width = "auto";
-  presetDelBtn.style.padding = "0 8px";
+  const presetDelBtn = presetBar.createEl("button", { cls: "nr-btn nr-btn-sm nr-btn-text", text: "删除" });
   presetDelBtn.title = "删除当前预设";
   presetDelBtn.addEventListener("click", () => {
     const name = host.plugin.settings.activePreset;
@@ -293,19 +289,15 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   });
 
   // Mode toggle buttons (mutually exclusive, pushed right)
-  quickBar.createDiv().style.flex = "1";
+  quickBar.createDiv({ cls: "nr-flex-spacer" });
   const modeBtn35 = quickBar.createEl("button", {
-    cls: `nr-btn nr-btn-sm${host.plugin.settings.pageMode === "long" ? " nr-btn-active" : ""}`,
+    cls: `nr-btn nr-btn-sm nr-btn-text${host.plugin.settings.pageMode === "long" ? " nr-btn-active" : ""}`,
     text: "3:5",
   });
-  modeBtn35.style.width = "auto";
-  modeBtn35.style.padding = "0 8px";
   const modeBtn34 = quickBar.createEl("button", {
-    cls: `nr-btn nr-btn-sm${host.plugin.settings.pageMode === "card" ? " nr-btn-active" : ""}`,
+    cls: `nr-btn nr-btn-sm nr-btn-text${host.plugin.settings.pageMode === "card" ? " nr-btn-active" : ""}`,
     text: "3:4",
   });
-  modeBtn34.style.width = "auto";
-  modeBtn34.style.padding = "0 8px";
 
   const setMode = async (mode: "long" | "card") => {
     if (host.syncing) return;
@@ -318,7 +310,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
 
   // Keep a hidden select for syncUI compatibility
   const modeSelect = document.createElement("select");
-  modeSelect.style.display = "none";
+  modeSelect.classList.add("nr-hidden");
   modeSelect.createEl("option", { text: "长文 3:5", value: "long" });
   modeSelect.createEl("option", { text: "图文 3:4", value: "card" });
   modeSelect.value = host.plugin.settings.pageMode;
@@ -420,9 +412,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     await host.updateSetting("coverFontColor", "");
   });
 
-  const weightSelect = styleRow.createEl("select", { cls: "dropdown" });
-  weightSelect.style.width = "72px";
-  weightSelect.style.flex = "none";
+  const weightSelect = styleRow.createEl("select", { cls: "dropdown nr-dropdown-narrow" });
   [
     { label: "极细 100", value: "100" },
     { label: "细 200", value: "200" },
@@ -463,11 +453,9 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   // ── Stroke sub-params (in coverTextBody) ──
   const strokeParamsRow = coverTextBody.createDiv("nr-row");
   strokeParamsRow.createEl("span", { cls: "nr-row-label", text: "描边" });
-  strokeParamsRow.style.display = strokeEnabled ? "" : "none";
+  strokeParamsRow.classList.toggle("nr-hidden", !strokeEnabled);
 
-  const strokeStyleSelect = strokeParamsRow.createEl("select", { cls: "dropdown" });
-  strokeStyleSelect.style.width = "72px";
-  strokeStyleSelect.style.flex = "none";
+  const strokeStyleSelect = strokeParamsRow.createEl("select", { cls: "dropdown nr-dropdown-narrow" });
   [
     { label: "描边", value: "stroke" },
     { label: "双层", value: "double" },
@@ -499,7 +487,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   const updateGlowVisibility = () => {
     const mode = strokeStyleSelect.value;
     const hasGlow = mode === "double" || mode === "glow";
-    glowField.style.display = hasGlow ? "" : "none";
+    glowField.classList.toggle("nr-hidden", !hasGlow);
   };
   updateGlowVisibility();
 
@@ -531,11 +519,11 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     if (currentStyle !== "none") {
       host.lastStrokeStyle = currentStyle;
       strokeToggle.classList.remove("active");
-      strokeParamsRow.style.display = "none";
+      strokeParamsRow.classList.add("nr-hidden");
       await host.updateSetting("coverStrokeStyle", "none");
     } else {
       strokeToggle.classList.add("active");
-      strokeParamsRow.style.display = "";
+      strokeParamsRow.classList.remove("nr-hidden");
       strokeStyleSelect.value = host.lastStrokeStyle;
       updateGlowVisibility();
       await host.updateSetting("coverStrokeStyle", host.lastStrokeStyle as import("./constants").CoverStrokeStyle);
@@ -545,7 +533,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   // ── Banner sub-params (in coverTextBody) ──
   const bannerParamsRow = coverTextBody.createDiv("nr-row");
   bannerParamsRow.createEl("span", { cls: "nr-row-label", text: "色带" });
-  bannerParamsRow.style.display = host.plugin.settings.coverBanner ? "" : "none";
+  bannerParamsRow.classList.toggle("nr-hidden", !host.plugin.settings.coverBanner);
 
   const parseColor = (c: string) => {
     if (c.startsWith("#")) return c;
@@ -571,7 +559,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     if (host.syncing) return;
     const val = !host.effective.coverBanner;
     bannerToggle.classList.toggle("active", val);
-    bannerParamsRow.style.display = val ? "" : "none";
+    bannerParamsRow.classList.toggle("nr-hidden", !val);
     await host.updateSetting("coverBanner", val);
   });
 
@@ -588,13 +576,13 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   // ── Shadow sub-params (in coverTextBody) ──
   const shadowParamsRow = coverTextBody.createDiv("nr-row");
   shadowParamsRow.createEl("span", { cls: "nr-row-label", text: "投影" });
-  shadowParamsRow.style.display = host.plugin.settings.coverShadow ? "" : "none";
+  shadowParamsRow.classList.toggle("nr-hidden", !host.plugin.settings.coverShadow);
 
   shadowToggle.addEventListener("click", async () => {
     if (host.syncing) return;
     const val = !host.effective.coverShadow;
     shadowToggle.classList.toggle("active", val);
-    shadowParamsRow.style.display = val ? "" : "none";
+    shadowParamsRow.classList.toggle("nr-hidden", !val);
     await host.updateSetting("coverShadow", val);
   });
 
@@ -651,7 +639,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     const params = effects[name];
     const row = effectBody.createDiv("nr-row");
     row.createEl("span", { cls: "nr-row-label", text: meta.label });
-    row.style.display = params?.enabled ? "" : "none";
+    row.classList.toggle("nr-hidden", !params?.enabled);
     effectParamRows[name] = row;
     makeField(host, row, "强度", String(params?.opacity ?? 50),
       { min: meta.min, max: meta.max, unit: "%" },
@@ -665,7 +653,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     for (const chip of chips) {
       if (chip.textContent === meta.label) {
         chip.addEventListener("click", () => {
-          row.style.display = chip.classList.contains("active") ? "" : "none";
+          row.classList.toggle("nr-hidden", !chip.classList.contains("active"));
         });
       }
     }
@@ -748,14 +736,12 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   // Right: actions + export
   const navRight = nav.createDiv("nr-nav-right");
 
-  const saveToNoteBtn = navRight.createEl("button", { cls: "nr-btn nr-btn-sm", text: "存入笔记" });
+  const saveToNoteBtn = navRight.createEl("button", { cls: "nr-btn nr-btn-sm nr-save-note-btn", text: "存入笔记" });
   saveToNoteBtn.title = "保存当前配置到笔记";
-  saveToNoteBtn.style.minWidth = "72px";
   saveToNoteBtn.addEventListener("click", () => host.handleSaveToNote());
 
-  const removeFromNoteBtn = navRight.createEl("button", { cls: "nr-btn nr-btn-sm", text: "移除" });
+  const removeFromNoteBtn = navRight.createEl("button", { cls: "nr-btn nr-btn-sm nr-remove-note-btn", text: "移除" });
   removeFromNoteBtn.title = "移除笔记中的渲染配置";
-  removeFromNoteBtn.style.minWidth = "48px";
   removeFromNoteBtn.addEventListener("click", () => host.handleRemoveFromNote());
 
   navRight.createDiv({ cls: "nr-nav-separator" });

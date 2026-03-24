@@ -10,7 +10,6 @@ import {
   RENDER_KEYS,
   NOTE_KEY_ALIASES,
   INTERNAL_TO_NOTE_KEY,
-  validateNoteConfig,
   extractRenderOptions,
   toNoteConfigKeys,
   type RenderOptions,

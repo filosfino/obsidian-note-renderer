@@ -27,4 +27,3 @@ export type CoverStrokeStyle = "none" | "stroke" | "double" | "shadow" | "glow";
 export type CoverTextAlign = "left" | "center" | "right";
 
 export const VIEW_TYPE = "note-renderer-preview";
-export const PLUGIN_ID = "note-renderer";
