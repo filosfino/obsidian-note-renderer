@@ -254,7 +254,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
       for (const key of PRESET_KEYS) {
         preset[key] = (host.effective as Record<string, unknown>)[key];
       }
-      host.plugin.settings.presets[name] = preset as any;
+      host.plugin.settings.presets[name] = preset as Partial<import("./main").RendererPreset>;
       host.plugin.settings.activePreset = name;
       await host.plugin.saveSettings();
       host.rebuildPresetOptions();
@@ -505,7 +505,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
 
   strokeStyleSelect.addEventListener("change", async () => {
     if (host.syncing) return;
-    const style = strokeStyleSelect.value as any;
+    const style = strokeStyleSelect.value as import("./constants").CoverStrokeStyle;
     host.lastStrokeStyle = style;
     const defaults: Record<string, number> = { stroke: 20, double: 5, glow: 6 };
     const newPercent = defaults[style] ?? 8;
@@ -538,7 +538,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
       strokeParamsRow.style.display = "";
       strokeStyleSelect.value = host.lastStrokeStyle;
       updateGlowVisibility();
-      await host.updateSetting("coverStrokeStyle", host.lastStrokeStyle as any);
+      await host.updateSetting("coverStrokeStyle", host.lastStrokeStyle as import("./constants").CoverStrokeStyle);
     }
   });
 

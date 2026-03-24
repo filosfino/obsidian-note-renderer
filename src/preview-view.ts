@@ -28,12 +28,12 @@ export class PreviewView extends ItemView implements PanelHost {
   private rendered: RenderedPages | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private fileChangeHandler: ((file: TAbstractFile) => void) | null = null;
-  private activeFileHandler: (() => void) | null = null;
+  private activeFileHandler: (...args: unknown[]) => void = () => {};
 
   // Current displayed clone + wrapper (for rescaling without re-rendering)
   private currentClone: HTMLElement | null = null;
   private currentWrapper: HTMLElement | null = null;
-  private coverCropOverlay: HTMLElement | null = null;
+  private coverCropOverlay: { topStrip: HTMLElement; bottomStrip: HTMLElement } | null = null;
   private effectivePageMode: "long" | "card" = "long";
 
   // Guard: true while syncing UI from renderer_config, prevents change handlers from writing back to global settings
@@ -106,7 +106,7 @@ export class PreviewView extends ItemView implements PanelHost {
       this.forceGlobalConfig = false;
       debouncedRefresh();
     };
-    this.app.workspace.on("active-leaf-change", this.activeFileHandler as any);
+    this.app.workspace.on("active-leaf-change", this.activeFileHandler );
 
     // Initial render
     await this.refresh();
@@ -119,7 +119,7 @@ export class PreviewView extends ItemView implements PanelHost {
       this.app.vault.off("modify", this.fileChangeHandler);
     }
     if (this.activeFileHandler) {
-      this.app.workspace.off("active-leaf-change", this.activeFileHandler as any);
+      this.app.workspace.off("active-leaf-change", this.activeFileHandler);
     }
   }
 
@@ -382,10 +382,7 @@ export class PreviewView extends ItemView implements PanelHost {
       this.currentWrapper.appendChild(topStrip);
       this.currentWrapper.appendChild(bottomStrip);
 
-      const ref = document.createElement("div");
-      (ref as any)._topStrip = topStrip;
-      (ref as any)._bottomStrip = bottomStrip;
-      this.coverCropOverlay = ref;
+      this.coverCropOverlay = { topStrip, bottomStrip };
     }
 
     this.rescale();
@@ -413,13 +410,9 @@ export class PreviewView extends ItemView implements PanelHost {
       const stripH = (pageHeight - cropH) / 2;
       const scaledStripH = stripH * scale;
       const scaledPageH = pageHeight * scale;
-      const topStrip = (this.coverCropOverlay as any)._topStrip as HTMLElement;
-      const bottomStrip = (this.coverCropOverlay as any)._bottomStrip as HTMLElement;
-      if (topStrip) topStrip.style.height = `${scaledStripH}px`;
-      if (bottomStrip) {
-        bottomStrip.style.top = `${scaledPageH - scaledStripH}px`;
-        bottomStrip.style.height = `${scaledStripH}px`;
-      }
+      this.coverCropOverlay.topStrip.style.height = `${scaledStripH}px`;
+      this.coverCropOverlay.bottomStrip.style.top = `${scaledPageH - scaledStripH}px`;
+      this.coverCropOverlay.bottomStrip.style.height = `${scaledStripH}px`;
     }
   }
 
