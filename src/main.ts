@@ -1,4 +1,4 @@
-import { Plugin, normalizePath } from "obsidian";
+import { Plugin, normalizePath, Notice, TFile } from "obsidian";
 import { VIEW_TYPE } from "./constants";
 import { PreviewView } from "./preview-view";
 import { THEME_PAPER } from "./themes/paper";
@@ -12,7 +12,9 @@ import { THEME_MIST } from "./themes/mist";
 import { THEME_ROSE } from "./themes/rose";
 
 import { RENDER_DEFAULTS, RENDER_KEYS, type RenderOptions } from "./schema";
-import { migrateSettings } from "./config-manager";
+import { migrateSettings, readNoteConfig, mergeConfigs, extractRenderOptions } from "./config-manager";
+import { renderNote } from "./renderer";
+import { exportSinglePage } from "./exporter";
 import { DEFAULT_FONTS, getFontDisplayName, type FontEntry } from "./fonts";
 
 // ── Types (derived from schema) ──────────────────────────────────────────────
@@ -198,6 +200,56 @@ export default class NoteRendererPlugin extends Plugin {
 
   getPresetNames(): string[] {
     return Object.keys(this.settings.presets);
+  }
+
+  // ── Headless render API ──
+
+  /**
+   * Render a markdown file to PNG images and save to a directory.
+   * Uses the note's renderer_config merged with global settings.
+   *
+   * @param filePath - vault-relative path, e.g. "4.projects/小红书分享/notes/xxx.md"
+   * @param outputDir - absolute filesystem path, e.g. "/tmp/nr-output"
+   * @returns array of output file paths
+   *
+   * Usage via Obsidian CLI:
+   *   obsidian eval code="await app.plugins.plugins['note-renderer'].renderToFiles('path/to/note.md', '/tmp/output')"
+   */
+  async renderToFiles(filePath: string, outputDir: string): Promise<string[]> {
+    const file = this.app.vault.getAbstractFileByPath(filePath);
+    if (!(file instanceof TFile) || file.extension !== "md") {
+      throw new Error(`Not a markdown file: ${filePath}`);
+    }
+
+    const markdown = await this.app.vault.read(file);
+    const noteConfig = readNoteConfig(markdown);
+    const merged = mergeConfigs(this.settings, noteConfig);
+    const themeCss = await this.loadTheme(merged.activeTheme);
+    const options = extractRenderOptions(merged as unknown as Record<string, unknown>);
+
+    const rendered = await renderNote(this.app, markdown, file.path, themeCss, this, options);
+
+    // Ensure output directory exists
+    const fs = require("fs") as typeof import("fs");
+    const path = require("path") as typeof import("path");
+    fs.mkdirSync(outputDir, { recursive: true });
+
+    const outputPaths: string[] = [];
+    const baseName = file.basename;
+
+    for (let i = 0; i < rendered.pages.length; i++) {
+      const pageNum = String(i + 1).padStart(2, "0");
+      const pngName = `${baseName}_${pageNum}`;
+      const blob = await exportSinglePage(rendered.pages[i], pngName);
+      const buffer = Buffer.from(await blob.arrayBuffer());
+      const outPath = path.join(outputDir, `${pngName}.png`);
+      fs.writeFileSync(outPath, buffer);
+      outputPaths.push(outPath);
+    }
+
+    rendered.cleanup();
+    new Notice(`Rendered ${rendered.pages.length} pages → ${outputDir}`);
+    return outputPaths;
   }
 
   async loadSettings(): Promise<void> {
