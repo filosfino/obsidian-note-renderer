@@ -1,5 +1,6 @@
 import { App, Component, sanitizeHTMLToDom } from "obsidian";
 import { PAGE_WIDTH, CONTENT_WIDTH, PAGE_PADDING_H, PAGE_PADDING_TOP, PAGE_PADDING_BOTTOM, PAGE_HEIGHTS, getContentHeight } from "./constants";
+import { applyCoverEffects } from "./effects";
 import { paginateBody } from "./paginator";
 import { parseNoteStructure } from "./parser";
 import { renderMarkdownToHtml, createVaultImageResolver } from "./md-to-html";
@@ -178,156 +179,9 @@ ${coverColorCss}
     }
   }
 
-  // ── Decorative cover effects (layered pseudo-elements via wrapper divs) ──
-  coverPage.style.position = "relative";
-  coverPage.style.overflow = "hidden";
-
-  // Detect theme brightness from CSS background color
-  const isDark = (() => {
-    const bgMatch = themeCss.match(/\.nr-page\s*\{[^}]*background:\s*#([0-9a-fA-F]{3,6})/);
-    if (!bgMatch) return true; // default assume dark
-    const hex = bgMatch[1].length === 3
-      ? bgMatch[1].split("").map(c => c + c).join("")
-      : bgMatch[1];
-    const r = parseInt(hex.slice(0, 2), 16);
-    const g = parseInt(hex.slice(2, 4), 16);
-    const b = parseInt(hex.slice(4, 6), 16);
-    return (r * 0.299 + g * 0.587 + b * 0.114) < 128;
-  })();
-  // Effect colors: light particles on dark bg, dark particles on light bg
-  const effectColor = isDark ? "rgba(255,255,255," : "rgba(0,0,0,";
-  const effectBlend = isDark ? "screen" : "multiply";
-
-  // Grain: SVG feTurbulence noise overlay
-  if (options.coverEffects?.grain?.enabled) {
-    const grainOp = (options.coverEffects.grain.opacity ?? 8) / 100;
-    const grain = document.createElement("div");
-    grain.style.cssText = `position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2;opacity:${grainOp};mix-blend-mode:overlay;`;
-    grain.innerHTML = `<svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg"><filter id="nr-grain-${Date.now()}"><feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch"/></filter><rect width="100%" height="100%" filter="url(#nr-grain-${Date.now()})"/></svg>`;
-    coverPage.appendChild(grain);
-  }
-
-  // Aurora: blurred color blobs
-  if (options.coverEffects?.aurora?.enabled) {
-    const auroraOp = (options.coverEffects.aurora.opacity ?? 30) / 100;
-    const aurora = document.createElement("div");
-    aurora.style.cssText = `position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2;opacity:${auroraOp};mix-blend-mode:${effectBlend};overflow:hidden;`;
-    const auroraColors = isDark
-      ? ["rgba(120,80,220,0.8)", "rgba(40,160,180,0.7)", "rgba(200,80,120,0.5)"]
-      : ["rgba(100,60,180,0.6)", "rgba(30,130,150,0.5)", "rgba(180,60,100,0.4)"];
-    aurora.innerHTML = `
-      <div style="position:absolute;width:60%;height:50%;top:10%;left:-10%;background:radial-gradient(circle,${auroraColors[0]},transparent 70%);filter:blur(80px);"></div>
-      <div style="position:absolute;width:50%;height:40%;top:50%;right:-5%;background:radial-gradient(circle,${auroraColors[1]},transparent 70%);filter:blur(70px);"></div>
-      <div style="position:absolute;width:40%;height:35%;bottom:5%;left:20%;background:radial-gradient(circle,${auroraColors[2]},transparent 70%);filter:blur(60px);"></div>
-    `;
-    coverPage.appendChild(aurora);
-  }
-
-  // Bokeh: scattered soft circles
-  if (options.coverEffects?.bokeh?.enabled) {
-    const bokehOp = (options.coverEffects.bokeh.opacity ?? 12) / 100;
-    const bokeh = document.createElement("div");
-    bokeh.style.cssText = `position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2;opacity:${bokehOp};`;
-    // Generate deterministic bokeh circles using box-shadow on a single element
-    const circles: string[] = [];
-    const seed = [0.15,0.73,0.42,0.88,0.31,0.67,0.09,0.56,0.81,0.24,0.95,0.38,0.61,0.77,0.03,0.49];
-    for (let i = 0; i < 16; i++) {
-      const x = Math.round(seed[i] * PAGE_WIDTH);
-      const y = Math.round(seed[(i + 5) % 16] * pageHeight);
-      const size = 20 + Math.round(seed[(i + 3) % 16] * 60);
-      const alpha = 0.3 + seed[(i + 7) % 16] * 0.5;
-      circles.push(`${x}px ${y}px 0 ${size}px ${effectColor}${alpha.toFixed(2)})`);
-    }
-    bokeh.innerHTML = `<div style="position:absolute;width:1px;height:1px;top:0;left:0;border-radius:50%;box-shadow:${circles.join(",")};"></div>`;
-    coverPage.appendChild(bokeh);
-  }
-
-  // Grid: subtle geometric line pattern
-  if (options.coverEffects?.grid?.enabled) {
-    const gridOp = (options.coverEffects.grid.opacity ?? 6) / 100;
-    const grid = document.createElement("div");
-    const lineColor = effectColor + "0.3)";
-    grid.style.cssText = `position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2;opacity:${gridOp};background-image:repeating-linear-gradient(0deg,${lineColor} 0px,${lineColor} 1px,transparent 1px,transparent 60px),repeating-linear-gradient(90deg,${lineColor} 0px,${lineColor} 1px,transparent 1px,transparent 60px);`;
-    coverPage.appendChild(grid);
-  }
-
-  // Vignette: radial darkening from edges
-  if (options.coverEffects?.vignette?.enabled) {
-    const vigOp = (options.coverEffects.vignette.opacity ?? 50) / 100;
-    const vignette = document.createElement("div");
-    vignette.style.cssText = `position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2;background:radial-gradient(ellipse at center,transparent 40%,rgba(0,0,0,${vigOp}) 100%);`;
-    coverPage.appendChild(vignette);
-  }
-
-  // Light leak: warm color bleed from corners
-  if (options.coverEffects?.lightLeak?.enabled) {
-    const leakOp = (options.coverEffects.lightLeak.opacity ?? 25) / 100;
-    const leak = document.createElement("div");
-    leak.style.cssText = `position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2;opacity:${leakOp};mix-blend-mode:${effectBlend};overflow:hidden;`;
-    const leakColors = isDark
-      ? ["rgba(255,180,80,0.9)", "rgba(255,120,100,0.7)"]
-      : ["rgba(200,140,50,0.7)", "rgba(200,80,60,0.5)"];
-    leak.innerHTML = `
-      <div style="position:absolute;width:50%;height:50%;top:-10%;right:-10%;background:radial-gradient(circle,${leakColors[0]},transparent 70%);filter:blur(60px);"></div>
-      <div style="position:absolute;width:40%;height:40%;bottom:-5%;left:-5%;background:radial-gradient(circle,${leakColors[1]},transparent 70%);filter:blur(50px);"></div>
-    `;
-    coverPage.appendChild(leak);
-  }
-
-  // Scanlines: horizontal thin lines
-  if (options.coverEffects?.scanlines?.enabled) {
-    const scanOp = (options.coverEffects.scanlines.opacity ?? 8) / 100;
-    const scan = document.createElement("div");
-    const scanColor = effectColor + "0.5)";
-    scan.style.cssText = `position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2;opacity:${scanOp};background:repeating-linear-gradient(to bottom,transparent 0px,transparent 2px,${scanColor} 2px,${scanColor} 4px);`;
-    coverPage.appendChild(scan);
-  }
-
-  // Particle network: nodes + connecting lines (constellation / molecular structure)
-  if (options.coverEffects?.network?.enabled) {
-    const netOp = (options.coverEffects.network.opacity ?? 15) / 100;
-    const cols = 10;
-    const rows = Math.round(cols * pageHeight / PAGE_WIDTH);
-    const cellW = PAGE_WIDTH / cols;
-    const cellH = pageHeight / rows;
-    const threshold = Math.max(cellW, cellH) * 1.6;
-
-    // Deterministic pseudo-random using simple seed
-    let seed = 42;
-    const rand = () => { seed = (seed * 16807 + 0) % 2147483647; return seed / 2147483647; };
-
-    // Generate jittered grid nodes
-    const nodes: { x: number; y: number }[] = [];
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const x = (c + 0.5) * cellW + (rand() - 0.5) * cellW * 0.8;
-        const y = (r + 0.5) * cellH + (rand() - 0.5) * cellH * 0.8;
-        nodes.push({ x, y });
-      }
-    }
-
-    // Build SVG with lines then circles
-    let svgContent = "";
-    for (let i = 0; i < nodes.length; i++) {
-      for (let j = i + 1; j < nodes.length; j++) {
-        const dx = nodes[j].x - nodes[i].x;
-        const dy = nodes[j].y - nodes[i].y;
-        const d = Math.sqrt(dx * dx + dy * dy);
-        if (d < threshold) {
-          const lineOp = Math.pow(1 - d / threshold, 1.5).toFixed(2);
-          svgContent += `<line x1="${nodes[i].x}" y1="${nodes[i].y}" x2="${nodes[j].x}" y2="${nodes[j].y}" stroke="currentColor" stroke-width="1" opacity="${lineOp}"/>`;
-        }
-      }
-    }
-    for (const n of nodes) {
-      svgContent += `<circle cx="${n.x}" cy="${n.y}" r="${2 + rand() * 2}" fill="currentColor" opacity="${(0.4 + rand() * 0.3).toFixed(2)}"/>`;
-    }
-
-    const network = document.createElement("div");
-    const netColor = isDark ? "rgba(200,200,200,1)" : "rgba(80,80,80,1)";
-    network.style.cssText = `position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2;opacity:${netOp};color:${netColor};`;
-    network.innerHTML = `<svg width="${PAGE_WIDTH}" height="${pageHeight}" xmlns="http://www.w3.org/2000/svg">${svgContent}</svg>`;
-    coverPage.appendChild(network);
+  // ── Decorative cover effects ──
+  if (options.coverEffects) {
+    applyCoverEffects(coverPage, options.coverEffects, themeCss, pageHeight);
   }
 
   // Apply cover text offset — shift child elements, not the container (which has the gradient overlay)
