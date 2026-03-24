@@ -20,9 +20,6 @@ export function getContentHeight(mode: PageMode): number {
 export const PAGE_HEIGHT = 1800;
 export const CONTENT_HEIGHT = PAGE_HEIGHT - PAGE_PADDING_TOP - PAGE_PADDING_BOTTOM;
 
-// Cover title styles
-export type CoverStyle = "fill";
-
 // Cover stroke styles for text-on-image
 export type CoverStrokeStyle = "none" | "stroke" | "double" | "shadow" | "glow";
 

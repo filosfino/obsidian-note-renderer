@@ -12,6 +12,7 @@ import { THEME_MIST } from "./themes/mist";
 import { THEME_ROSE } from "./themes/rose";
 
 import { RENDER_DEFAULTS, RENDER_KEYS, type RenderOptions } from "./schema";
+import { migrateSettings } from "./config-manager";
 
 // ── Types (derived from schema) ──────────────────────────────────────────────
 
@@ -198,14 +199,15 @@ export default class NoteRendererPlugin extends Plugin {
 
   async loadSettings(): Promise<void> {
     const raw = await this.loadData();
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, raw);
+    const migrated = raw ? migrateSettings({ ...raw }) : {};
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, migrated);
 
-    // Migrate legacy key: activeTemplate → activeTheme
-    if (raw && (raw as any).activeTemplate && !raw.activeTheme) {
-      this.settings.activeTheme = (raw as any).activeTemplate;
+    // Also migrate presets
+    if (this.settings.presets) {
+      for (const [name, preset] of Object.entries(this.settings.presets)) {
+        this.settings.presets[name] = migrateSettings({ ...preset as Record<string, unknown> }) as Partial<RendererPreset>;
+      }
     }
-    // Clean up legacy key from runtime settings
-    delete (this.settings as any).activeTemplate;
   }
 
   async saveSettings(): Promise<void> {

@@ -1,7 +1,6 @@
 import {
   ItemView,
   WorkspaceLeaf,
-  TFile,
   TAbstractFile,
   Notice,
   Modal,
@@ -13,8 +12,16 @@ import {
 import { VIEW_TYPE, PAGE_WIDTH, PAGE_HEIGHTS } from "./constants";
 import { renderNote, RenderedPages } from "./renderer";
 import { exportPages, exportSinglePage } from "./exporter";
-import { parseRendererConfig } from "./parser";
-import { extractRenderOptions, RENDER_KEYS, INTERNAL_TO_NOTE_KEY, toNoteConfigKeys } from "./schema";
+import {
+  readNoteConfig,
+  mergeConfigs,
+  updateNoteConfigKey,
+  saveFullNoteConfig,
+  removeNoteConfig,
+  extractRenderOptions,
+  RENDER_KEYS,
+} from "./config-manager";
+import { EFFECT_META } from "./schema";
 import type NoteRendererPlugin from "./main";
 import { PRESET_KEYS } from "./main";
 import type { NoteRendererSettings } from "./main";
@@ -608,59 +615,50 @@ export class PreviewView extends ItemView {
 
     const effectChips = effectHead.createDiv("nr-header-chips");
 
-    const chipToggle = (parent: HTMLElement, label: string, key: string, active: boolean) => {
+    const effects = this.plugin.settings.coverEffects;
+    const chipToggle = (parent: HTMLElement, label: string, effectName: string, active: boolean) => {
       const chip = parent.createEl("span", { cls: `nr-chip${active ? " active" : ""}`, text: label });
       chip.addEventListener("click", async (e) => {
         e.stopPropagation();
         if (this.syncing) return;
-        const val = !(this.effective as any)[key];
-        chip.classList.toggle("active", val);
-        await this.updateSetting(key, val);
+        const current = this.effective.coverEffects[effectName];
+        const newEnabled = !current?.enabled;
+        chip.classList.toggle("active", newEnabled);
+        const updated = { ...this.effective.coverEffects, [effectName]: { ...current, enabled: newEnabled } };
+        await this.updateSetting("coverEffects", updated);
       });
       return chip;
     };
 
-    const overlayToggle = chipToggle(effectChips, "遮罩", "coverOverlay", this.plugin.settings.coverOverlay);
-    this.uiOverlayToggle = overlayToggle;
-    chipToggle(effectChips, "暗角", "coverVignette", this.plugin.settings.coverVignette);
-    chipToggle(effectChips, "噪点", "coverGrain", this.plugin.settings.coverGrain);
-    chipToggle(effectChips, "极光", "coverAurora", this.plugin.settings.coverAurora);
-    chipToggle(effectChips, "散景", "coverBokeh", this.plugin.settings.coverBokeh);
-    chipToggle(effectChips, "网格", "coverGrid", this.plugin.settings.coverGrid);
-    chipToggle(effectChips, "漏光", "coverLightLeak", this.plugin.settings.coverLightLeak);
-    chipToggle(effectChips, "扫描线", "coverScanlines", this.plugin.settings.coverScanlines);
-    chipToggle(effectChips, "网络", "coverNetwork", this.plugin.settings.coverNetwork);
+    // Build effect chips from registry
+    for (const [name, meta] of Object.entries(EFFECT_META)) {
+      const chip = chipToggle(effectChips, meta.label, name, effects[name]?.enabled ?? false);
+      if (name === "overlay") this.uiOverlayToggle = chip;
+    }
 
     effectHead.addEventListener("click", () => toggleSection(effectSection));
 
     // ── Effect section body: opacity sub-params ──
     const effectBody = effectSection.createDiv("nr-section-body");
 
-    const effectFields: { label: string; key: string; opKey: string; active: boolean; min: number; max: number; def: number }[] = [
-      { label: "遮罩", key: "coverOverlay", opKey: "coverOverlayOpacity", active: this.plugin.settings.coverOverlay, min: 0, max: 100, def: 55 },
-      { label: "暗角", key: "coverVignette", opKey: "coverVignetteOpacity", active: this.plugin.settings.coverVignette, min: 0, max: 100, def: 50 },
-      { label: "噪点", key: "coverGrain", opKey: "coverGrainOpacity", active: this.plugin.settings.coverGrain, min: 1, max: 50, def: 8 },
-      { label: "极光", key: "coverAurora", opKey: "coverAuroraOpacity", active: this.plugin.settings.coverAurora, min: 5, max: 80, def: 30 },
-      { label: "散景", key: "coverBokeh", opKey: "coverBokehOpacity", active: this.plugin.settings.coverBokeh, min: 1, max: 50, def: 12 },
-      { label: "网格", key: "coverGrid", opKey: "coverGridOpacity", active: this.plugin.settings.coverGrid, min: 1, max: 30, def: 6 },
-      { label: "漏光", key: "coverLightLeak", opKey: "coverLightLeakOpacity", active: this.plugin.settings.coverLightLeak, min: 5, max: 80, def: 25 },
-      { label: "扫描线", key: "coverScanlines", opKey: "coverScanlinesOpacity", active: this.plugin.settings.coverScanlines, min: 1, max: 30, def: 8 },
-      { label: "网络", key: "coverNetwork", opKey: "coverNetworkOpacity", active: this.plugin.settings.coverNetwork, min: 5, max: 50, def: 15 },
-    ];
-
+    // Build effect opacity rows from registry
     const effectParamRows: Record<string, HTMLElement> = {};
-    for (const ef of effectFields) {
+    for (const [name, meta] of Object.entries(EFFECT_META)) {
+      const params = effects[name];
       const row = effectBody.createDiv("nr-row");
-      row.createEl("span", { cls: "nr-row-label", text: ef.label });
-      row.style.display = ef.active ? "" : "none";
-      effectParamRows[ef.key] = row;
-      makeField(row, "强度", String((this.effective as any)[ef.opKey] ?? ef.def),
-        { min: ef.min, max: ef.max, unit: "%" },
-        (val) => this.updateSetting(ef.opKey, val));
+      row.createEl("span", { cls: "nr-row-label", text: meta.label });
+      row.style.display = params?.enabled ? "" : "none";
+      effectParamRows[name] = row;
+      makeField(row, "强度", String(this.effective.coverEffects[name]?.opacity ?? params?.opacity ?? 50),
+        { min: meta.min, max: meta.max, unit: "%" },
+        (val) => {
+          const updated = { ...this.effective.coverEffects, [name]: { ...this.effective.coverEffects[name], opacity: val } };
+          this.updateSetting("coverEffects", updated);
+        });
       // Wire chip toggle to show/hide this row
       const chips = effectChips.querySelectorAll(".nr-chip");
       for (const chip of chips) {
-        if (chip.textContent === ef.label) {
+        if (chip.textContent === meta.label) {
           chip.addEventListener("click", () => {
             row.style.display = chip.classList.contains("active") ? "" : "none";
           });
@@ -882,20 +880,12 @@ export class PreviewView extends ItemView {
     const markdown = await this.app.vault.read(file);
 
     // Parse per-note renderer_config and merge with global settings
-    const noteConfig = parseRendererConfig(markdown);
+    const noteConfig = readNoteConfig(markdown);
     this.hasNoteConfig = !!noteConfig;
 
     // When forceGlobalConfig is on, skip merging note config (for comparison)
     const useNoteConfig = noteConfig && !this.forceGlobalConfig;
-
-    const merged: NoteRendererSettings = Object.assign({}, this.plugin.settings);
-    if (useNoteConfig) {
-      for (const [key, value] of Object.entries(noteConfig)) {
-        if (key in merged && value !== undefined && value !== null) {
-          (merged as Record<string, unknown>)[key] = value;
-        }
-      }
-    }
+    const merged = mergeConfigs(this.plugin.settings, useNoteConfig ? noteConfig : null);
 
     // Store effective settings for UI handlers to read from
     this.effective = merged;
@@ -949,8 +939,8 @@ export class PreviewView extends ItemView {
     if (this.uiOverlayToggle) {
       const show = this.rendered.hasCoverImage;
       this.uiOverlayToggle.style.display = show ? "" : "none";
-      if (this._effectParamRows["coverOverlay"]) {
-        this._effectParamRows["coverOverlay"].style.display = show && this.effective.coverOverlay ? "" : "none";
+      if (this._effectParamRows["overlay"]) {
+        this._effectParamRows["overlay"].style.display = show && this.effective.coverEffects?.overlay?.enabled ? "" : "none";
       }
     }
     // Preserve current page if possible, otherwise reset to 0
@@ -988,29 +978,11 @@ export class PreviewView extends ItemView {
     if (!file || file.extension !== "md") return;
 
     const markdown = await this.app.vault.read(file);
-    const noteConfig = parseRendererConfig(markdown);
-    if (!noteConfig) return;
-
-    // Map internal key names to user-facing names for renderer_config
-    const noteKey = (INTERNAL_TO_NOTE_KEY as Record<string, string>)[key] || key;
-
-    // Update the key in the parsed config
-    noteConfig[noteKey] = value;
-
-    // Rebuild the JSON and replace in markdown
-    const configJson = JSON.stringify(noteConfig, null, 2);
-    const configSection = `\n## renderer_config\n\n\`\`\`json\n${configJson}\n\`\`\`\n`;
-    const newContent = removeRendererConfigSection(markdown).trimEnd() + configSection;
-
-    // Re-insert before ## 正文描述 if possible
-    const finalContent = insertRendererConfigSection(
-      removeRendererConfigSection(markdown),
-      configSection
-    );
+    const updated = updateNoteConfigKey(markdown, key, value);
+    if (updated === markdown) return;
 
     this.writingNoteConfig = true;
-    await this.app.vault.modify(file, finalContent);
-    // Reset guard after a tick to allow the file watcher to settle
+    await this.app.vault.modify(file, updated);
     setTimeout(() => { this.writingNoteConfig = false; }, 100);
   }
 
@@ -1083,7 +1055,7 @@ export class PreviewView extends ItemView {
     if (this.uiStrokeLabel) (this.uiStrokeLabel as any).value = String(s.coverStrokePercent);
     if (this.uiOpLabel) (this.uiOpLabel as any).value = String(s.coverStrokeOpacity);
     if (this.uiGlowLabel) (this.uiGlowLabel as any).value = String(s.coverGlowSize);
-    if (this.uiOverlayToggle) this.uiOverlayToggle.classList.toggle("active", s.coverOverlay);
+    if (this.uiOverlayToggle) this.uiOverlayToggle.classList.toggle("active", s.coverEffects?.overlay?.enabled ?? false);
     if (this.uiOxLabel) (this.uiOxLabel as any).value = String(s.coverOffsetX);
     if (this.uiOyLabel) (this.uiOyLabel as any).value = String(s.coverOffsetY);
     if (this.uiShadowToggle) this.uiShadowToggle.classList.toggle("active", s.coverShadow);
@@ -1114,11 +1086,8 @@ export class PreviewView extends ItemView {
     }
     const markdown = await this.app.vault.read(file);
     const options = extractRenderOptions(this.plugin.settings as unknown as Record<string, unknown>);
-    const noteConfig = toNoteConfigKeys(options as unknown as Record<string, unknown>);
-    const configJson = JSON.stringify(noteConfig, null, 2);
-    const configSection = `\n## renderer_config\n\n\`\`\`json\n${configJson}\n\`\`\`\n`;
-    const newContent = insertRendererConfigSection(markdown, configSection);
-    await this.app.vault.modify(file, newContent);
+    const updated = saveFullNoteConfig(markdown, options);
+    await this.app.vault.modify(file, updated);
     new Notice("已存入笔记");
   }
 
@@ -1130,8 +1099,8 @@ export class PreviewView extends ItemView {
       return;
     }
     const markdown = await this.app.vault.read(file);
-    const newContent = removeRendererConfigSection(markdown);
-    await this.app.vault.modify(file, newContent);
+    const updated = removeNoteConfig(markdown);
+    await this.app.vault.modify(file, updated);
     new Notice("已移除笔记配置");
   }
 
@@ -1284,30 +1253,6 @@ export class PreviewView extends ItemView {
       new Notice("Export failed — check console");
     }
   }
-}
-
-// ── renderer_config section helpers ──────────────────────────────────────────
-
-/**
- * Remove `## renderer_config` section (and its content) from markdown.
- */
-function removeRendererConfigSection(markdown: string): string {
-  // Match from `## renderer_config` to the next H2 or end of string
-  return markdown.replace(/\n## renderer_config\n[\s\S]*?(?=\n## |\n*$)/, "").trimEnd() + "\n";
-}
-
-/**
- * Insert renderer_config section into markdown.
- * Inserts before `## 正文描述` if it exists, otherwise appends at end.
- */
-function insertRendererConfigSection(markdown: string, configSection: string): string {
-  // Insert before ## 正文描述 if present
-  const insertBefore = /(\n## 正文描述\n)/;
-  if (insertBefore.test(markdown)) {
-    return markdown.replace(insertBefore, `${configSection}$1`);
-  }
-  // Otherwise append at end
-  return markdown.trimEnd() + "\n" + configSection;
 }
 
 /** Modal for text input (replaces window.prompt) */

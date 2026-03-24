@@ -17,7 +17,7 @@ const titleFont = getArg("font", '"PingFang SC", "Noto Sans SC", sans-serif');
 const outDir = "/tmp/nr-preview";
 
 // Load theme CSS
-const tsFile = readFileSync(join(import.meta.dirname, `../src/themes/${templateName}.ts`), "utf8");
+const tsFile = readFileSync(join(import.meta.dirname, `../src/themes/${themeName}.ts`), "utf8");
 const cssMatch = tsFile.match(/`([\s\S]+?)`/);
 let css = cssMatch ? cssMatch[1].replace(/\\\\([0-9a-fA-F]{4})/g, "\\$1") : "";
 
