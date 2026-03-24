@@ -4,6 +4,16 @@ An Obsidian plugin that renders markdown notes into beautifully paginated images
 
 [中文文档](#中文文档) | English
 
+## Screenshots
+
+| Cover with image overlay | Body page with inline image | Cover auto-scaling |
+|:---:|:---:|:---:|
+| ![Cover preview](assets/cover-preview.jpeg) | ![Body preview](assets/body-preview.jpeg) | ![Auto-size](assets/cover-autosize.jpeg) |
+
+| Rich text layout | Light theme |
+|:---:|:---:|
+| ![Rich text](assets/rich-text.png) | ![Light theme](assets/light-theme.png) |
+
 ## Features
 
 - **H2-based parsing**: Reads `## 标题` / `## 封面文字` / `## 封面图` / `## 正文` sections
@@ -125,6 +135,16 @@ If you find this plugin useful, buy me a coffee!
 # 中文文档
 
 Obsidian 插件，将 markdown 笔记渲染为分页图片，用于小红书图文发布。
+
+## 效果展示
+
+| 封面图 + 文字叠加 | 正文分页 + 呼吸图 | 封面文字自动缩放 |
+|:---:|:---:|:---:|
+| ![封面预览](assets/cover-preview.jpeg) | ![正文预览](assets/body-preview.jpeg) | ![自动缩放](assets/cover-autosize.jpeg) |
+
+| 富文本排版 | 浅色主题 |
+|:---:|:---:|
+| ![富文本](assets/rich-text.png) | ![浅色主题](assets/light-theme.png) |
 
 ## 功能
 
