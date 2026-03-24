@@ -1,6 +1,7 @@
 import { Notice, Menu, setIcon } from "obsidian";
 import type { App } from "obsidian";
-import { EFFECT_META, RENDER_DEFAULTS } from "./schema";
+import { FIELD_SCHEMAS, EFFECT_SCHEMAS, RENDER_DEFAULTS, getFieldSchema } from "./schema";
+import type { FieldSchema } from "./schema";
 import { InputModal, ConfirmModal } from "./modals";
 import { PRESET_KEYS } from "./main";
 import type NoteRendererPlugin from "./main";
@@ -184,6 +185,19 @@ function toggleSection(target: HTMLElement): void {
   target.classList.toggle("open");
 }
 
+/** Build makeField opts from a FieldSchema. Numeric fields only. */
+function schemaOpts(key: string): { min: number; max: number; step?: number; unit?: string; transform?: (v: number) => string; parse?: (v: string) => number } {
+  const s = getFieldSchema(key);
+  if (!s || s.type !== "number") return { min: 0, max: 100 };
+  return {
+    min: s.min, max: s.max,
+    ...(s.step !== undefined && s.step !== 1 ? { step: s.step } : {}),
+    ...(s.unit ? { unit: s.unit } : {}),
+    ...(s.toDisplay ? { transform: s.toDisplay } : {}),
+    ...(s.fromDisplay ? { parse: s.fromDisplay } : {}),
+  };
+}
+
 /** Create a labeled input field with scroll-wheel support. Returns the input element. */
 function makeField(
   host: PanelHost,
@@ -339,9 +353,10 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   const scaleInput = coverHeadControls.createEl("input", { cls: "nr-size-input", type: "text" }) as HTMLInputElement;
   scaleInput.value = String(host.plugin.settings.coverFontScale);
   scaleInput.addEventListener("click", (e) => e.stopPropagation());
+  const cfs = FIELD_SCHEMAS.coverFontScale;
   const applyScale = async () => {
     if (host.syncing) return;
-    const val = Math.max(50, Math.min(300, parseInt(scaleInput.value) || 90));
+    const val = Math.max(cfs.min, Math.min(cfs.max, parseInt(scaleInput.value) || cfs.default));
     scaleInput.value = String(val);
     await host.updateSetting("coverFontScale", val);
   };
@@ -350,8 +365,8 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   scaleInput.addEventListener("wheel", (e) => {
     if (document.activeElement !== scaleInput) return;
     e.preventDefault();
-    const cur = parseInt(scaleInput.value) || 90;
-    const val = Math.max(50, Math.min(300, cur + (e.deltaY < 0 ? 10 : -10)));
+    const cur = parseInt(scaleInput.value) || cfs.default;
+    const val = Math.max(cfs.min, Math.min(cfs.max, cur + (e.deltaY < 0 ? (cfs.step ?? 10) : -(cfs.step ?? 10))));
     scaleInput.value = String(val);
     host.updateSetting("coverFontScale", val);
   }, { passive: false });
@@ -431,23 +446,24 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   });
 
   const lsInput = makeField(host, styleRow, "间距", String(host.plugin.settings.coverLetterSpacing),
-    { min: -5, max: 30 },
+    schemaOpts("coverLetterSpacing"),
     (val) => host.updateSetting("coverLetterSpacing", val));
 
-  const lhInput = makeField(host, styleRow, "行高", (host.plugin.settings.coverLineHeight / 10).toFixed(1),
-    { min: 0.8, max: 2.5, step: 0.1, transform: (v) => v.toFixed(1) },
-    (val) => host.updateSetting("coverLineHeight", Math.round(val * 10)));
+  const lhSchema = schemaOpts("coverLineHeight");
+  const lhInput = makeField(host, styleRow, "行高", FIELD_SCHEMAS.coverLineHeight.toDisplay!(host.plugin.settings.coverLineHeight),
+    lhSchema,
+    (val) => host.updateSetting("coverLineHeight", val));
 
   // Position row
   const posRow = coverTextBody.createDiv("nr-row");
   posRow.createEl("span", { cls: "nr-row-label", text: "位置" });
 
   const oxInput = makeField(host, posRow, "X", String(host.plugin.settings.coverOffsetX),
-    { min: -50, max: 50, unit: "%" },
+    schemaOpts("coverOffsetX"),
     (val) => host.updateSetting("coverOffsetX", val));
 
   const oyInput = makeField(host, posRow, "Y", String(host.plugin.settings.coverOffsetY),
-    { min: -50, max: 50, unit: "%" },
+    schemaOpts("coverOffsetY"),
     (val) => host.updateSetting("coverOffsetY", val));
 
   // ── Stroke sub-params (in coverTextBody) ──
@@ -464,11 +480,11 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   strokeStyleSelect.value = strokeEnabled ? host.plugin.settings.coverStrokeStyle : host.lastStrokeStyle;
 
   const strokeInput = makeField(host, strokeParamsRow, "粗", String(host.plugin.settings.coverStrokePercent),
-    { min: 0, max: 100 },
+    schemaOpts("coverStrokePercent"),
     (val) => host.updateSetting("coverStrokePercent", val));
 
   const opInput = makeField(host, strokeParamsRow, "透", String(host.plugin.settings.coverStrokeOpacity),
-    { min: 0, max: 100 },
+    schemaOpts("coverStrokeOpacity"),
     (val) => host.updateSetting("coverStrokeOpacity", val));
 
   const glowField = strokeParamsRow.createDiv("nr-field");
@@ -477,7 +493,8 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   glowInput.value = String(host.plugin.settings.coverGlowSize);
   const applyGlow = async () => {
     if (host.syncing) return;
-    const val = Math.max(0, Math.min(200, parseInt(glowInput.value) || 0));
+    const gs = FIELD_SCHEMAS.coverGlowSize;
+    const val = Math.max(gs.min, Math.min(gs.max, parseInt(glowInput.value) || 0));
     glowInput.value = String(val);
     await host.updateSetting("coverGlowSize", val);
   };
@@ -548,11 +565,11 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   let currentAlpha = bannerAlpha / 100;
 
   makeField(host, bannerParamsRow, "", String(bannerAlpha),
-    { min: 0, max: 100, unit: "%" },
+    { min: 0, max: 100, unit: "%" },  // banner alpha — not a schema field, local to color picker
     async (val) => { currentAlpha = val / 100; await updateBannerColor(); });
 
   makeField(host, bannerParamsRow, "斜", String(host.plugin.settings.coverBannerSkew),
-    { min: 0, max: 20 },
+    schemaOpts("coverBannerSkew"),
     (val) => host.updateSetting("coverBannerSkew", val));
 
   bannerToggle.addEventListener("click", async () => {
@@ -587,15 +604,15 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   });
 
   const blurInput = makeField(host, shadowParamsRow, "模糊", String(host.plugin.settings.coverShadowBlur),
-    { min: 0, max: 200 },
+    schemaOpts("coverShadowBlur"),
     (val) => host.updateSetting("coverShadowBlur", val));
 
   makeField(host, shadowParamsRow, "X", String(host.plugin.settings.coverShadowOffsetX),
-    { min: -100, max: 100 },
+    schemaOpts("coverShadowOffsetX"),
     (val) => host.updateSetting("coverShadowOffsetX", val));
 
   makeField(host, shadowParamsRow, "Y", String(host.plugin.settings.coverShadowOffsetY),
-    { min: -100, max: 100 },
+    schemaOpts("coverShadowOffsetY"),
     (val) => host.updateSetting("coverShadowOffsetY", val));
 
   // ── Section: 效果 (decorative overlays only) ──
@@ -623,7 +640,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
 
   // Build effect chips from registry
   let overlayToggle: HTMLElement = null!;
-  for (const [name, meta] of Object.entries(EFFECT_META)) {
+  for (const [name, meta] of Object.entries(EFFECT_SCHEMAS)) {
     const chip = chipToggle(effectChips, meta.label, name, effects[name]?.enabled ?? false);
     if (name === "overlay") overlayToggle = chip;
   }
@@ -635,7 +652,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
 
   // Build effect opacity rows from registry
   const effectParamRows: Record<string, HTMLElement> = {};
-  for (const [name, meta] of Object.entries(EFFECT_META)) {
+  for (const [name, meta] of Object.entries(EFFECT_SCHEMAS)) {
     const params = effects[name];
     const row = effectBody.createDiv("nr-row");
     row.createEl("span", { cls: "nr-row-label", text: meta.label });
@@ -676,9 +693,10 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
 
   const sizeInput = bodyControls.createEl("input", { cls: "nr-size-input", type: "text" }) as HTMLInputElement;
   sizeInput.value = String(host.plugin.settings.fontSize);
+  const fs = FIELD_SCHEMAS.fontSize;
   const applySize = async () => {
     if (host.syncing) return;
-    const val = Math.max(24, Math.min(72, parseInt(sizeInput.value) || 36));
+    const val = Math.max(fs.min, Math.min(fs.max, parseInt(sizeInput.value) || fs.default));
     sizeInput.value = String(val);
     await host.updateSetting("fontSize", val);
   };
@@ -687,8 +705,8 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   sizeInput.addEventListener("wheel", (e) => {
     if (document.activeElement !== sizeInput) return;
     e.preventDefault();
-    const cur = parseInt(sizeInput.value) || 36;
-    const val = Math.max(24, Math.min(72, cur + (e.deltaY < 0 ? 2 : -2)));
+    const cur = parseInt(sizeInput.value) || fs.default;
+    const val = Math.max(fs.min, Math.min(fs.max, cur + (e.deltaY < 0 ? (fs.step ?? 2) : -(fs.step ?? 2))));
     sizeInput.value = String(val);
     host.updateSetting("fontSize", val);
   }, { passive: false });
