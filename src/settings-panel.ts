@@ -1,6 +1,6 @@
 import { Notice, Menu, setIcon } from "obsidian";
 import type { App } from "obsidian";
-import { EFFECT_META } from "./schema";
+import { EFFECT_META, RENDER_DEFAULTS } from "./schema";
 import { InputModal, ConfirmModal } from "./modals";
 import { PRESET_KEYS } from "./main";
 import type NoteRendererPlugin from "./main";
@@ -618,7 +618,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
 
   const effectChips = effectHead.createDiv("nr-header-chips");
 
-  const effects = host.plugin.settings.coverEffects;
+  const effects = host.plugin.settings.coverEffects ?? RENDER_DEFAULTS.coverEffects;
   const chipToggle = (parent: HTMLElement, label: string, effectName: string, active: boolean) => {
     const chip = parent.createEl("span", { cls: `nr-chip${active ? " active" : ""}`, text: label });
     chip.addEventListener("click", async (e) => {
@@ -653,10 +653,11 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     row.createEl("span", { cls: "nr-row-label", text: meta.label });
     row.style.display = params?.enabled ? "" : "none";
     effectParamRows[name] = row;
-    makeField(host, row, "强度", String(host.effective.coverEffects[name]?.opacity ?? params?.opacity ?? 50),
+    makeField(host, row, "强度", String(params?.opacity ?? 50),
       { min: meta.min, max: meta.max, unit: "%" },
       (val) => {
-        const updated = { ...host.effective.coverEffects, [name]: { ...host.effective.coverEffects[name], opacity: val } };
+        const eff = host.effective.coverEffects ?? effects;
+        const updated = { ...eff, [name]: { ...eff[name], opacity: val } };
         return host.updateSetting("coverEffects", updated);
       });
     // Wire chip toggle to show/hide this row

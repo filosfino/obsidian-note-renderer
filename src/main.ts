@@ -200,7 +200,25 @@ export default class NoteRendererPlugin extends Plugin {
   async loadSettings(): Promise<void> {
     const raw = await this.loadData();
     const migrated = raw ? migrateSettings({ ...raw }) : {};
+
+    // Deep merge: Object.assign is shallow, so coverEffects needs special handling
+    const defaultEffects = { ...RENDER_DEFAULTS.coverEffects };
+    for (const [name, params] of Object.entries(defaultEffects)) {
+      defaultEffects[name] = { ...params };
+    }
     this.settings = Object.assign({}, DEFAULT_SETTINGS, migrated);
+    // Merge coverEffects: defaults + migrated (migrated may be incomplete)
+    if (migrated.coverEffects && typeof migrated.coverEffects === "object") {
+      const merged: Record<string, { enabled: boolean; opacity: number }> = { ...defaultEffects };
+      for (const [name, params] of Object.entries(migrated.coverEffects as Record<string, { enabled: boolean; opacity: number }>)) {
+        if (name in merged) {
+          merged[name] = { ...merged[name], ...params };
+        }
+      }
+      this.settings.coverEffects = merged;
+    } else {
+      this.settings.coverEffects = defaultEffects;
+    }
 
     // Also migrate presets
     if (this.settings.presets) {
@@ -208,6 +226,9 @@ export default class NoteRendererPlugin extends Plugin {
         this.settings.presets[name] = migrateSettings({ ...preset as Record<string, unknown> }) as Partial<RendererPreset>;
       }
     }
+
+    // Persist migrated settings so data.json gets updated
+    await this.saveSettings();
   }
 
   async saveSettings(): Promise<void> {
