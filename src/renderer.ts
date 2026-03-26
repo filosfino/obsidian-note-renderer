@@ -72,6 +72,10 @@ ${coverColorCss}
   height: ${pageHeight}px;
   padding: ${PAGE_PADDING_TOP}px ${PAGE_PADDING_H}px ${PAGE_PADDING_BOTTOM}px;
 }
+.nr-page-body .nr-page-content {
+  height: ${contentHeight}px;
+  overflow: hidden;
+}
 .nr-page-full {
   height: ${pageHeight}px;
   padding: 0;
@@ -382,16 +386,15 @@ async function renderBodyPages(
   measurer.classList.add("nr-measurer", "nr-offscreen");
   measurer.setCssStyles({
     width: `${PAGE_WIDTH}px`,
-    padding: `${PAGE_PADDING_TOP}px ${PAGE_PADDING_H}px ${PAGE_PADDING_BOTTOM}px`,
     boxSizing: "border-box",
   });
   document.body.appendChild(measurer);
 
   measurer.createEl("style", { text: css });
 
-  // Wrap in .nr-page .nr-page-content for CSS selectors to match
+  // Match the final body-page shell so pagination measures the same box model.
   const pageShell = document.createElement("div");
-  pageShell.classList.add("nr-page");
+  pageShell.classList.add("nr-page", "nr-page-body");
   measurer.appendChild(pageShell);
 
   const contentDiv = document.createElement("div");
@@ -400,6 +403,7 @@ async function renderBodyPages(
   pageShell.appendChild(contentDiv);
 
   // Wait for layout + images to load
+  await waitForFonts();
   await waitForImages(contentDiv);
   await new Promise((r) => requestAnimationFrame(r));
   await new Promise((r) => requestAnimationFrame(r));
@@ -467,4 +471,9 @@ function waitForImages(container: HTMLElement): Promise<void> {
         })
     )
   ).then(() => {});
+}
+
+function waitForFonts(): Promise<void> {
+  if (!("fonts" in document)) return Promise.resolve();
+  return (document as Document & { fonts?: FontFaceSet }).fonts?.ready.then(() => {}) ?? Promise.resolve();
 }
