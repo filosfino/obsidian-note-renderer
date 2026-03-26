@@ -22,7 +22,10 @@ jobs:
         run: npm ci
 
       - name: Build plugin
-        run: npm run build
+        run: |
+          mkdir -p ~/projects/obsidian-knowledge/.obsidian/plugins/note-renderer
+          npm run build
+          cp ~/projects/obsidian-knowledge/.obsidian/plugins/note-renderer/main.js .
 
       - name: Create release
         env:
