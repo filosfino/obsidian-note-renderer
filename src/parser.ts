@@ -1,3 +1,4 @@
+import yaml from "js-yaml";
 import { validateNoteConfig } from "./schema";
 
 /**
@@ -8,7 +9,7 @@ import { validateNoteConfig } from "./schema";
  * - ## 封面文字    → cover text content (overlaid on image if present)
  * - ## 封面图      → (optional) cover background image
  * - ## 正文        → body content (auto-paginated)
- * - ## renderer_config → locked render settings (JSON code block, not rendered)
+ * - ## renderer_config → locked render settings (JSON/YAML code block, not rendered)
  *
  * Legacy: ## 封面 is treated as ## 封面文字 for backward compatibility.
  *
@@ -28,8 +29,9 @@ export interface NoteStructure {
 
 /**
  * Parse `## renderer_config` section from markdown.
- * Returns a partial settings object (only keys present in the JSON).
- * Returns null if no renderer_config section or JSON is invalid.
+ * Supports both JSON and YAML code blocks.
+ * Returns a partial settings object (only keys present in the config).
+ * Returns null if no renderer_config section or config is invalid.
  */
 export function parseRendererConfig(markdown: string): Record<string, unknown> | null {
   const stripped = stripFrontmatter(markdown);
@@ -37,19 +39,51 @@ export function parseRendererConfig(markdown: string): Record<string, unknown> |
   const configSection = sections.find((s) => s.heading === "renderer_config");
   if (!configSection) return null;
 
-  // Extract JSON from ```json ... ``` code block
-  const jsonMatch = configSection.content.match(/```(?:json)?\s*\n([\s\S]*?)\n```/);
-  if (!jsonMatch) return null;
+  // Extract code block content and language tag
+  const codeMatch = configSection.content.match(/```(\w*)\s*\n([\s\S]*?)\n```/);
+  if (!codeMatch) return null;
 
-  try {
-    const parsed = JSON.parse(jsonMatch[1]);
-    if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
-      return validateNoteConfig(parsed);
-    }
-  } catch {
-    // Invalid JSON — silently ignore
+  const lang = codeMatch[1].toLowerCase();
+  const body = codeMatch[2];
+
+  const parsed = parseConfigBody(lang, body);
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    return validateNoteConfig(parsed as Record<string, unknown>);
   }
   return null;
+}
+
+/**
+ * Parse config body based on language tag.
+ * - "json" → JSON only
+ * - "yaml" / "yml" → YAML only
+ * - "" (no tag) → try JSON first, then YAML
+ */
+function parseConfigBody(lang: string, body: string): unknown {
+  if (lang === "json") {
+    return tryParseJson(body);
+  }
+  if (lang === "yaml" || lang === "yml") {
+    return tryParseYaml(body);
+  }
+  // No language tag: try JSON first, fall back to YAML
+  return tryParseJson(body) ?? tryParseYaml(body);
+}
+
+function tryParseJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+function tryParseYaml(text: string): unknown {
+  try {
+    return yaml.load(text);
+  } catch {
+    return null;
+  }
 }
 
 interface Section {

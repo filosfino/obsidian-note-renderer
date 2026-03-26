@@ -185,8 +185,10 @@ export type { RenderOptions, RenderKey };
 // ── Internal helpers ────────────────────────────────────────────────────────
 
 function buildConfigSection(config: Record<string, unknown>): string {
-  const json = JSON.stringify(config, null, 2);
-  return `\n## renderer_config\n\n\`\`\`json\n${json}\n\`\`\`\n`;
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const yaml = require("js-yaml") as typeof import("js-yaml");
+  const yamlStr = yaml.dump(config, { indent: 2, lineWidth: -1, sortKeys: false });
+  return `\n## renderer_config\n\n\`\`\`yaml\n${yamlStr}\`\`\`\n`;
 }
 
 /** Remove `## renderer_config` section (and its content) from markdown. */

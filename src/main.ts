@@ -210,12 +210,14 @@ export default class NoteRendererPlugin extends Plugin {
    *
    * @param filePath - vault-relative path, e.g. "4.projects/小红书分享/notes/xxx.md"
    * @param outputDir - absolute filesystem path, e.g. "/tmp/nr-output"
+   * @param scale - output scale factor (0-1, default 1). 0.5 = 50% size.
    * @returns array of output file paths
    *
    * Usage via Obsidian CLI:
    *   obsidian eval code="await app.plugins.plugins['note-renderer'].renderToFiles('path/to/note.md', '/tmp/output')"
+   *   obsidian eval code="await app.plugins.plugins['note-renderer'].renderToFiles('path/to/note.md', '/tmp/output', 0.5)"
    */
-  async renderToFiles(filePath: string, outputDir: string): Promise<string[]> {
+  async renderToFiles(filePath: string, outputDir: string, scale?: number): Promise<string[]> {
     const file = this.app.vault.getAbstractFileByPath(filePath);
     if (!(file instanceof TFile) || file.extension !== "md") {
       throw new Error(`Not a markdown file: ${filePath}`);
@@ -244,12 +246,69 @@ export default class NoteRendererPlugin extends Plugin {
       const buffer = Buffer.from(await blob.arrayBuffer());
       const outPath = path.join(outputDir, `${pngName}.png`);
       fs.writeFileSync(outPath, buffer);
+      if (scale !== undefined && scale > 0 && scale < 1) {
+        const maxDim = Math.round(1800 * scale);
+        require("child_process").execSync(`sips -Z ${maxDim} "${outPath}"`, { stdio: "ignore" });
+      }
       outputPaths.push(outPath);
     }
 
     rendered.cleanup();
     new Notice(`Rendered ${rendered.pages.length} pages → ${outputDir}`);
     return outputPaths;
+  }
+
+  /**
+   * 渲染指定页面到文件。
+   *
+   * @param filePath - vault 内的 markdown 文件相对路径
+   * @param pageIndex - 页码（从 1 开始）
+   * @param outputDir - 输出目录
+   * @param scale - 输出缩放比例（0-1，默认 1）。0.5 = 50% 尺寸。
+   * @returns 输出文件路径
+   *
+   * Usage via Obsidian CLI:
+   *   obsidian eval code="await app.plugins.plugins['note-renderer'].renderPage('path/to/note.md', 2, '/tmp/output')"
+   *   obsidian eval code="await app.plugins.plugins['note-renderer'].renderPage('path/to/note.md', 2, '/tmp/output', 0.5)"
+   */
+  async renderPage(filePath: string, pageIndex: number, outputDir: string, scale?: number): Promise<string> {
+    const file = this.app.vault.getAbstractFileByPath(filePath);
+    if (!(file instanceof TFile) || file.extension !== "md") {
+      throw new Error(`Not a markdown file: ${filePath}`);
+    }
+
+    const markdown = await this.app.vault.read(file);
+    const noteConfig = readNoteConfig(markdown);
+    const merged = mergeConfigs(this.settings, noteConfig);
+    const themeCss = await this.loadTheme(merged.activeTheme);
+    const options = extractRenderOptions(merged as unknown as Record<string, unknown>);
+
+    const rendered = await renderNote(this.app, markdown, file.path, themeCss, this, options);
+
+    const totalPages = rendered.pages.length;
+    if (pageIndex < 1 || pageIndex > totalPages) {
+      rendered.cleanup();
+      throw new Error(`pageIndex ${pageIndex} out of range (total ${totalPages} pages)`);
+    }
+
+    const fs = require("fs") as typeof import("fs");
+    const path = require("path") as typeof import("path");
+    fs.mkdirSync(outputDir, { recursive: true });
+
+    const pageNum = String(pageIndex).padStart(2, "0");
+    const pngName = `${file.basename}_${pageNum}`;
+    const blob = await exportSinglePage(rendered.pages[pageIndex - 1], pngName);
+    const buffer = Buffer.from(await blob.arrayBuffer());
+    const outPath = path.join(outputDir, `${pngName}.png`);
+    fs.writeFileSync(outPath, buffer);
+    if (scale !== undefined && scale > 0 && scale < 1) {
+      const maxDim = Math.round(1800 * scale);
+      require("child_process").execSync(`sips -Z ${maxDim} "${outPath}"`, { stdio: "ignore" });
+    }
+
+    rendered.cleanup();
+    new Notice(`Rendered page ${pageIndex}/${totalPages} → ${outPath}`);
+    return outPath;
   }
 
   async loadSettings(): Promise<void> {

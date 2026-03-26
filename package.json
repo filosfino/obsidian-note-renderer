@@ -11,6 +11,7 @@
     "validate": "npm run check && npm run lint"
   },
   "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.11.0",
     "@typescript-eslint/eslint-plugin": "^8.57.2",
     "@typescript-eslint/parser": "^8.57.2",
@@ -23,6 +24,7 @@
   },
   "dependencies": {
     "html-to-image": "^1.11.11",
+    "js-yaml": "^4.1.1",
     "jszip": "^3.10.1",
     "marked": "^17.0.4"
   }

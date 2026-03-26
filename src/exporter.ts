@@ -40,6 +40,43 @@ export async function exportSinglePage(
   return blob;
 }
 
+/**
+ * Scale a PNG blob by the given factor (0-1).
+ * Uses an offscreen canvas to resize the image.
+ */
+export async function scaleBlob(blob: Blob, scale: number): Promise<Blob> {
+  const img = new Image();
+  const url = URL.createObjectURL(blob);
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error("Failed to load image for scaling"));
+      img.src = url;
+    });
+
+    const newWidth = Math.round(img.naturalWidth * scale);
+    const newHeight = Math.round(img.naturalHeight * scale);
+
+    const canvas = document.createElement("canvas");
+    canvas.width = newWidth;
+    canvas.height = newHeight;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Failed to get canvas context");
+    ctx.drawImage(img, 0, 0, newWidth, newHeight);
+
+    return await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((result) => {
+        if (result) resolve(result);
+        else reject(new Error("Failed to export scaled image"));
+      }, "image/png");
+    });
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 export async function exportPages(
   pages: HTMLElement[],
   filename: string
