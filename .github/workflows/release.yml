@@ -22,10 +22,7 @@ jobs:
         run: npm ci
 
       - name: Build plugin
-        run: |
-          mkdir -p ~/projects/obsidian-knowledge/.obsidian/plugins/note-renderer
-          npm run build
-          cp ~/projects/obsidian-knowledge/.obsidian/plugins/note-renderer/main.js .
+        run: npm run build
 
       - name: Create release
         env:
@@ -35,4 +32,4 @@ jobs:
           gh release create "$tag" \
             --title "$tag" \
             --generate-notes \
-            main.js manifest.json styles.css
+            dist/main.js manifest.json styles.css

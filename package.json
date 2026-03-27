@@ -1,7 +1,16 @@
 {
   "name": "obsidian-note-renderer",
   "version": "0.2.0",
-  "private": true,
+  "description": "Render markdown notes into paginated images optimized for Xiaohongshu.",
+  "author": "filosfino",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/filosfino/obsidian-note-renderer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/filosfino/obsidian-note-renderer/issues"
+  },
   "scripts": {
     "dev": "node esbuild.config.mjs",
     "build": "node esbuild.config.mjs production",

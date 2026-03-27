@@ -7,15 +7,8 @@ import { execFileSync } from "child_process";
 
 const prod = process.argv[2] === "production";
 
-// Output to vault's plugin directory
-const vaultPluginDir = join(
-  process.env.HOME,
-  "projects/obsidian-knowledge/.obsidian/plugins/note-renderer"
-);
-
-if (!existsSync(vaultPluginDir)) {
-  mkdirSync(vaultPluginDir, { recursive: true });
-}
+const distDir = join(import.meta.dirname, "dist");
+mkdirSync(distDir, { recursive: true });
 
 const ctx = await esbuild.context({
   entryPoints: ["src/main.ts"],
@@ -42,15 +35,15 @@ const ctx = await esbuild.context({
   logLevel: "info",
   sourcemap: prod ? false : "inline",
   treeShaking: true,
-  outfile: join(vaultPluginDir, "main.js"),
+  outfile: join(distDir, "main.js"),
   plugins: [
     {
       name: "copy-assets",
       setup(build) {
         build.onEnd(() => {
-          copyFileSync("manifest.json", join(vaultPluginDir, "manifest.json"));
+          copyFileSync("manifest.json", join(distDir, "manifest.json"));
           if (existsSync("styles.css")) {
-            copyFileSync("styles.css", join(vaultPluginDir, "styles.css"));
+            copyFileSync("styles.css", join(distDir, "styles.css"));
           }
           // Export schema.json for vault-side agents
           try {

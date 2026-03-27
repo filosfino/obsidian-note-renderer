@@ -10,10 +10,7 @@ import { readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { transformSync } from "esbuild";
 
-const VAULT_PLUGIN_DIR = join(
-  process.env.HOME,
-  "projects/obsidian-knowledge/.obsidian/plugins/note-renderer"
-);
+const distDir = join(import.meta.dirname, "dist");
 
 // ── Compile schema.ts to plain JS ──────────────────────────────────────────
 
@@ -64,8 +61,8 @@ const output = {
 };
 
 writeFileSync(
-  join(VAULT_PLUGIN_DIR, "schema.json"),
+  join(distDir, "schema.json"),
   JSON.stringify(output, null, 2) + "\n"
 );
 
-console.log("  schema.json → .obsidian/plugins/note-renderer/");
+console.log("  schema.json → dist/");
