@@ -3,6 +3,7 @@ import process from "process";
 import builtins from "builtin-modules";
 import { existsSync, mkdirSync, copyFileSync } from "fs";
 import { join } from "path";
+import { execFileSync } from "child_process";
 
 const prod = process.argv[2] === "production";
 
@@ -51,6 +52,10 @@ const ctx = await esbuild.context({
           if (existsSync("styles.css")) {
             copyFileSync("styles.css", join(vaultPluginDir, "styles.css"));
           }
+          // Export schema.json for vault-side agents
+          try {
+            execFileSync("node", ["export-schema.mjs"], { stdio: "inherit" });
+          } catch { /* non-fatal */ }
         });
       },
     },

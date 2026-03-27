@@ -65,18 +65,52 @@ function renderGrain(container: HTMLElement, params: EffectParams): void {
 
 function renderAurora(container: HTMLElement, params: EffectParams, ctx: EffectContext): void {
   const op = params.opacity / 100;
-  const colors = ctx.isDark
-    ? ["rgba(120,80,220,0.8)", "rgba(40,160,180,0.7)", "rgba(200,80,120,0.5)"]
-    : ["rgba(100,60,180,0.6)", "rgba(30,130,150,0.5)", "rgba(180,60,100,0.4)"];
-  const el = createOverlay({ opacity: String(op), mixBlendMode: ctx.effectBlend, overflow: "hidden" });
-  const blobs: { w: string; h: string; styles: Record<string, string>; color: string; blur: string }[] = [
-    { w: "60%", h: "50%", styles: { top: "10%", left: "-10%" }, color: colors[0], blur: "80px" },
-    { w: "50%", h: "40%", styles: { top: "50%", right: "-5%" }, color: colors[1], blur: "70px" },
-    { w: "40%", h: "35%", styles: { bottom: "5%", left: "20%" }, color: colors[2], blur: "60px" },
+  const count = params.count ?? 3;
+  const darkPalette = [
+    { color: "rgba(120,80,220,0.8)", blur: 80 },
+    { color: "rgba(40,160,180,0.7)", blur: 70 },
+    { color: "rgba(200,80,120,0.5)", blur: 60 },
+    { color: "rgba(80,200,140,0.6)", blur: 75 },
+    { color: "rgba(180,120,220,0.6)", blur: 65 },
+    { color: "rgba(60,140,200,0.7)", blur: 70 },
   ];
-  for (const b of blobs) {
+  const lightPalette = [
+    { color: "rgba(100,60,180,0.6)", blur: 80 },
+    { color: "rgba(30,130,150,0.5)", blur: 70 },
+    { color: "rgba(180,60,100,0.4)", blur: 60 },
+    { color: "rgba(60,160,100,0.5)", blur: 75 },
+    { color: "rgba(140,80,180,0.5)", blur: 65 },
+    { color: "rgba(40,110,160,0.5)", blur: 70 },
+  ];
+  const palette = ctx.isDark ? darkPalette : lightPalette;
+  const el = createOverlay({ opacity: String(op), mixBlendMode: ctx.effectBlend, overflow: "hidden" });
+
+  // Deterministic positioning seeds
+  const positions = [
+    { w: 60, h: 50, top: 10, left: -10 },
+    { w: 50, h: 40, top: 50, right: -5 },
+    { w: 40, h: 35, bottom: 5, left: 20 },
+    { w: 55, h: 45, top: 30, right: 10 },
+    { w: 45, h: 38, bottom: 15, left: -5 },
+    { w: 50, h: 42, top: 5, left: 35 },
+  ];
+
+  for (let i = 0; i < count; i++) {
+    const p = palette[i % palette.length];
+    const pos = positions[i % positions.length];
+    const styles: Record<string, string> = {
+      position: "absolute",
+      width: `${pos.w}%`,
+      height: `${pos.h}%`,
+      background: `radial-gradient(circle,${p.color},transparent 70%)`,
+      filter: `blur(${p.blur}px)`,
+    };
+    if ("top" in pos) styles.top = `${pos.top}%`;
+    if ("bottom" in pos) styles.bottom = `${pos.bottom}%`;
+    if ("left" in pos) styles.left = `${pos.left}%`;
+    if ("right" in pos) styles.right = `${pos.right}%`;
     const div = document.createElement("div");
-    div.setCssStyles({ position: "absolute", width: b.w, height: b.h, ...b.styles, background: `radial-gradient(circle,${b.color},transparent 70%)`, filter: `blur(${b.blur})` });
+    div.setCssStyles(styles);
     el.appendChild(div);
   }
   container.appendChild(el);
@@ -84,14 +118,17 @@ function renderAurora(container: HTMLElement, params: EffectParams, ctx: EffectC
 
 function renderBokeh(container: HTMLElement, params: EffectParams, ctx: EffectContext): void {
   const op = params.opacity / 100;
+  const count = params.count ?? 16;
   const el = createOverlay({ opacity: String(op) });
   const circles: string[] = [];
-  const seed = [0.15, 0.73, 0.42, 0.88, 0.31, 0.67, 0.09, 0.56, 0.81, 0.24, 0.95, 0.38, 0.61, 0.77, 0.03, 0.49];
-  for (let i = 0; i < 16; i++) {
-    const x = Math.round(seed[i] * ctx.pageWidth);
-    const y = Math.round(seed[(i + 5) % 16] * ctx.pageHeight);
-    const size = 20 + Math.round(seed[(i + 3) % 16] * 60);
-    const alpha = 0.3 + seed[(i + 7) % 16] * 0.5;
+  // Extend seed array to support up to 40 circles
+  const baseSeed = [0.15, 0.73, 0.42, 0.88, 0.31, 0.67, 0.09, 0.56, 0.81, 0.24, 0.95, 0.38, 0.61, 0.77, 0.03, 0.49];
+  const seed = (i: number) => baseSeed[i % baseSeed.length];
+  for (let i = 0; i < count; i++) {
+    const x = Math.round(seed(i) * ctx.pageWidth);
+    const y = Math.round(seed(i + 5) * ctx.pageHeight);
+    const size = 20 + Math.round(seed(i + 3) * 60);
+    const alpha = 0.3 + seed(i + 7) * 0.5;
     circles.push(`${x}px ${y}px 0 ${size}px ${ctx.effectColor}${alpha.toFixed(2)})`);
   }
   const dot = document.createElement("div");
@@ -115,17 +152,46 @@ function renderVignette(container: HTMLElement, params: EffectParams): void {
 
 function renderLightLeak(container: HTMLElement, params: EffectParams, ctx: EffectContext): void {
   const op = params.opacity / 100;
-  const colors = ctx.isDark
-    ? ["rgba(255,180,80,0.9)", "rgba(255,120,100,0.7)"]
-    : ["rgba(200,140,50,0.7)", "rgba(200,80,60,0.5)"];
-  const el = createOverlay({ opacity: String(op), mixBlendMode: ctx.effectBlend, overflow: "hidden" });
-  const leaks: { w: string; h: string; styles: Record<string, string>; color: string; blur: string }[] = [
-    { w: "50%", h: "50%", styles: { top: "-10%", right: "-10%" }, color: colors[0], blur: "60px" },
-    { w: "40%", h: "40%", styles: { bottom: "-5%", left: "-5%" }, color: colors[1], blur: "50px" },
+  const count = params.count ?? 2;
+  const darkPalette = [
+    { color: "rgba(255,180,80,0.9)", blur: 60 },
+    { color: "rgba(255,120,100,0.7)", blur: 50 },
+    { color: "rgba(255,200,120,0.6)", blur: 55 },
+    { color: "rgba(255,150,60,0.8)", blur: 65 },
+    { color: "rgba(240,100,80,0.6)", blur: 45 },
   ];
-  for (const l of leaks) {
+  const lightPalette = [
+    { color: "rgba(200,140,50,0.7)", blur: 60 },
+    { color: "rgba(200,80,60,0.5)", blur: 50 },
+    { color: "rgba(200,160,80,0.5)", blur: 55 },
+    { color: "rgba(180,120,40,0.6)", blur: 65 },
+    { color: "rgba(190,70,50,0.4)", blur: 45 },
+  ];
+  const palette = ctx.isDark ? darkPalette : lightPalette;
+  const positions = [
+    { w: 50, h: 50, top: -10, right: -10 },
+    { w: 40, h: 40, bottom: -5, left: -5 },
+    { w: 45, h: 45, top: 20, left: -8 },
+    { w: 35, h: 35, bottom: 15, right: -8 },
+    { w: 42, h: 42, top: -5, left: 30 },
+  ];
+  const el = createOverlay({ opacity: String(op), mixBlendMode: ctx.effectBlend, overflow: "hidden" });
+  for (let i = 0; i < count; i++) {
+    const p = palette[i % palette.length];
+    const pos = positions[i % positions.length];
+    const styles: Record<string, string> = {
+      position: "absolute",
+      width: `${pos.w}%`,
+      height: `${pos.h}%`,
+      background: `radial-gradient(circle,${p.color},transparent 70%)`,
+      filter: `blur(${p.blur}px)`,
+    };
+    if ("top" in pos) styles.top = `${pos.top}%`;
+    if ("bottom" in pos) styles.bottom = `${pos.bottom}%`;
+    if ("left" in pos) styles.left = `${pos.left}%`;
+    if ("right" in pos) styles.right = `${pos.right}%`;
     const div = document.createElement("div");
-    div.setCssStyles({ position: "absolute", width: l.w, height: l.h, ...l.styles, background: `radial-gradient(circle,${l.color},transparent 70%)`, filter: `blur(${l.blur})` });
+    div.setCssStyles(styles);
     el.appendChild(div);
   }
   container.appendChild(el);
@@ -140,7 +206,7 @@ function renderScanlines(container: HTMLElement, params: EffectParams, ctx: Effe
 
 function renderNetwork(container: HTMLElement, params: EffectParams, ctx: EffectContext): void {
   const op = params.opacity / 100;
-  const cols = 10;
+  const cols = params.count ?? 10;
   const rows = Math.round(cols * ctx.pageHeight / ctx.pageWidth);
   const cellW = ctx.pageWidth / cols;
   const cellH = ctx.pageHeight / rows;

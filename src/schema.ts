@@ -88,6 +88,7 @@ export function getFieldSchema(key: string): FieldSchema | undefined {
 export interface EffectParams {
   enabled: boolean;
   opacity: number;
+  count?: number;
 }
 
 export interface EffectSchema {
@@ -96,6 +97,10 @@ export interface EffectSchema {
   defaultOpacity: number;
   min: number;
   max: number;
+  /** Count parameter — only for effects with discrete elements. */
+  defaultCount?: number;
+  countMin?: number;
+  countMax?: number;
 }
 
 /** Effect definitions — single source of truth for defaults + UI constraints. */
@@ -103,12 +108,12 @@ export const EFFECT_SCHEMAS: Record<string, EffectSchema> = {
   overlay:   { label: "遮罩",   defaultEnabled: true,  defaultOpacity: 55, min: 0,  max: 100 },
   vignette:  { label: "暗角",   defaultEnabled: false, defaultOpacity: 50, min: 0,  max: 100 },
   grain:     { label: "噪点",   defaultEnabled: false, defaultOpacity: 8,  min: 1,  max: 50 },
-  aurora:    { label: "极光",   defaultEnabled: false, defaultOpacity: 30, min: 5,  max: 80 },
-  bokeh:     { label: "散景",   defaultEnabled: false, defaultOpacity: 12, min: 1,  max: 50 },
+  aurora:    { label: "极光",   defaultEnabled: false, defaultOpacity: 30, min: 5,  max: 80, defaultCount: 3,  countMin: 2, countMax: 6 },
+  bokeh:     { label: "散景",   defaultEnabled: false, defaultOpacity: 12, min: 1,  max: 50, defaultCount: 16, countMin: 4, countMax: 40 },
   grid:      { label: "网格",   defaultEnabled: false, defaultOpacity: 6,  min: 1,  max: 30 },
-  lightLeak: { label: "漏光",   defaultEnabled: false, defaultOpacity: 25, min: 5,  max: 80 },
+  lightLeak: { label: "漏光",   defaultEnabled: false, defaultOpacity: 25, min: 5,  max: 80, defaultCount: 2,  countMin: 1, countMax: 5 },
   scanlines: { label: "扫描线", defaultEnabled: false, defaultOpacity: 8,  min: 1,  max: 30 },
-  network:   { label: "网络",   defaultEnabled: false, defaultOpacity: 15, min: 5,  max: 50 },
+  network:   { label: "网络",   defaultEnabled: false, defaultOpacity: 15, min: 5,  max: 50, defaultCount: 10, countMin: 4, countMax: 20 },
 };
 
 export const EFFECT_NAMES: string[] = Object.keys(EFFECT_SCHEMAS);
@@ -121,7 +126,11 @@ export const RENDER_DEFAULTS = {
     Object.entries(FIELD_SCHEMAS).map(([key, schema]) => [key, schema.default])
   ),
   coverEffects: Object.fromEntries(
-    Object.entries(EFFECT_SCHEMAS).map(([name, s]) => [name, { enabled: s.defaultEnabled, opacity: s.defaultOpacity }])
+    Object.entries(EFFECT_SCHEMAS).map(([name, s]) => [name, {
+      enabled: s.defaultEnabled,
+      opacity: s.defaultOpacity,
+      ...(s.defaultCount != null ? { count: s.defaultCount } : {}),
+    }])
   ) as Record<string, EffectParams>,
 } as {
   // Explicit type for TS inference (Object.fromEntries loses key types)
@@ -206,10 +215,16 @@ function validateCoverEffects(raw: Record<string, unknown>): Record<string, Effe
     const opacity = typeof v.opacity === "number"
       ? Math.max(schema.min, Math.min(schema.max, v.opacity))
       : schema.defaultOpacity;
-    result[name] = {
+    const params: EffectParams = {
       enabled: typeof v.enabled === "boolean" ? v.enabled : schema.defaultEnabled,
       opacity,
     };
+    if (schema.defaultCount != null) {
+      params.count = typeof v.count === "number"
+        ? Math.max(schema.countMin!, Math.min(schema.countMax!, Math.round(v.count)))
+        : schema.defaultCount;
+    }
+    result[name] = params;
   }
   return result;
 }

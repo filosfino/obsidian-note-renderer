@@ -590,6 +590,15 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
         const updated = { ...eff, [name]: { ...eff[name], opacity: val } };
         return host.updateSetting("coverEffects", updated);
       });
+    if (meta.defaultCount != null) {
+      makeField(host, row, "数量", String(params?.count ?? meta.defaultCount),
+        { min: meta.countMin!, max: meta.countMax! },
+        (val) => {
+          const eff = host.effective.coverEffects ?? effects;
+          const updated = { ...eff, [name]: { ...eff[name], count: val } };
+          return host.updateSetting("coverEffects", updated);
+        });
+    }
     // Wire chip toggle to show/hide this row
     const chips = effectChips.querySelectorAll(".nr-chip");
     for (const chip of chips) {
