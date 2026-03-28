@@ -1,7 +1,7 @@
 {
   "id": "note-renderer",
   "name": "Note Renderer",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "minAppVersion": "1.0.0",
   "description": "Render markdown notes into paginated images optimized for Xiaohongshu.",
   "author": "filosfino",
