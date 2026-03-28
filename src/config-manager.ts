@@ -12,6 +12,7 @@ import {
   INTERNAL_TO_NOTE_KEY,
   extractRenderOptions,
   toNoteConfigKeys,
+  getFieldSchema,
   type RenderOptions,
   type RenderKey,
   type EffectParams,
@@ -84,7 +85,13 @@ export function updateNoteConfigKey(
   if (!noteConfig) return markdown;
 
   const noteKey = (INTERNAL_TO_NOTE_KEY as Record<string, string>)[key] || key;
-  noteConfig[noteKey] = value;
+  // Convert internal value to display value for note storage
+  const schema = getFieldSchema(key);
+  if (schema?.type === "number" && schema.toDisplay && typeof value === "number") {
+    noteConfig[noteKey] = parseFloat(schema.toDisplay(value));
+  } else {
+    noteConfig[noteKey] = value;
+  }
 
   const configSection = buildConfigSection(noteConfig);
   return insertConfigSection(removeConfigSection(markdown), configSection);

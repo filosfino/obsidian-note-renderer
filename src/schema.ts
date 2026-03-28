@@ -22,6 +22,7 @@ interface NumericField {
   max: number;
   step?: number;       // default 1
   unit?: string;       // display unit: "%", "px", "em"
+  description?: string;
   /** Transform internal value → display string. Default: String() */
   toDisplay?: (v: number) => string;
   /** Transform display string → internal value. Default: parseFloat() */
@@ -32,50 +33,78 @@ interface StringField {
   type: "string";
   default: string;
   enum?: readonly string[];  // constrained to these values
+  description?: string;
 }
 
 interface BooleanField {
   type: "boolean";
   default: boolean;
+  description?: string;
 }
 
 export type FieldSchema = NumericField | StringField | BooleanField;
 
 // ── Field schema definitions ────────────────────────────────────────────────
 
+export const BUILTIN_THEMES = [
+  "paper", "graphite", "ink-gold", "amber", "cream", "latte", "sage", "mist", "rose",
+] as const;
+
 export const FIELD_SCHEMAS = {
   // ── Basic ──
-  activeTheme:       { type: "string",  default: "cream" } as StringField,
-  fontSize:          { type: "number",  default: 42, min: 24, max: 72, step: 2, unit: "px" } as NumericField,
-  fontFamily:        { type: "string",  default: '"PingFang SC", "Noto Sans SC", sans-serif' } as StringField,
-  pageMode:          { type: "string",  default: "long", enum: ["long", "card"] as const } as StringField,
+  activeTheme:       { type: "string",  default: "cream", enum: BUILTIN_THEMES,
+                       description: "配色主题。浅色：paper / cream / latte / sage / mist / rose；深色：graphite / ink-gold / amber。也可填自定义主题文件名（不含 .css）" } as StringField,
+  fontSize:          { type: "number",  default: 42, min: 24, max: 72, step: 2, unit: "px",
+                       description: "正文字号" } as NumericField,
+  fontFamily:        { type: "string",  default: '"PingFang SC", "Noto Sans SC", sans-serif',
+                       description: "正文字体族，CSS font-family 格式" } as StringField,
+  pageMode:          { type: "string",  default: "long", enum: ["long", "card"] as const,
+                       description: "页面比例：long = 3:5，card = 3:4" } as StringField,
 
   // ── Cover text ──
-  coverFontFamily:   { type: "string",  default: '"Yuanti SC", "PingFang SC", sans-serif' } as StringField,
-  coverFontColor:    { type: "string",  default: "" } as StringField,
-  coverFontScale:    { type: "number",  default: 100, min: 50, max: 300, step: 10, unit: "%" } as NumericField,
-  coverFontWeight:   { type: "number",  default: 800, min: 100, max: 900, step: 100 } as NumericField,
-  coverLetterSpacing:{ type: "number",  default: 5, min: -5, max: 30 } as NumericField,
-  coverLineHeight:   { type: "number",  default: 13, min: 8, max: 25, step: 1,
-                       toDisplay: (v: number) => (v / 10).toFixed(1),
-                       fromDisplay: (v: string) => Math.round(parseFloat(v) * 10),
+  coverFontFamily:   { type: "string",  default: '"Yuanti SC", "PingFang SC", sans-serif',
+                       description: "封面标题字体族" } as StringField,
+  coverFontColor:    { type: "string",  default: "",
+                       description: "封面标题颜色，留空则跟随主题；支持任意 CSS 颜色值" } as StringField,
+  coverFontScale:    { type: "number",  default: 100, min: 50, max: 300, step: 10, unit: "%",
+                       description: "封面标题字号缩放比例" } as NumericField,
+  coverFontWeight:   { type: "number",  default: 800, min: 100, max: 900, step: 100,
+                       description: "封面标题字重（100 最细，900 最粗）" } as NumericField,
+  coverLetterSpacing:{ type: "number",  default: 5, min: -5, max: 30,
+                       description: "封面标题字间距（px）" } as NumericField,
+  coverLineHeight:   { type: "number",  default: 1.3, min: 0.8, max: 2.5, step: 0.1,
+                       description: "封面标题行高倍数",
                      } as NumericField,
-  coverTextAlign:    { type: "string",  default: "left", enum: ["left", "center", "right"] as const } as StringField,
-  coverOffsetX:      { type: "number",  default: 0, min: -50, max: 50, unit: "%" } as NumericField,
-  coverOffsetY:      { type: "number",  default: 0, min: -50, max: 50, unit: "%" } as NumericField,
+  coverTextAlign:    { type: "string",  default: "left", enum: ["left", "center", "right"] as const,
+                       description: "封面标题对齐方式" } as StringField,
+  coverOffsetX:      { type: "number",  default: 0, min: -50, max: 50, unit: "%",
+                       description: "封面标题水平偏移" } as NumericField,
+  coverOffsetY:      { type: "number",  default: 0, min: -50, max: 50, unit: "%",
+                       description: "封面标题垂直偏移" } as NumericField,
 
   // ── Cover text effects ──
-  coverStrokeStyle:  { type: "string",  default: "stroke", enum: ["none", "stroke", "double", "shadow", "glow"] as const } as StringField,
-  coverStrokePercent:{ type: "number",  default: 20, min: 0, max: 100 } as NumericField,
-  coverStrokeOpacity:{ type: "number",  default: 90, min: 0, max: 100 } as NumericField,
-  coverGlowSize:     { type: "number",  default: 60, min: 0, max: 200 } as NumericField,
-  coverShadow:       { type: "boolean", default: true } as BooleanField,
-  coverShadowBlur:   { type: "number",  default: 16, min: 0, max: 200 } as NumericField,
-  coverShadowOffsetX:{ type: "number",  default: 0, min: -100, max: 100 } as NumericField,
-  coverShadowOffsetY:{ type: "number",  default: 4, min: -100, max: 100 } as NumericField,
-  coverBanner:       { type: "boolean", default: false } as BooleanField,
-  coverBannerColor:  { type: "string",  default: "rgba(0,0,0,0.5)" } as StringField,
-  coverBannerSkew:   { type: "number",  default: 6, min: 0, max: 20 } as NumericField,
+  coverStrokeStyle:  { type: "string",  default: "stroke", enum: ["none", "stroke", "double", "shadow", "glow"] as const,
+                       description: "封面标题描边样式" } as StringField,
+  coverStrokePercent:{ type: "number",  default: 20, min: 0, max: 100,
+                       description: "描边粗细（相对于字号的百分比）" } as NumericField,
+  coverStrokeOpacity:{ type: "number",  default: 90, min: 0, max: 100,
+                       description: "描边不透明度" } as NumericField,
+  coverGlowSize:     { type: "number",  default: 60, min: 0, max: 200,
+                       description: "发光效果半径（仅 glow 样式生效）" } as NumericField,
+  coverShadow:       { type: "boolean", default: true,
+                       description: "封面标题是否显示投影" } as BooleanField,
+  coverShadowBlur:   { type: "number",  default: 16, min: 0, max: 200,
+                       description: "标题投影模糊半径" } as NumericField,
+  coverShadowOffsetX:{ type: "number",  default: 0, min: -100, max: 100,
+                       description: "标题投影水平偏移" } as NumericField,
+  coverShadowOffsetY:{ type: "number",  default: 4, min: -100, max: 100,
+                       description: "标题投影垂直偏移" } as NumericField,
+  coverBanner:       { type: "boolean", default: false,
+                       description: "封面是否显示斜条 banner 装饰" } as BooleanField,
+  coverBannerColor:  { type: "string",  default: "rgba(0,0,0,0.5)",
+                       description: "banner 颜色，支持 CSS 颜色值含 rgba" } as StringField,
+  coverBannerSkew:   { type: "number",  default: 6, min: 0, max: 20,
+                       description: "banner 倾斜角度（度）" } as NumericField,
 } as const satisfies Record<string, FieldSchema>;
 
 /** Lookup field schema by key. Returns undefined for unknown keys. */
@@ -93,6 +122,7 @@ export interface EffectParams {
 
 export interface EffectSchema {
   label: string;
+  description?: string;
   defaultEnabled: boolean;
   defaultOpacity: number;
   min: number;
@@ -103,17 +133,26 @@ export interface EffectSchema {
   countMax?: number;
 }
 
-/** Effect definitions — single source of truth for defaults + UI constraints. */
+/** Effect definitions — single source of truth for defaults + UI constraints. 仅作用于封面页。 */
 export const EFFECT_SCHEMAS: Record<string, EffectSchema> = {
-  overlay:   { label: "遮罩",   defaultEnabled: true,  defaultOpacity: 55, min: 0,  max: 100 },
-  vignette:  { label: "暗角",   defaultEnabled: false, defaultOpacity: 50, min: 0,  max: 100 },
-  grain:     { label: "噪点",   defaultEnabled: false, defaultOpacity: 8,  min: 1,  max: 50 },
-  aurora:    { label: "极光",   defaultEnabled: false, defaultOpacity: 30, min: 5,  max: 80, defaultCount: 3,  countMin: 2, countMax: 6 },
-  bokeh:     { label: "散景",   defaultEnabled: false, defaultOpacity: 12, min: 1,  max: 50, defaultCount: 16, countMin: 4, countMax: 40 },
-  grid:      { label: "网格",   defaultEnabled: false, defaultOpacity: 6,  min: 1,  max: 30 },
-  lightLeak: { label: "漏光",   defaultEnabled: false, defaultOpacity: 25, min: 5,  max: 80, defaultCount: 2,  countMin: 1, countMax: 5 },
-  scanlines: { label: "扫描线", defaultEnabled: false, defaultOpacity: 8,  min: 1,  max: 30 },
-  network:   { label: "网络",   defaultEnabled: false, defaultOpacity: 15, min: 5,  max: 50, defaultCount: 10, countMin: 4, countMax: 20 },
+  overlay:   { label: "遮罩",   description: "封面特效。纯色半透明遮罩，压暗背景突出文字",
+               defaultEnabled: true,  defaultOpacity: 55, min: 0,  max: 100 },
+  vignette:  { label: "暗角",   description: "封面特效。四角渐暗，模拟镜头暗角",
+               defaultEnabled: false, defaultOpacity: 50, min: 0,  max: 100 },
+  grain:     { label: "噪点",   description: "封面特效。胶片颗粒质感",
+               defaultEnabled: false, defaultOpacity: 8,  min: 1,  max: 50 },
+  aurora:    { label: "极光",   description: "封面特效。彩色光带，count 控制光带数量",
+               defaultEnabled: false, defaultOpacity: 30, min: 5,  max: 80, defaultCount: 3,  countMin: 2, countMax: 6 },
+  bokeh:     { label: "散景",   description: "封面特效。虚化光斑，count 控制光斑数量",
+               defaultEnabled: false, defaultOpacity: 12, min: 1,  max: 50, defaultCount: 16, countMin: 4, countMax: 40 },
+  grid:      { label: "网格",   description: "封面特效。细线网格纹理",
+               defaultEnabled: false, defaultOpacity: 6,  min: 1,  max: 30 },
+  lightLeak: { label: "漏光",   description: "封面特效。模拟胶片漏光，count 控制漏光区域数",
+               defaultEnabled: false, defaultOpacity: 25, min: 5,  max: 80, defaultCount: 2,  countMin: 1, countMax: 5 },
+  scanlines: { label: "扫描线", description: "封面特效。水平扫描线，CRT 显示器风格",
+               defaultEnabled: false, defaultOpacity: 8,  min: 1,  max: 30 },
+  network:   { label: "网络",   description: "封面特效。随机连线节点图案，count 控制节点数",
+               defaultEnabled: false, defaultOpacity: 15, min: 5,  max: 50, defaultCount: 10, countMin: 4, countMax: 20 },
 };
 
 export const EFFECT_NAMES: string[] = Object.keys(EFFECT_SCHEMAS);
@@ -185,9 +224,10 @@ export function validateNoteConfig(raw: Record<string, unknown>): Partial<Render
     if (!schema) continue;
     if (typeof value !== schema.type) continue;
 
-    // Clamp numeric values to schema range
+    // Clamp numeric values to schema range; apply fromDisplay if present (user writes display value)
     if (schema.type === "number" && typeof value === "number") {
-      result[canonicalKey] = clampToSchema(value, schema);
+      const internal = schema.fromDisplay ? schema.fromDisplay(String(value)) : value;
+      result[canonicalKey] = clampToSchema(internal, schema);
     } else if (schema.type === "string" && schema.enum && typeof value === "string") {
       // Validate enum values
       if (schema.enum.includes(value)) {
@@ -254,7 +294,13 @@ export function toNoteConfigKeys(config: Record<string, unknown>): Record<string
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(config)) {
     const noteKey = (INTERNAL_TO_NOTE_KEY as Record<string, string>)[key] || key;
-    result[noteKey] = value;
+    // Convert internal values to display values for note storage
+    const schema = getFieldSchema(key);
+    if (schema?.type === "number" && schema.toDisplay && typeof value === "number") {
+      result[noteKey] = parseFloat(schema.toDisplay(value));
+    } else {
+      result[noteKey] = value;
+    }
   }
   return result;
 }

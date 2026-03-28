@@ -120,7 +120,7 @@ ${coverColorCss}
     strokePercent,
     fontScale: options.coverFontScale ?? 100,
     letterSpacing: options.coverLetterSpacing ?? 5,
-    lineHeight: options.coverLineHeight ?? 13,
+    lineHeight: options.coverLineHeight ?? 1.3,
   };
   let coverPage: HTMLElement;
   if (structure.coverMarkdown) {
@@ -349,7 +349,7 @@ function autosizeCoverText(container: HTMLElement, opts: CoverTextOptions): void
     htmlEl.setCssStyles({
       fontSize: `${scaledSize}px`,
       fontWeight: "800",
-      lineHeight: String(lineHeight / 10),
+      lineHeight: String(lineHeight),
       letterSpacing: `${letterSpacing / 100}em`,
     });
 
@@ -361,9 +361,11 @@ function autosizeCoverText(container: HTMLElement, opts: CoverTextOptions): void
   }
 }
 
-function createPageDiv(extraClass: string, css: string, _pageHeight: number): HTMLElement {
+function createPageDiv(extraClass: string, css: string, pageHeight: number): HTMLElement {
   const pageDiv = document.createElement("div");
   pageDiv.classList.add("nr-page", extraClass);
+  pageDiv.style.width = `${PAGE_WIDTH}px`;
+  pageDiv.style.height = `${pageHeight}px`;
 
   pageDiv.createEl("style", { text: css });
 
@@ -418,6 +420,8 @@ async function renderBodyPages(
 
     if (page.isFullPage) {
       pageDiv.classList.add("nr-page", "nr-page-full");
+      pageDiv.style.width = `${PAGE_WIDTH}px`;
+      pageDiv.style.height = `${pageHeight}px`;
 
       pageDiv.createEl("style", { text: css });
 
@@ -433,6 +437,8 @@ async function renderBodyPages(
       }
     } else {
       pageDiv.classList.add("nr-page", "nr-page-body");
+      pageDiv.style.width = `${PAGE_WIDTH}px`;
+      pageDiv.style.height = `${pageHeight}px`;
 
       pageDiv.createEl("style", { text: css });
 

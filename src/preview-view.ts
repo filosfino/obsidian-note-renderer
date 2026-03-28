@@ -300,12 +300,25 @@ export class PreviewView extends ItemView implements PanelHost {
     setFontSelectValue(r.coverFontSelect, s.coverFontFamily);
     r.scaleInput.value = String(s.coverFontScale);
     r.lsInput.value = String(s.coverLetterSpacing);
-    r.lhInput.value = (s.coverLineHeight / 10).toFixed(1);
+    r.lhInput.value = String(s.coverLineHeight);
     r.strokeStyleSelect.value = s.coverStrokeStyle;
     r.strokeInput.value = String(s.coverStrokePercent);
     r.opInput.value = String(s.coverStrokeOpacity);
     r.glowInput.value = String(s.coverGlowSize);
     r.overlayToggle.classList.toggle("active", s.coverEffects?.overlay?.enabled ?? false);
+    // Sync all effect chips, param rows, and input values
+    for (const [name, chip] of Object.entries(r.effectChips)) {
+      const params = s.coverEffects?.[name];
+      const enabled = params?.enabled ?? false;
+      chip.classList.toggle("active", enabled);
+      const row = r.effectParamRows[name];
+      if (row) {
+        row.classList.toggle("nr-hidden", !enabled);
+        const inputs = row.querySelectorAll<HTMLInputElement>(".nr-field-input");
+        if (inputs[0] && params?.opacity != null) inputs[0].value = String(params.opacity);
+        if (inputs[1] && params?.count != null) inputs[1].value = String(params.count);
+      }
+    }
     r.oxInput.value = String(s.coverOffsetX);
     r.oyInput.value = String(s.coverOffsetY);
     r.shadowToggle.classList.toggle("active", s.coverShadow);
@@ -468,7 +481,7 @@ export class PreviewView extends ItemView implements PanelHost {
     const file = this.app.workspace.getActiveFile();
     const baseName = file ? file.basename : "note";
     const theme = this.plugin.settings.activeTheme;
-    const mode = this.plugin.settings.pageMode === "card" ? "3-4" : "3-5";
+    const mode = this.effectivePageMode === "card" ? "3-4" : "3-5";
     const zipName = `${baseName}_${theme}_${mode}`;
 
     new Notice("Exporting...");

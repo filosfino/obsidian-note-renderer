@@ -56,6 +56,7 @@ export interface PanelRefs {
   bannerParamsRow: HTMLElement;
   shadowParamsRow: HTMLElement;
   alignBtns: { left: HTMLElement; center: HTMLElement; right: HTMLElement };
+  effectChips: Record<string, HTMLElement>;
   effectParamRows: Record<string, HTMLElement>;
   saveToNoteBtn: HTMLElement;
   removeFromNoteBtn: HTMLElement;
@@ -375,7 +376,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     (val) => host.updateSetting("coverLetterSpacing", val));
 
   const lhSchema = schemaOpts("coverLineHeight");
-  const lhInput = makeField(host, styleRow, "行高", FIELD_SCHEMAS.coverLineHeight.toDisplay!(host.plugin.settings.coverLineHeight),
+  const lhInput = makeField(host, styleRow, "行高", String(host.plugin.settings.coverLineHeight),
     lhSchema,
     (val) => host.updateSetting("coverLineHeight", val));
 
@@ -565,8 +566,10 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
 
   // Build effect chips from registry
   let overlayToggle: HTMLElement = null!;
+  const effectChipMap: Record<string, HTMLElement> = {};
   for (const [name, meta] of Object.entries(EFFECT_SCHEMAS)) {
     const chip = chipToggle(effectChips, meta.label, name, effects[name]?.enabled ?? false);
+    effectChipMap[name] = chip;
     if (name === "overlay") overlayToggle = chip;
   }
 
@@ -744,6 +747,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     bannerParamsRow,
     shadowParamsRow,
     alignBtns: alignBtns as { left: HTMLElement; center: HTMLElement; right: HTMLElement },
+    effectChips: effectChipMap,
     effectParamRows,
     saveToNoteBtn,
     removeFromNoteBtn,
