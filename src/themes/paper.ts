@@ -22,18 +22,6 @@ export const THEME_PAPER = `
   position: relative;
 }
 
-/* Decorative accent bar */
-.nr-cover-content::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 15%;
-  width: 6px;
-  height: 80px;
-  background: #1a1a1a;
-  border-radius: 3px;
-}
-
 .nr-cover-content h1 {
   font-size: 72px;
   font-weight: 800;
@@ -77,9 +65,6 @@ export const THEME_PAPER = `
   -webkit-text-stroke: var(--nr-stroke-width, 6px) rgba(0,0,0,0.7);
   paint-order: stroke fill;
   text-shadow: 0 4px 16px rgba(0,0,0,0.5);
-}
-.nr-cover-has-image .nr-cover-content::before {
-  background: #fff;
 }
 .nr-cover-has-image .nr-cover-content mark {
   background: linear-gradient(to top, rgba(255,255,255,0.35) 35%, transparent 35%);

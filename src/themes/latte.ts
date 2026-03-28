@@ -31,18 +31,6 @@ export const THEME_LATTE = `
   position: relative;
 }
 
-/* Decorative accent bar */
-.nr-cover-content::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 15%;
-  width: 6px;
-  height: 80px;
-  background: #a17453;
-  border-radius: 3px;
-}
-
 .nr-cover-content h1 {
   font-size: 68px;
   font-weight: 800;
@@ -86,9 +74,6 @@ export const THEME_LATTE = `
   -webkit-text-stroke: var(--nr-stroke-width, 6px) rgba(0,0,0,0.7);
   paint-order: stroke fill;
   text-shadow: 0 4px 16px rgba(0,0,0,0.5);
-}
-.nr-cover-has-image .nr-cover-content::before {
-  background: #fff;
 }
 .nr-cover-has-image .nr-cover-content mark {
   background: linear-gradient(to top, rgba(255,255,255,0.35) 35%, transparent 35%);

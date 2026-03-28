@@ -23,18 +23,6 @@ export const THEME_GRAPHITE = `
   position: relative;
 }
 
-/* Decorative accent bar */
-.nr-cover-content::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 15%;
-  width: 6px;
-  height: 80px;
-  background: #fff;
-  border-radius: 3px;
-}
-
 .nr-cover-content h1 {
   font-size: 72px;
   font-weight: 800;
@@ -78,9 +66,6 @@ export const THEME_GRAPHITE = `
   -webkit-text-stroke: var(--nr-stroke-width, 6px) rgba(0,0,0,0.8);
   paint-order: stroke fill;
   text-shadow: 0 4px 16px rgba(0,0,0,0.6);
-}
-.nr-cover-has-image .nr-cover-content::before {
-  background: #fff;
 }
 .nr-cover-has-image .nr-cover-content mark {
   background: linear-gradient(to top, rgba(255,255,255,0.3) 35%, transparent 35%);
