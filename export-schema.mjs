@@ -30,13 +30,30 @@ const mod = { exports: {} };
 new Function("module", "exports", code)(mod, mod.exports);
 const exported = mod.exports;
 
-// ── Strip non-serialisable fields & write ──────────────────────────────────
+// ── Note-facing key mapping ─────────────────────────────────────────────────
+
+const INTERNAL_TO_NOTE = exported.INTERNAL_TO_NOTE_KEY || {};
+
+function noteKey(internalKey) {
+  return INTERNAL_TO_NOTE[internalKey] || internalKey;
+}
+
+// ── Strip non-serialisable fields, use note-facing keys, convert display values
 
 function cleanFieldSchemas(raw) {
   const out = {};
   for (const [key, schema] of Object.entries(raw)) {
     const { toDisplay, fromDisplay, ...rest } = schema;
-    out[key] = rest;
+    // Convert numeric min/max/default to display values when toDisplay exists
+    if (toDisplay && rest.type === "number") {
+      rest.default = parseFloat(toDisplay(rest.default));
+      rest.min = parseFloat(toDisplay(rest.min));
+      rest.max = parseFloat(toDisplay(rest.max));
+      if (rest.step != null) {
+        rest.step = parseFloat(toDisplay(rest.step));
+      }
+    }
+    out[noteKey(key)] = rest;
   }
   return out;
 }
@@ -45,10 +62,13 @@ const output = {
   fieldSchemas: cleanFieldSchemas(exported.FIELD_SCHEMAS),
   effectSchemas: exported.EFFECT_SCHEMAS,
   defaults: (() => {
-    // Reconstruct defaults without functions
     const defaults = {};
     for (const [key, schema] of Object.entries(exported.FIELD_SCHEMAS)) {
-      defaults[key] = schema.default;
+      // Defaults use display values when toDisplay exists
+      const val = schema.toDisplay
+        ? parseFloat(schema.toDisplay(schema.default))
+        : schema.default;
+      defaults[noteKey(key)] = val;
     }
     defaults.coverEffects = {};
     for (const [name, s] of Object.entries(exported.EFFECT_SCHEMAS)) {

@@ -3,6 +3,7 @@ import type { App } from "obsidian";
 import { FIELD_SCHEMAS, EFFECT_SCHEMAS, RENDER_DEFAULTS, getFieldSchema } from "./schema";
 import { InputModal, ConfirmModal, FontManagerModal } from "./modals";
 import { getCoverFontList, getBodyFontList, type FontEntry } from "./fonts";
+import { extractCoverTitleColor } from "./effects";
 import { PRESET_KEYS } from "./main";
 import type NoteRendererPlugin from "./main";
 import type { NoteRendererSettings } from "./main";
@@ -58,6 +59,7 @@ export interface PanelRefs {
   alignBtns: { left: HTMLElement; center: HTMLElement; right: HTMLElement };
   effectChips: Record<string, HTMLElement>;
   effectParamRows: Record<string, HTMLElement>;
+  coverColorInput: HTMLInputElement;
   saveToNoteBtn: HTMLElement;
   removeFromNoteBtn: HTMLElement;
   coverSection: HTMLElement;
@@ -341,7 +343,14 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   styleRow.createEl("span", { cls: "nr-row-label", text: "样式" });
 
   const colorInput = styleRow.createEl("input", { cls: "nr-color-dot", type: "color" });
-  colorInput.value = host.plugin.settings.coverFontColor || "#e07c5a";
+  // Resolve display color: saved value → theme default → fallback
+  const resolveThemeColor = async (): Promise<string> => {
+    const css = await host.plugin.loadTheme(host.plugin.settings.activeTheme);
+    return extractCoverTitleColor(css) || "#e07c5a";
+  };
+  void resolveThemeColor().then(c => {
+    colorInput.value = host.plugin.settings.coverFontColor || c;
+  });
   colorInput.title = "封面文字颜色（双击重置为主题默认）";
   colorInput.addEventListener("input", () => {
     void host.updateSetting("coverFontColor", colorInput.value);
@@ -349,8 +358,10 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   colorInput.addEventListener("dblclick", (e) => {
     e.preventDefault();
     if (host.syncing) return;
-    colorInput.value = "#e07c5a";
-    void host.updateSetting("coverFontColor", "");
+    void resolveThemeColor().then(c => {
+      colorInput.value = c;
+      void host.updateSetting("coverFontColor", "");
+    });
   });
 
   const weightSelect = styleRow.createEl("select", { cls: "dropdown nr-dropdown-narrow" });
@@ -749,6 +760,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     alignBtns: alignBtns as { left: HTMLElement; center: HTMLElement; right: HTMLElement },
     effectChips: effectChipMap,
     effectParamRows,
+    coverColorInput: colorInput,
     saveToNoteBtn,
     removeFromNoteBtn,
     coverSection,

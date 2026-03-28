@@ -1,6 +1,6 @@
 import { App, Component, sanitizeHTMLToDom } from "obsidian";
 import { PAGE_WIDTH, CONTENT_WIDTH, PAGE_PADDING_H, PAGE_PADDING_TOP, PAGE_PADDING_BOTTOM, PAGE_HEIGHTS, getContentHeight, type PageMode } from "./constants";
-import { applyCoverEffects } from "./effects";
+import { applyCoverEffects, extractCoverTitleColor } from "./effects";
 import { paginateBody } from "./paginator";
 import { parseNoteStructure } from "./parser";
 import { renderMarkdownToHtml, createVaultImageResolver } from "./md-to-html";
@@ -31,6 +31,7 @@ export async function renderNote(
 
   const coverFont = options.coverFontFamily || options.fontFamily;
   const coverColor = options.coverFontColor || "";
+  const themeTitleColor = extractCoverTitleColor(themeCss) || "#e8c36a";
 
   // Build full CSS: theme + font overrides
   const coverColorCss = coverColor ? `
@@ -141,10 +142,10 @@ ${coverColorCss}
       const htmlEl = el as HTMLElement;
       const fs = parseInt(htmlEl.style.fontSize) || 120;
       const sw = Math.max(1, Math.round(fs * strokePercent));
-      const accentColor = htmlEl.style.color || "#e8c36a";
+      const accentColor = htmlEl.style.color || coverColor || themeTitleColor;
 
       const hasInlineColor = htmlEl.style.color && htmlEl.style.color !== "";
-      const textColor = coverColor || "#fff";
+      const textColor = coverColor || themeTitleColor;
       let css = hasInlineColor ? ";" : `; color: ${textColor} !important;`;
       const strokeAlpha = (options.coverStrokeOpacity ?? 90) / 100;
       const glowMul = (options.coverGlowSize ?? 60) / 100;

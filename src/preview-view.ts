@@ -8,6 +8,7 @@ import {
 import { VIEW_TYPE, PAGE_WIDTH, PAGE_HEIGHTS } from "./constants";
 import { renderNote, RenderedPages } from "./renderer";
 import { exportPages, exportSinglePage } from "./exporter";
+import { extractCoverTitleColor } from "./effects";
 import {
   readNoteConfig,
   mergeConfigs,
@@ -298,6 +299,10 @@ export class PreviewView extends ItemView implements PanelHost {
     // Use helper to handle fonts not in the dropdown (e.g. from old presets)
     setFontSelectValue(r.fontSelect, s.fontFamily);
     setFontSelectValue(r.coverFontSelect, s.coverFontFamily);
+    // Sync cover color: saved value → theme default
+    void this.plugin.loadTheme(s.activeTheme).then(css => {
+      r.coverColorInput.value = s.coverFontColor || extractCoverTitleColor(css) || "#e07c5a";
+    });
     r.scaleInput.value = String(s.coverFontScale);
     r.lsInput.value = String(s.coverLetterSpacing);
     r.lhInput.value = String(s.coverLineHeight);

@@ -36,17 +36,17 @@ export const THEME_ROSE = `
   font-weight: 800;
   line-height: 1.3;
   margin: 0;
-  color: #965454;
+  color: #884040;
 }
 
 .nr-cover-content p {
   margin: 12px 0;
-  color: #965454;
+  color: #884040;
 }
 
 /* Cover emphasis: marker highlight — bottom-half stripe */
 .nr-cover-content mark {
-  background: linear-gradient(to top, rgba(150,84,84,0.20) 35%, transparent 35%);
+  background: linear-gradient(to top, rgba(136,64,64,0.20) 35%, transparent 35%);
   padding: 0 4px;
   color: inherit;
 }
@@ -54,7 +54,7 @@ export const THEME_ROSE = `
 /* Cover emphasis: hand-drawn underline */
 .nr-cover-content u {
   text-decoration: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 12'%3E%3Cpath d='M2 8 Q30 2 50 7 T100 6 T150 8 T198 5' fill='none' stroke='%23965454' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 12'%3E%3Cpath d='M2 8 Q30 2 50 7 T100 6 T150 8 T198 5' fill='none' stroke='%23884040' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E");
   background-repeat: repeat-x;
   background-position: bottom;
   background-size: 200px 12px;

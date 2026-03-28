@@ -283,6 +283,12 @@ const EFFECT_RENDERERS: Record<string, EffectRenderer> = {
 /**
  * Detect theme brightness from CSS background color.
  */
+/** Extract the cover title color from theme CSS (`.nr-cover-content h1 { color: ... }`). */
+export function extractCoverTitleColor(themeCss: string): string {
+  const m = themeCss.match(/\.nr-cover-content\s+h1\s*\{[^}]*color:\s*(#[0-9a-fA-F]{3,6})/);
+  return m?.[1] ?? "";
+}
+
 export function detectThemeBrightness(themeCss: string): boolean {
   const bgMatch = themeCss.match(/\.nr-page\s*\{[^}]*background:\s*#([0-9a-fA-F]{3,6})/);
   if (!bgMatch) return true; // default assume dark

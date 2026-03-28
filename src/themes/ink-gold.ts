@@ -19,7 +19,7 @@ export const THEME_INK_GOLD = `
   background:
     radial-gradient(circle at 20% 80%, rgba(255,255,255,0.02) 0%, transparent 50%),
     radial-gradient(circle at 80% 20%, rgba(255,255,255,0.02) 0%, transparent 50%),
-    #333;
+    #2a2a2a;
   border: 1px solid #555;
 }
 
@@ -37,17 +37,17 @@ export const THEME_INK_GOLD = `
   font-weight: 800;
   line-height: 1.3;
   margin: 0;
-  color: #e8c36a;
+  color: #f5d040;
 }
 
 .nr-cover-content p {
   margin: 8px 0;
-  color: #e8c36a;
+  color: #f5d040;
 }
 
 /* Cover emphasis: marker highlight — bottom-half stripe */
 .nr-cover-content mark {
-  background: linear-gradient(to top, rgba(232,195,106,0.25) 35%, transparent 35%);
+  background: linear-gradient(to top, rgba(245,208,64,0.25) 35%, transparent 35%);
   padding: 0 4px;
   color: inherit;
 }
@@ -55,7 +55,7 @@ export const THEME_INK_GOLD = `
 /* Cover emphasis: hand-drawn underline */
 .nr-cover-content u {
   text-decoration: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 12'%3E%3Cpath d='M2 8 Q30 2 50 7 T100 6 T150 8 T198 5' fill='none' stroke='%23e8c36a' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 12'%3E%3Cpath d='M2 8 Q30 2 50 7 T100 6 T150 8 T198 5' fill='none' stroke='%23f5d040' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E");
   background-repeat: repeat-x;
   background-position: bottom;
   background-size: 200px 12px;

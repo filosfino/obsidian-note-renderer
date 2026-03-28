@@ -36,17 +36,17 @@ export const THEME_LATTE = `
   font-weight: 800;
   line-height: 1.3;
   margin: 0;
-  color: #a17453;
+  color: #6d4a2e;
 }
 
 .nr-cover-content p {
   margin: 12px 0;
-  color: #a17453;
+  color: #6d4a2e;
 }
 
 /* Cover emphasis: marker highlight — bottom-half stripe */
 .nr-cover-content mark {
-  background: linear-gradient(to top, rgba(161,116,83,0.20) 35%, transparent 35%);
+  background: linear-gradient(to top, rgba(109,74,46,0.20) 35%, transparent 35%);
   padding: 0 4px;
   color: inherit;
 }
@@ -54,7 +54,7 @@ export const THEME_LATTE = `
 /* Cover emphasis: hand-drawn underline */
 .nr-cover-content u {
   text-decoration: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 12'%3E%3Cpath d='M2 8 Q30 2 50 7 T100 6 T150 8 T198 5' fill='none' stroke='%23a17453' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 12'%3E%3Cpath d='M2 8 Q30 2 50 7 T100 6 T150 8 T198 5' fill='none' stroke='%236d4a2e' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E");
   background-repeat: repeat-x;
   background-position: bottom;
   background-size: 200px 12px;
