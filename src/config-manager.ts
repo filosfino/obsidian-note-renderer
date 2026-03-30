@@ -12,16 +12,24 @@ import {
   INTERNAL_TO_NOTE_KEY,
   withRendererConfigVersion,
   extractRenderOptions,
+  buildCoverConfig,
   toNoteConfigKeys,
   getFieldSchema,
   type RenderOptions,
   type RenderKey,
   type EffectParams,
+  type CoverConfig,
 } from "./schema";
 
 import { parseRendererConfig } from "./parser";
 
 import type { NoteRendererSettings } from "./main";
+
+export interface ResolvedRenderConfig {
+  settings: NoteRendererSettings;
+  options: RenderOptions;
+  cover: CoverConfig;
+}
 
 // ── Read ────────────────────────────────────────────────────────────────────
 
@@ -61,6 +69,16 @@ export function mergeConfigs(
     }
   }
   return merged;
+}
+
+export function resolveMergedRenderConfig(
+  global: NoteRendererSettings,
+  noteConfig: Partial<RenderOptions> | null,
+): ResolvedRenderConfig {
+  const settings = mergeConfigs(global, noteConfig);
+  const options = extractRenderOptions(settings as unknown as Record<string, unknown>);
+  const cover = buildCoverConfig(options);
+  return { settings, options, cover };
 }
 
 function deepCopyEffects(effects: Record<string, EffectParams>): Record<string, EffectParams> {
@@ -210,8 +228,8 @@ function migrateFlatEffects(raw: Record<string, unknown>): void {
 
 // ── Re-exports (so consumers only import from config-manager) ───────────────
 
-export { extractRenderOptions, RENDER_KEYS, RENDER_DEFAULTS };
-export type { RenderOptions, RenderKey };
+export { extractRenderOptions, buildCoverConfig, RENDER_KEYS, RENDER_DEFAULTS };
+export type { RenderOptions, RenderKey, CoverConfig };
 
 // ── Internal helpers ────────────────────────────────────────────────────────
 

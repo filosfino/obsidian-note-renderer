@@ -1,6 +1,6 @@
 import { Notice, Menu, setIcon } from "obsidian";
 import type { App } from "obsidian";
-import { FIELD_SCHEMAS, EFFECT_SCHEMAS, RENDER_DEFAULTS, COVER_STROKE_STYLE_UI, getFieldSchema } from "./schema";
+import { FIELD_SCHEMAS, EFFECT_SCHEMAS, RENDER_DEFAULTS, COVER_STROKE_STYLE_UI, COVER_SEMANTIC_SCHEMA, isCoverSemanticFieldActive, getFieldSchema } from "./schema";
 import { InputModal, ConfirmModal, FontManagerModal } from "./modals";
 import { getCoverFontList, getBodyFontList, type FontEntry } from "./fonts";
 import { deriveCoverStrokePalette, extractThemeColorChoices, extractCoverTitleColor, type ThemeColorChoice } from "./effects";
@@ -287,6 +287,20 @@ function bindThemeBoundColorInput(options: ThemeBoundColorInputOptions): void {
       resetValue();
     });
   });
+}
+
+function describeSemanticField(
+  group: keyof typeof COVER_SEMANTIC_SCHEMA,
+  field: string,
+  fallback: string,
+): string {
+  const meta = (COVER_SEMANTIC_SCHEMA[group].fields as Record<string, { description: string; appliesWhen?: string; followsThemeWhenEmpty?: boolean; relatedFields?: readonly string[] }>)[field];
+  if (!meta) return fallback;
+  const extras: string[] = [];
+  if (meta.appliesWhen) extras.push(`生效条件: ${meta.appliesWhen}`);
+  if (meta.followsThemeWhenEmpty) extras.push("留空时跟随当前 theme");
+  if (meta.relatedFields?.length) extras.push(`相关字段: ${meta.relatedFields.join(", ")}`);
+  return [meta.description, ...extras].join("；");
 }
 
 let activeColorPopover: HTMLElement | null = null;
@@ -625,7 +639,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   void resolveThemeColor().then(c => {
     colorInput.value = host.plugin.settings.coverFontColor || c;
   });
-  colorInput.title = "封面文字颜色（双击重置为主题默认）";
+  colorInput.title = describeSemanticField("typography", "color", "封面文字颜色（双击重置为主题默认）");
   bindThemeBoundColorInput({
     host,
     input: colorInput,
@@ -700,7 +714,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
 
   const strokeColorInput = strokeParamsRow.createEl("input", { cls: "nr-color-dot", type: "color" });
   strokeColorInput.value = "#000000";
-  strokeColorInput.title = "描边颜色（双击跟随主题标题色）";
+  strokeColorInput.title = describeSemanticField("stroke", "innerColor", "描边颜色（双击跟随主题标题色）");
   bindThemeBoundColorInput({
     host,
     input: strokeColorInput,
@@ -716,7 +730,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
 
   const doubleStrokeColorInput = strokeParamsRow.createEl("input", { cls: "nr-color-dot", type: "color" });
   doubleStrokeColorInput.value = parseColorValue(host.plugin.settings.coverDoubleStrokeColor, host.plugin.settings.coverFontColor || "#e07c5a");
-  doubleStrokeColorInput.title = "外描边颜色（双击跟随 theme 默认）";
+  doubleStrokeColorInput.title = describeSemanticField("stroke", "outerColor", "外描边颜色（双击跟随 theme 默认）");
   bindThemeBoundColorInput({
     host,
     input: doubleStrokeColorInput,
@@ -765,11 +779,13 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   const doubleStrokeField = doubleStrokeInput.parentElement as HTMLElement;
 
   const updateStrokeUi = (style: import("./constants").CoverStrokeStyle) => {
-    const mode = COVER_STROKE_STYLE_UI[style] ?? COVER_STROKE_STYLE_UI.stroke;
-    const isDouble = Boolean(mode.doubleStroke);
-    doubleStrokeField.classList.toggle("nr-hidden", !isDouble);
-    doubleStrokeColorField.classList.toggle("nr-hidden", !isDouble);
-    opInput.parentElement?.classList.toggle("nr-hidden", !mode.showOpacity);
+    const semanticValues = {
+      ...host.effective,
+      coverStrokeStyle: style,
+    };
+    doubleStrokeField.classList.toggle("nr-hidden", !isCoverSemanticFieldActive("stroke", "outerWidth", semanticValues));
+    doubleStrokeColorField.classList.toggle("nr-hidden", !isCoverSemanticFieldActive("stroke", "outerColor", semanticValues));
+    opInput.parentElement?.classList.toggle("nr-hidden", !isCoverSemanticFieldActive("stroke", "opacity", semanticValues));
     const limits = strokeLimits(style);
     const current = parseFloat(strokeInput.value) || 0;
     strokeInput.value = String(Math.max(limits.min, Math.min(limits.max, current)));
@@ -813,7 +829,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
 
   const glowColorInput = glowParamsRow.createEl("input", { cls: "nr-color-dot", type: "color" });
   glowColorInput.value = parseColorValue(host.plugin.settings.coverGlowColor, host.plugin.settings.coverFontColor || "#e07c5a");
-  glowColorInput.title = "发光颜色（双击跟随文字颜色）";
+  glowColorInput.title = describeSemanticField("glow", "color", "发光颜色（双击跟随文字颜色）");
   bindThemeBoundColorInput({
     host,
     input: glowColorInput,
@@ -950,7 +966,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
 
   const shadowColorInput = shadowParamsRow.createEl("input", { cls: "nr-color-dot", type: "color" });
   shadowColorInput.value = parseColorValue(host.plugin.settings.coverShadowColor, "#000000");
-  shadowColorInput.title = "投影颜色（双击恢复默认）";
+  shadowColorInput.title = describeSemanticField("shadow", "color", "投影颜色（双击恢复默认）");
   attachThemeColorPopover(
     host,
     shadowColorInput,

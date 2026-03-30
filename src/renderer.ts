@@ -4,7 +4,7 @@ import { applyCoverEffects, deriveCoverStrokePalette } from "./effects";
 import { paginateBody } from "./paginator";
 import { parseNoteStructure } from "./parser";
 import { renderMarkdownToHtml, createVaultImageResolver } from "./md-to-html";
-import type { RenderOptions } from "./schema";
+import { buildCoverConfig, type RenderOptions } from "./schema";
 
 export type { RenderOptions };
 
@@ -29,9 +29,10 @@ export async function renderNote(
   const pageMode = options.pageMode as PageMode;
   const pageHeight = PAGE_HEIGHTS[pageMode];
   const contentHeight = getContentHeight(pageMode);
+  const cover = buildCoverConfig(options);
 
-  const coverFont = options.coverFontFamily || options.fontFamily;
-  const coverColor = options.coverFontColor || "";
+  const coverFont = cover.typography.fontFamily;
+  const coverColor = cover.typography.color;
   const strokePalette = deriveCoverStrokePalette(themeCss, themeName);
   const themeTitleColor = strokePalette.fill || "#e8c36a";
 
@@ -41,7 +42,7 @@ export async function renderNote(
 .nr-page-cover .nr-cover-content p { color: ${coverColor}; }
 .nr-page-cover .nr-cover-content::before { background: ${coverColor}; }
 ` : "";
-  const textAlign = options.coverTextAlign ?? "left";
+  const textAlign = cover.typography.align;
   const alignItems = textAlign === "center" ? "center" : textAlign === "right" ? "flex-end" : "flex-start";
   const fontOverrideCss = `
 .nr-page {
@@ -52,7 +53,7 @@ export async function renderNote(
 }
 .nr-page-cover .nr-cover-content {
   font-family: ${coverFont};
-  font-weight: ${options.coverFontWeight ?? 800};
+  font-weight: ${cover.typography.weight};
   align-items: ${alignItems};
   text-align: ${textAlign};
 }
@@ -60,7 +61,7 @@ export async function renderNote(
 .nr-page-cover .nr-cover-content h2,
 .nr-page-cover .nr-cover-content h3,
 .nr-page-cover .nr-cover-content p {
-  font-weight: ${options.coverFontWeight ?? 800};
+  font-weight: ${cover.typography.weight};
 }
 ${coverColorCss}
 `;
@@ -117,13 +118,13 @@ ${coverColorCss}
   const pages: HTMLElement[] = [];
 
   // --- Cover page ---
-  const strokePercent = (options.coverStrokePercent ?? 8) / 100;
+  const strokePercent = cover.stroke.inner.widthPercent / 100;
   const hasCoverImage = !!structure.coverImageMarkdown;
   const coverTextOpts: CoverTextOptions = {
     strokePercent,
-    fontScale: options.coverFontScale ?? 100,
-    letterSpacing: options.coverLetterSpacing ?? 5,
-    lineHeight: options.coverLineHeight ?? 1.3,
+    fontScale: cover.typography.scale,
+    letterSpacing: cover.typography.letterSpacing,
+    lineHeight: cover.typography.lineHeight,
   };
   let coverPage: HTMLElement;
   if (structure.coverMarkdown) {
@@ -134,28 +135,28 @@ ${coverColorCss}
 
   // Apply effects to cover text (works with or without cover image)
   {
-    const strokeStyle = options.coverStrokeStyle || "stroke";
-    const hasGlow = options.coverGlow === true;
-    const hasShadow = options.coverShadow !== false;
-    const shadowBlur = options.coverShadowBlur ?? 16;
-    const shadowOffX = options.coverShadowOffsetX ?? 0;
-    const shadowOffY = options.coverShadowOffsetY ?? 4;
+    const strokeStyle = cover.stroke.style;
+    const hasGlow = cover.glow.enabled;
+    const hasShadow = cover.shadow.enabled;
+    const shadowBlur = cover.shadow.blur;
+    const shadowOffX = cover.shadow.offsetX;
+    const shadowOffY = cover.shadow.offsetY;
     const allCoverText = coverPage.querySelectorAll(".nr-cover-content p, .nr-cover-content h1, .nr-cover-content h2, .nr-cover-content h3, .nr-cover-content div");
     for (const el of allCoverText) {
       const htmlEl = el as HTMLElement;
       const fs = parseInt(htmlEl.style.fontSize) || 120;
       const sw = Math.max(1, Math.round(fs * strokePercent));
       const accentColor = htmlEl.style.color || coverColor || themeTitleColor;
-      const strokeColor = withAlpha(options.coverStrokeColor || strokePalette.inner, options.coverStrokeOpacity ?? 90);
-      const doubleStrokeWidth = Math.max(sw + 1, Math.round(fs * ((options.coverDoubleStrokePercent ?? 38) / 100)));
-      const doubleStrokeColor = options.coverDoubleStrokeColor || strokePalette.outer;
-      const glowColor = options.coverGlowColor || accentColor;
-      const shadowColor = options.coverShadowColor || "rgba(0,0,0,0.6)";
+      const strokeColor = withAlpha(cover.stroke.inner.color || strokePalette.inner, cover.stroke.opacity);
+      const doubleStrokeWidth = Math.max(sw + 1, Math.round(fs * (cover.stroke.outer.widthPercent / 100)));
+      const doubleStrokeColor = cover.stroke.outer.color || strokePalette.outer;
+      const glowColor = cover.glow.color || accentColor;
+      const shadowColor = cover.shadow.color;
 
       const hasInlineColor = htmlEl.style.color && htmlEl.style.color !== "";
       const textColor = coverColor || themeTitleColor;
       let css = hasInlineColor ? ";" : `; color: ${textColor} !important;`;
-      const glowMul = (options.coverGlowSize ?? 60) / 100;
+      const glowMul = cover.glow.size / 100;
       const textShadows: string[] = [];
       switch (strokeStyle) {
         case "none":
@@ -182,9 +183,9 @@ ${coverColorCss}
         textShadows.push(`0 0 ${gs * 3}px ${glowColor}`);
       }
 
-      if (options.coverBanner) {
-        const bannerColor = options.coverBannerColor || "rgba(0,0,0,0.5)";
-        const skew = options.coverBannerSkew ?? 6;
+      if (cover.banner.enabled) {
+        const bannerColor = cover.banner.color;
+        const skew = cover.banner.skew;
         css += ` background: ${bannerColor}; display: inline-block; padding: 8px 32px; clip-path: polygon(${skew}% 0%, 100% 0%, ${100-skew}% 100%, 0% 100%);`;
       }
 
@@ -233,8 +234,8 @@ ${coverColorCss}
   }
 
   // Apply cover text offset — shift child elements, not the container (which has the gradient overlay)
-  const offsetX = options.coverOffsetX ?? 0;
-  const offsetY = options.coverOffsetY ?? 0;
+  const offsetX = cover.position.offsetX;
+  const offsetY = cover.position.offsetY;
   if (offsetX !== 0 || offsetY !== 0) {
     const coverContent = coverPage.querySelector(".nr-cover-content") as HTMLElement;
     if (coverContent) {

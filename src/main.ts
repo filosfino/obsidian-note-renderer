@@ -12,7 +12,7 @@ import { THEME_MIST } from "./themes/mist";
 import { THEME_ROSE } from "./themes/rose";
 
 import { RENDER_DEFAULTS, RENDER_KEYS, type RenderOptions } from "./schema";
-import { migrateSettings, readNoteConfig, mergeConfigs, extractRenderOptions } from "./config-manager";
+import { migrateSettings, readNoteConfig, resolveMergedRenderConfig } from "./config-manager";
 import { renderNote } from "./renderer";
 import { exportSinglePage } from "./exporter";
 import { DEFAULT_FONTS, getFontDisplayName, type FontEntry } from "./fonts";
@@ -225,11 +225,10 @@ export default class NoteRendererPlugin extends Plugin {
 
     const markdown = await this.app.vault.read(file);
     const noteConfig = readNoteConfig(markdown);
-    const merged = mergeConfigs(this.settings, noteConfig);
-    const themeCss = await this.loadTheme(merged.activeTheme);
-    const options = extractRenderOptions(merged as unknown as Record<string, unknown>);
+    const resolved = resolveMergedRenderConfig(this.settings, noteConfig);
+    const themeCss = await this.loadTheme(resolved.settings.activeTheme);
 
-    const rendered = await renderNote(this.app, markdown, file.path, themeCss, merged.activeTheme, this, options);
+    const rendered = await renderNote(this.app, markdown, file.path, themeCss, resolved.settings.activeTheme, this, resolved.options);
 
     // Ensure output directory exists
     const fs = require("fs") as typeof import("fs");
@@ -279,11 +278,10 @@ export default class NoteRendererPlugin extends Plugin {
 
     const markdown = await this.app.vault.read(file);
     const noteConfig = readNoteConfig(markdown);
-    const merged = mergeConfigs(this.settings, noteConfig);
-    const themeCss = await this.loadTheme(merged.activeTheme);
-    const options = extractRenderOptions(merged as unknown as Record<string, unknown>);
+    const resolved = resolveMergedRenderConfig(this.settings, noteConfig);
+    const themeCss = await this.loadTheme(resolved.settings.activeTheme);
 
-    const rendered = await renderNote(this.app, markdown, file.path, themeCss, merged.activeTheme, this, options);
+    const rendered = await renderNote(this.app, markdown, file.path, themeCss, resolved.settings.activeTheme, this, resolved.options);
 
     const totalPages = rendered.pages.length;
     if (pageIndex < 1 || pageIndex > totalPages) {

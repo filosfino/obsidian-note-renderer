@@ -232,6 +232,181 @@ export type RenderOptions = typeof RENDER_DEFAULTS;
 export type RenderKey = keyof RenderOptions;
 export const RENDER_KEYS: RenderKey[] = Object.keys(RENDER_DEFAULTS) as RenderKey[];
 
+export interface CoverTypographyConfig {
+  fontFamily: string;
+  color: string;
+  scale: number;
+  weight: number;
+  letterSpacing: number;
+  lineHeight: number;
+  align: "left" | "center" | "right";
+}
+
+export interface CoverPositionConfig {
+  offsetX: number;
+  offsetY: number;
+}
+
+export interface CoverStrokeLayerConfig {
+  widthPercent: number;
+  color: string;
+}
+
+export interface CoverStrokeConfig {
+  style: "none" | "stroke" | "double" | "hollow";
+  opacity: number;
+  inner: CoverStrokeLayerConfig;
+  outer: CoverStrokeLayerConfig;
+}
+
+export interface CoverGlowConfig {
+  enabled: boolean;
+  size: number;
+  color: string;
+}
+
+export interface CoverShadowConfig {
+  enabled: boolean;
+  blur: number;
+  offsetX: number;
+  offsetY: number;
+  color: string;
+}
+
+export interface CoverBannerConfig {
+  enabled: boolean;
+  color: string;
+  skew: number;
+}
+
+export interface CoverConfig {
+  typography: CoverTypographyConfig;
+  position: CoverPositionConfig;
+  stroke: CoverStrokeConfig;
+  glow: CoverGlowConfig;
+  shadow: CoverShadowConfig;
+  banner: CoverBannerConfig;
+}
+
+export interface SemanticFieldMeta {
+  key: string;
+  noteKey: string;
+  description: string;
+  appliesWhen?: string;
+  followsThemeWhenEmpty?: boolean;
+  relatedFields?: readonly string[];
+  examples?: readonly string[];
+}
+
+export interface SemanticGroupMeta {
+  label: string;
+  description: string;
+  composition?: string;
+  fields: Record<string, SemanticFieldMeta>;
+}
+
+export const COVER_SEMANTIC_SCHEMA = {
+  typography: {
+    label: "文字",
+    description: "封面标题的基础排版样式。",
+    composition: "定义封面标题本身的字体、填充和排版，不包含描边/发光/投影。",
+    fields: {
+      fontFamily: { key: "coverFontFamily", noteKey: "coverFontFamily", description: "封面标题字体族", examples: ['"Yuanti SC", "PingFang SC", sans-serif'] },
+      color: { key: "coverFontColor", noteKey: "coverFontColor", description: "封面标题填充色；留空时跟随主题标题色", followsThemeWhenEmpty: true, relatedFields: ["coverGlowColor", "coverStrokeColor"], examples: ["#111111", "#ffffff", ""] },
+      scale: { key: "coverFontScale", noteKey: "coverFontScale", description: "封面标题字号缩放比例", examples: ["100", "180", "240"] },
+      weight: { key: "coverFontWeight", noteKey: "coverFontWeight", description: "封面标题字重", examples: ["700", "800", "900"] },
+      letterSpacing: { key: "coverLetterSpacing", noteKey: "coverLetterSpacing", description: "封面标题字间距", examples: ["0", "5", "12"] },
+      lineHeight: { key: "coverLineHeight", noteKey: "coverLineHeight", description: "封面标题行高", examples: ["1.1", "1.3", "1.6"] },
+      align: { key: "coverTextAlign", noteKey: "coverTextAlign", description: "封面标题对齐方式", examples: ["left", "center", "right"] },
+    },
+  },
+  position: {
+    label: "位置",
+    description: "封面标题相对封面中心的偏移。",
+    composition: "只影响封面标题块的位置，不改变页面整体布局。",
+    fields: {
+      offsetX: { key: "coverOffsetX", noteKey: "coverOffsetX", description: "水平偏移百分比", examples: ["-10", "0", "12"] },
+      offsetY: { key: "coverOffsetY", noteKey: "coverOffsetY", description: "垂直偏移百分比", examples: ["-8", "0", "10"] },
+    },
+  },
+  stroke: {
+    label: "描边",
+    description: "封面标题描边系统，支持单描边、双描边和镂空。",
+    composition: "double 表示内外双描边；hollow 表示透明填充，仅保留轮廓线。",
+    fields: {
+      style: { key: "coverStrokeStyle", noteKey: "coverStrokeStyle", description: "描边模式：none / stroke / double / hollow", relatedFields: ["coverStrokePercent", "coverDoubleStrokePercent"], examples: ["stroke", "double", "hollow"] },
+      opacity: { key: "coverStrokeOpacity", noteKey: "coverStrokeOpacity", description: "描边透明度；主要作用于描边层，不影响文字填充", appliesWhen: "coverStrokeStyle != none && coverStrokeStyle != hollow", examples: ["60", "90", "100"] },
+      innerWidth: { key: "coverStrokePercent", noteKey: "coverStrokePercent", description: "内描边粗度，相对字号的百分比", appliesWhen: "coverStrokeStyle in [stroke, double, hollow]", relatedFields: ["coverStrokeStyle", "coverStrokeColor"], examples: ["1", "5", "9"] },
+      innerColor: { key: "coverStrokeColor", noteKey: "coverStrokeColor", description: "内描边颜色；留空时跟随当前 theme 派生色", appliesWhen: "coverStrokeStyle in [stroke, double, hollow]", followsThemeWhenEmpty: true, relatedFields: ["coverFontColor", "coverDoubleStrokeColor"], examples: ["#ffffff", "#111111", ""] },
+      outerWidth: { key: "coverDoubleStrokePercent", noteKey: "coverDoubleStrokePercent", description: "外描边粗度，仅 double 模式生效", appliesWhen: "coverStrokeStyle == double", relatedFields: ["coverStrokeStyle", "coverDoubleStrokeColor"], examples: ["3", "5", "10"] },
+      outerColor: { key: "coverDoubleStrokeColor", noteKey: "coverDoubleStrokeColor", description: "外描边颜色，仅 double 模式生效；留空时跟随当前 theme 派生色", appliesWhen: "coverStrokeStyle == double", followsThemeWhenEmpty: true, relatedFields: ["coverStrokeColor"], examples: ["#2b1a1a", "#000000", ""] },
+    },
+  },
+  glow: {
+    label: "发光",
+    description: "封面标题发光效果，可与描边、投影叠加。",
+    composition: "独立开关，不与描边或投影互斥。",
+    fields: {
+      enabled: { key: "coverGlow", noteKey: "coverGlow", description: "是否启用发光", relatedFields: ["coverGlowSize", "coverGlowColor"], examples: ["true", "false"] },
+      size: { key: "coverGlowSize", noteKey: "coverGlowSize", description: "发光强度", appliesWhen: "coverGlow == true", examples: ["20", "40", "60"] },
+      color: { key: "coverGlowColor", noteKey: "coverGlowColor", description: "发光颜色；留空时跟随文字填充色", appliesWhen: "coverGlow == true", followsThemeWhenEmpty: true, relatedFields: ["coverFontColor"], examples: ["#ffcc66", "#ffffff", ""] },
+    },
+  },
+  shadow: {
+    label: "投影",
+    description: "封面标题投影效果，可与描边、发光叠加。",
+    composition: "独立开关，不与描边或发光互斥。",
+    fields: {
+      enabled: { key: "coverShadow", noteKey: "coverShadow", description: "是否启用投影", relatedFields: ["coverShadowBlur", "coverShadowColor"], examples: ["true", "false"] },
+      blur: { key: "coverShadowBlur", noteKey: "coverShadowBlur", description: "投影模糊半径", appliesWhen: "coverShadow == true", examples: ["8", "16", "32"] },
+      offsetX: { key: "coverShadowOffsetX", noteKey: "coverShadowOffsetX", description: "投影水平偏移", appliesWhen: "coverShadow == true", examples: ["0", "2", "-2"] },
+      offsetY: { key: "coverShadowOffsetY", noteKey: "coverShadowOffsetY", description: "投影垂直偏移", appliesWhen: "coverShadow == true", examples: ["2", "4", "8"] },
+      color: { key: "coverShadowColor", noteKey: "coverShadowColor", description: "投影颜色", appliesWhen: "coverShadow == true", relatedFields: ["coverShadowBlur"], examples: ["rgba(0,0,0,0.6)", "#000000"] },
+    },
+  },
+  banner: {
+    label: "色带",
+    description: "封面标题背景色带效果。",
+    composition: "在标题文字背后生成一条斜切背景带。",
+    fields: {
+      enabled: { key: "coverBanner", noteKey: "coverBanner", description: "是否启用色带", relatedFields: ["coverBannerColor", "coverBannerSkew"], examples: ["true", "false"] },
+      color: { key: "coverBannerColor", noteKey: "coverBannerColor", description: "色带颜色", appliesWhen: "coverBanner == true", examples: ["rgba(0,0,0,0.5)", "#222222"] },
+      skew: { key: "coverBannerSkew", noteKey: "coverBannerSkew", description: "色带切角/倾斜度", appliesWhen: "coverBanner == true", examples: ["4", "6", "10"] },
+    },
+  },
+} as const satisfies Record<string, SemanticGroupMeta>;
+
+type CoverSemanticGroupKey = keyof typeof COVER_SEMANTIC_SCHEMA;
+
+function evaluateSemanticCondition(expression: string, values: Record<string, unknown>): boolean {
+  const inMatch = expression.match(/^(\w+)\s+in\s+\[([^\]]+)\]$/);
+  if (inMatch) {
+    const [, key, rawValues] = inMatch;
+    const current = String(values[key] ?? "");
+    const allowed = rawValues.split(",").map((part) => part.trim());
+    return allowed.includes(current);
+  }
+
+  const eqMatch = expression.match(/^(\w+)\s*(==|!=)\s*(\w+)$/);
+  if (eqMatch) {
+    const [, key, op, rhs] = eqMatch;
+    const current = String(values[key] ?? "");
+    return op === "==" ? current === rhs : current !== rhs;
+  }
+
+  return true;
+}
+
+export function isCoverSemanticFieldActive<G extends CoverSemanticGroupKey>(
+  group: G,
+  field: string,
+  values: Partial<RenderOptions>,
+): boolean {
+  const meta = (COVER_SEMANTIC_SCHEMA[group].fields as Record<string, SemanticFieldMeta>)[field];
+  if (!meta.appliesWhen) return true;
+  return evaluateSemanticCondition(meta.appliesWhen, values as Record<string, unknown>);
+}
+
 // ── Key mapping ──────────────────────────────────────────────────────────────
 
 export const NOTE_KEY_ALIASES: Record<string, RenderKey> = {
@@ -343,6 +518,53 @@ export function extractRenderOptions(settings: Record<string, unknown>): RenderO
     }
   }
   return options;
+}
+
+export function buildCoverConfig(options: RenderOptions): CoverConfig {
+  return {
+    typography: {
+      fontFamily: options.coverFontFamily || options.fontFamily,
+      color: options.coverFontColor || "",
+      scale: options.coverFontScale ?? 100,
+      weight: options.coverFontWeight ?? 800,
+      letterSpacing: options.coverLetterSpacing ?? 5,
+      lineHeight: options.coverLineHeight ?? 1.3,
+      align: (options.coverTextAlign ?? "left") as CoverTypographyConfig["align"],
+    },
+    position: {
+      offsetX: options.coverOffsetX ?? 0,
+      offsetY: options.coverOffsetY ?? 0,
+    },
+    stroke: {
+      style: (options.coverStrokeStyle || "stroke") as CoverStrokeConfig["style"],
+      opacity: options.coverStrokeOpacity ?? 90,
+      inner: {
+        widthPercent: options.coverStrokePercent ?? 9,
+        color: options.coverStrokeColor || "",
+      },
+      outer: {
+        widthPercent: options.coverDoubleStrokePercent ?? 5,
+        color: options.coverDoubleStrokeColor || "",
+      },
+    },
+    glow: {
+      enabled: options.coverGlow === true,
+      size: options.coverGlowSize ?? 60,
+      color: options.coverGlowColor || "",
+    },
+    shadow: {
+      enabled: options.coverShadow !== false,
+      blur: options.coverShadowBlur ?? 16,
+      offsetX: options.coverShadowOffsetX ?? 0,
+      offsetY: options.coverShadowOffsetY ?? 4,
+      color: options.coverShadowColor || "rgba(0,0,0,0.6)",
+    },
+    banner: {
+      enabled: options.coverBanner === true,
+      color: options.coverBannerColor || "rgba(0,0,0,0.5)",
+      skew: options.coverBannerSkew ?? 6,
+    },
+  };
 }
 
 export function toNoteConfigKeys(config: Record<string, unknown>): Record<string, unknown> {

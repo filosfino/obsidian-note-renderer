@@ -9,9 +9,10 @@ import { VIEW_TYPE, PAGE_WIDTH, PAGE_HEIGHTS } from "./constants";
 import { renderNote, RenderedPages } from "./renderer";
 import { exportPages, exportSinglePage } from "./exporter";
 import { deriveCoverStrokePalette, extractCoverTitleColor } from "./effects";
+import { isCoverSemanticFieldActive } from "./schema";
 import {
   readNoteConfig,
-  mergeConfigs,
+  resolveMergedRenderConfig,
   updateNoteConfigKey,
   saveFullNoteConfig,
   removeNoteConfig,
@@ -155,7 +156,8 @@ export class PreviewView extends ItemView implements PanelHost {
 
     // When forceGlobalConfig is on, skip merging note config (for comparison)
     const useNoteConfig = noteConfig && !this.forceGlobalConfig;
-    const merged = mergeConfigs(this.plugin.settings, useNoteConfig ? noteConfig : null);
+    const resolved = resolveMergedRenderConfig(this.plugin.settings, useNoteConfig ? noteConfig : null);
+    const merged = resolved.settings;
 
     // Store effective settings for UI handlers to read from
     this.effective = merged;
@@ -201,7 +203,7 @@ export class PreviewView extends ItemView implements PanelHost {
       themeCss,
       merged.activeTheme,
       this.plugin,
-      extractRenderOptions(merged as unknown as Record<string, unknown>),
+      resolved.options,
     );
 
     this.pages = this.rendered.pages;
@@ -362,8 +364,8 @@ export class PreviewView extends ItemView implements PanelHost {
     const strokeOn = s.coverStrokeStyle !== "none";
     r.strokeToggle.classList.toggle("active", strokeOn);
     r.strokeParamsRow.classList.toggle("nr-hidden", !strokeOn);
-    r.doubleStrokeField.classList.toggle("nr-hidden", s.coverStrokeStyle !== "double");
-    r.doubleStrokeColorField.classList.toggle("nr-hidden", s.coverStrokeStyle !== "double");
+    r.doubleStrokeField.classList.toggle("nr-hidden", !isCoverSemanticFieldActive("stroke", "outerWidth", s));
+    r.doubleStrokeColorField.classList.toggle("nr-hidden", !isCoverSemanticFieldActive("stroke", "outerColor", s));
     r.glowParamsRow.classList.toggle("nr-hidden", !s.coverGlow);
     r.bannerParamsRow.classList.toggle("nr-hidden", !s.coverBanner);
     r.shadowParamsRow.classList.toggle("nr-hidden", !s.coverShadow);

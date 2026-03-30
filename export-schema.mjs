@@ -87,6 +87,7 @@ const output = {
   rendererConfigVersion: exported.RENDERER_CONFIG_VERSION,
   rendererConfigVersionKey: exported.RENDERER_CONFIG_VERSION_KEY,
   coverStrokeStyleUi: exported.COVER_STROKE_STYLE_UI,
+  coverSemanticSchema: exported.COVER_SEMANTIC_SCHEMA,
   themeColorSchemas: themeColors.THEME_COLOR_SCHEMAS,
   fieldSchemas: cleanFieldSchemas(exported.FIELD_SCHEMAS),
   effectSchemas: exported.EFFECT_SCHEMAS,
@@ -107,6 +108,7 @@ const output = {
     }
     return defaults;
   })(),
+  coverDefaults: exported.buildCoverConfig(exported.RENDER_DEFAULTS),
 };
 
 writeFileSync(
