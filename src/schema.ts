@@ -288,6 +288,8 @@ export interface CoverConfig {
   banner: CoverBannerConfig;
 }
 
+type CoverSemanticFieldPath = readonly [keyof CoverConfig, string] | readonly [keyof CoverConfig, string, string];
+
 export interface SemanticFieldMeta {
   key: string;
   noteKey: string;
@@ -379,6 +381,35 @@ export const COVER_SEMANTIC_SCHEMA = {
   },
 } as const satisfies Record<string, SemanticGroupMeta>;
 
+const COVER_SEMANTIC_FIELD_PATHS: Record<string, CoverSemanticFieldPath> = {
+  coverFontFamily: ["typography", "fontFamily"],
+  coverFontColor: ["typography", "color"],
+  coverFontScale: ["typography", "scale"],
+  coverFontWeight: ["typography", "weight"],
+  coverLetterSpacing: ["typography", "letterSpacing"],
+  coverLineHeight: ["typography", "lineHeight"],
+  coverTextAlign: ["typography", "align"],
+  coverOffsetX: ["position", "offsetX"],
+  coverOffsetY: ["position", "offsetY"],
+  coverStrokeStyle: ["stroke", "style"],
+  coverStrokeOpacity: ["stroke", "opacity"],
+  coverStrokePercent: ["stroke", "inner", "widthPercent"],
+  coverStrokeColor: ["stroke", "inner", "color"],
+  coverDoubleStrokePercent: ["stroke", "outer", "widthPercent"],
+  coverDoubleStrokeColor: ["stroke", "outer", "color"],
+  coverGlow: ["glow", "enabled"],
+  coverGlowSize: ["glow", "size"],
+  coverGlowColor: ["glow", "color"],
+  coverShadow: ["shadow", "enabled"],
+  coverShadowBlur: ["shadow", "blur"],
+  coverShadowOffsetX: ["shadow", "offsetX"],
+  coverShadowOffsetY: ["shadow", "offsetY"],
+  coverShadowColor: ["shadow", "color"],
+  coverBanner: ["banner", "enabled"],
+  coverBannerColor: ["banner", "color"],
+  coverBannerSkew: ["banner", "skew"],
+};
+
 type CoverSemanticGroupKey = keyof typeof COVER_SEMANTIC_SCHEMA;
 
 function evaluateSemanticCondition(expression: string, values: Record<string, unknown>): boolean {
@@ -417,6 +448,45 @@ export function getCoverSemanticFieldMeta<G extends CoverSemanticGroupKey>(
   return (COVER_SEMANTIC_SCHEMA[group].fields as Record<string, SemanticFieldMeta>)[field] ?? null;
 }
 
+function setNestedValue(target: Record<string, unknown>, path: readonly string[], value: unknown): void {
+  let current = target;
+  for (let i = 0; i < path.length - 1; i++) {
+    const key = path[i];
+    const existing = current[key];
+    if (!existing || typeof existing !== "object" || Array.isArray(existing)) {
+      current[key] = {};
+    }
+    current = current[key] as Record<string, unknown>;
+  }
+  current[path[path.length - 1]] = value;
+}
+
+function getNestedValue(source: Record<string, unknown>, path: readonly string[]): unknown {
+  let current: unknown = source;
+  for (const key of path) {
+    if (!current || typeof current !== "object" || Array.isArray(current)) return undefined;
+    current = (current as Record<string, unknown>)[key];
+  }
+  return current;
+}
+
+export function expandSemanticNoteConfig(raw: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = { ...raw };
+  const cover = raw.cover;
+  if (cover && typeof cover === "object" && !Array.isArray(cover)) {
+    const coverObject = cover as Record<string, unknown>;
+    for (const [key, path] of Object.entries(COVER_SEMANTIC_FIELD_PATHS)) {
+      const value = getNestedValue(coverObject, path as readonly string[]);
+      if (value !== undefined) result[key] = value;
+    }
+    const effects = coverObject.effects;
+    if (effects && typeof effects === "object" && !Array.isArray(effects)) {
+      result.coverEffects = effects;
+    }
+  }
+  return result;
+}
+
 // ── Key mapping ──────────────────────────────────────────────────────────────
 
 export const NOTE_KEY_ALIASES: Record<string, RenderKey> = {
@@ -444,8 +514,9 @@ export function withRendererConfigVersion(config: Record<string, unknown>): Reco
  * - Drops unknown keys
  */
 export function validateNoteConfig(raw: Record<string, unknown>): Partial<RenderOptions> {
+  const normalized = expandSemanticNoteConfig(raw);
   const result: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(raw)) {
+  for (const [key, value] of Object.entries(normalized)) {
     if (value === undefined || value === null) continue;
     const canonicalKey = (NOTE_KEY_ALIASES[key] || key) as string;
     if (!(canonicalKey in RENDER_DEFAULTS)) continue;
@@ -575,6 +646,34 @@ export function buildCoverConfig(options: RenderOptions): CoverConfig {
       skew: options.coverBannerSkew ?? 6,
     },
   };
+}
+
+export function toSemanticNoteConfig(config: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  const cover: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(config)) {
+    if (value === undefined) continue;
+    if (key === "coverEffects") {
+      cover.effects = value;
+      continue;
+    }
+
+    const noteKey = (INTERNAL_TO_NOTE_KEY as Record<string, string>)[key] || key;
+    const path = COVER_SEMANTIC_FIELD_PATHS[key];
+    if (path) {
+      setNestedValue(cover, path as readonly string[], value);
+      continue;
+    }
+
+    result[noteKey] = value;
+  }
+
+  if (Object.keys(cover).length > 0) {
+    result.cover = cover;
+  }
+
+  return result;
 }
 
 export function toNoteConfigKeys(config: Record<string, unknown>): Record<string, unknown> {

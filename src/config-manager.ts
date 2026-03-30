@@ -8,11 +8,11 @@
 import {
   RENDER_DEFAULTS,
   RENDER_KEYS,
-  INTERNAL_TO_NOTE_KEY,
   withRendererConfigVersion,
   extractRenderOptions,
   buildCoverConfig,
   toNoteConfigKeys,
+  toSemanticNoteConfig,
   getFieldSchema,
   type RenderOptions,
   type RenderKey,
@@ -103,13 +103,12 @@ export function updateNoteConfigKey(
   const noteConfig = parseRendererConfig(markdown);
   if (!noteConfig) return markdown;
 
-  const noteKey = (INTERNAL_TO_NOTE_KEY as Record<string, string>)[key] || key;
   // Convert internal value to display value for note storage
   const schema = getFieldSchema(key);
   if (schema?.type === "number" && schema.toDisplay && typeof value === "number") {
-    noteConfig[noteKey] = parseFloat(schema.toDisplay(value));
+    noteConfig[key] = parseFloat(schema.toDisplay(value));
   } else {
-    noteConfig[noteKey] = value;
+    noteConfig[key] = value;
   }
 
   const configSection = buildConfigSection(noteConfig);
@@ -124,8 +123,7 @@ export function saveFullNoteConfig(
   markdown: string,
   options: RenderOptions,
 ): string {
-  const noteConfig = toNoteConfigKeys(options as unknown as Record<string, unknown>);
-  const configSection = buildConfigSection(noteConfig);
+  const configSection = buildConfigSection(options as unknown as Record<string, unknown>);
   return insertConfigSection(markdown, configSection);
 }
 
@@ -155,7 +153,8 @@ export type { RenderOptions, RenderKey, CoverConfig };
 
 function buildConfigSection(config: Record<string, unknown>): string {
   const yaml = require("js-yaml") as typeof import("js-yaml");
-  const yamlStr = yaml.dump(withRendererConfigVersion(config), {
+  const semanticConfig = toSemanticNoteConfig(toNoteConfigKeys(config));
+  const yamlStr = yaml.dump(withRendererConfigVersion(semanticConfig), {
     indent: 2,
     lineWidth: -1,
     sortKeys: false,

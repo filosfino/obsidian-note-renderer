@@ -109,6 +109,7 @@ const output = {
     return defaults;
   })(),
   coverDefaults: exported.buildCoverConfig(exported.RENDER_DEFAULTS),
+  semanticDefaults: exported.toSemanticNoteConfig(exported.toNoteConfigKeys(exported.RENDER_DEFAULTS)),
 };
 
 writeFileSync(
