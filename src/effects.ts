@@ -11,6 +11,20 @@
 
 import { PAGE_WIDTH } from "./constants";
 import type { EffectParams } from "./schema";
+import { detectThemeBrightness } from "./theme-colors";
+export {
+  deriveCoverStrokePalette,
+  detectThemeBrightness,
+  extractBodyTextColor,
+  extractCoverTitleColor,
+  extractPageBackgroundColor,
+  extractThemeColorChoices,
+  extractThemeColorValues,
+  THEME_COLOR_SCHEMAS,
+  type CoverStrokePalette,
+  type ThemeColorChoice,
+  type ThemeColorSchema,
+} from "./theme-colors";
 
 // ── Context passed to every effect renderer ─────────────────────────────────
 
@@ -279,107 +293,6 @@ const EFFECT_RENDERERS: Record<string, EffectRenderer> = {
 };
 
 // ── Public API ──────────────────────────────────────────────────────────────
-
-/**
- * Detect theme brightness from CSS background color.
- */
-/** Extract the cover title color from theme CSS (`.nr-cover-content h1 { color: ... }`). */
-export function extractCoverTitleColor(themeCss: string): string {
-  const m = themeCss.match(/\.nr-cover-content\s+h1\s*\{[^}]*color:\s*(#[0-9a-fA-F]{3,6})/);
-  return m?.[1] ?? "";
-}
-
-export function extractPageBackgroundColor(themeCss: string): string {
-  const m = themeCss.match(/\.nr-page\s*\{[^}]*background:\s*(#[0-9a-fA-F]{3,6})/);
-  return m?.[1] ?? "";
-}
-
-export function extractBodyTextColor(themeCss: string): string {
-  const m = themeCss.match(/\.nr-page\s*\{[^}]*color:\s*(#[0-9a-fA-F]{3,6})/);
-  return m?.[1] ?? "";
-}
-
-export interface CoverStrokePalette {
-  fill: string;
-  inner: string;
-  outer: string;
-  background: string;
-}
-
-export interface ThemeColorChoice {
-  label: string;
-  value: string;
-}
-
-export function deriveCoverStrokePalette(themeCss: string): CoverStrokePalette {
-  const isDark = detectThemeBrightness(themeCss);
-  const fill = extractCoverTitleColor(themeCss) || (isDark ? "#ffffff" : "#1a1a1a");
-  const background = extractPageBackgroundColor(themeCss) || (isDark ? "#303030" : "#f4efe6");
-  return {
-    fill,
-    background,
-    inner: mixHex(fill, background, 0.18),
-    outer: mixHex(fill, background, 0.72),
-  };
-}
-
-export function extractThemeColorChoices(themeCss: string): ThemeColorChoice[] {
-  const entries: ThemeColorChoice[] = [];
-  const push = (label: string, value: string) => {
-    if (!value) return;
-    if (entries.some((entry) => entry.label === label && entry.value.toLowerCase() === value.toLowerCase())) return;
-    entries.push({ label, value });
-  };
-
-  const pick = (pattern: RegExp): string => themeCss.match(pattern)?.[1] ?? "";
-  const pickRgba = (pattern: RegExp): string => {
-    const match = themeCss.match(pattern)?.[1] ?? "";
-    return match ? `rgba(${match})` : "";
-  };
-
-  push("背景", extractPageBackgroundColor(themeCss));
-  push("正文", extractBodyTextColor(themeCss));
-  push("标题", extractCoverTitleColor(themeCss));
-  push("高亮", pickRgba(/\.nr-cover-content\s+mark\s*\{[^}]*rgba?\(([^)]+)\)/));
-  push("引用", pick(/\.nr-page-content\s+blockquote\s*\{[^}]*color:\s*(#[0-9a-fA-F]{3,6})/));
-  push("引用线", pick(/\.nr-page-content\s+blockquote\s*\{[^}]*border-left:\s*\d+px\s+solid\s+(#[0-9a-fA-F]{3,6})/));
-  push("行内代码", pick(/\.nr-page-content\s+code\s*\{[^}]*color:\s*(#[0-9a-fA-F]{3,6})/));
-  push("代码底", pick(/\.nr-page-content\s+code\s*\{[^}]*background:\s*(#[0-9a-fA-F]{3,6})/));
-  push("代码块底", pick(/\.nr-page-content\s+pre\s*\{[^}]*background:\s*(#[0-9a-fA-F]{3,6})/));
-  push("正文强调", pick(/\.nr-page-content\s+strong\s*\{[^}]*color:\s*(#[0-9a-fA-F]{3,6})/));
-  push("图片封面字", pick(/\.nr-cover-has-image\s+\.nr-cover-content\s+h1,[\s\S]*?color:\s*(#[0-9a-fA-F]{3,6})/));
-
-  return entries;
-}
-
-export function detectThemeBrightness(themeCss: string): boolean {
-  const bgMatch = themeCss.match(/\.nr-page\s*\{[^}]*background:\s*#([0-9a-fA-F]{3,6})/);
-  if (!bgMatch) return true; // default assume dark
-  const hex = bgMatch[1].length === 3
-    ? bgMatch[1].split("").map(c => c + c).join("")
-    : bgMatch[1];
-  const r = parseInt(hex.slice(0, 2), 16);
-  const g = parseInt(hex.slice(2, 4), 16);
-  const b = parseInt(hex.slice(4, 6), 16);
-  return (r * 0.299 + g * 0.587 + b * 0.114) < 128;
-}
-
-function normalizeHex(hex: string): string {
-  const raw = hex.replace("#", "");
-  if (raw.length === 3) {
-    return raw.split("").map((c) => c + c).join("");
-  }
-  return raw;
-}
-
-function mixHex(a: string, b: string, ratio: number): string {
-  const aa = normalizeHex(a);
-  const bb = normalizeHex(b);
-  const r = Math.round(parseInt(aa.slice(0, 2), 16) * (1 - ratio) + parseInt(bb.slice(0, 2), 16) * ratio);
-  const g = Math.round(parseInt(aa.slice(2, 4), 16) * (1 - ratio) + parseInt(bb.slice(2, 4), 16) * ratio);
-  const bl = Math.round(parseInt(aa.slice(4, 6), 16) * (1 - ratio) + parseInt(bb.slice(4, 6), 16) * ratio);
-  return `#${[r, g, bl].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
-}
 
 /**
  * Apply all enabled cover effects to a page element.

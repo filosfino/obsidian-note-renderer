@@ -1,6 +1,6 @@
 import { Notice, Menu, setIcon } from "obsidian";
 import type { App } from "obsidian";
-import { FIELD_SCHEMAS, EFFECT_SCHEMAS, RENDER_DEFAULTS, getFieldSchema } from "./schema";
+import { FIELD_SCHEMAS, EFFECT_SCHEMAS, RENDER_DEFAULTS, COVER_STROKE_STYLE_UI, getFieldSchema } from "./schema";
 import { InputModal, ConfirmModal, FontManagerModal } from "./modals";
 import { getCoverFontList, getBodyFontList, type FontEntry } from "./fonts";
 import { deriveCoverStrokePalette, extractThemeColorChoices, extractCoverTitleColor, type ThemeColorChoice } from "./effects";
@@ -607,8 +607,8 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   };
 
   const strokeLimits = (style: import("./constants").CoverStrokeStyle): { min: number; max: number; step: number } => {
-    if (style === "hollow") return { min: 0, max: 2, step: 0.2 };
-    return { min: 0, max: 100, step: 0.5 };
+    const schema = COVER_STROKE_STYLE_UI[style] ?? COVER_STROKE_STYLE_UI.stroke;
+    return schema.stroke;
   };
 
   const strokeColorInput = strokeParamsRow.createEl("input", { cls: "nr-color-dot", type: "color" });
@@ -734,32 +734,26 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   }, { passive: false });
 
   const updateStrokeUi = (style: import("./constants").CoverStrokeStyle) => {
-    const isDouble = style === "double";
-    const isHollow = style === "hollow";
+    const mode = COVER_STROKE_STYLE_UI[style] ?? COVER_STROKE_STYLE_UI.stroke;
+    const isDouble = Boolean(mode.doubleStroke);
     doubleStrokeField.classList.toggle("nr-hidden", !isDouble);
     doubleStrokeColorField.classList.toggle("nr-hidden", !isDouble);
-    opInput.parentElement?.classList.toggle("nr-hidden", isHollow);
+    opInput.parentElement?.classList.toggle("nr-hidden", !mode.showOpacity);
     const limits = strokeLimits(style);
     const current = parseFloat(strokeInput.value) || 0;
     strokeInput.value = String(Math.max(limits.min, Math.min(limits.max, current)));
   };
 
-  const strokePresets: Record<Exclude<import("./constants").CoverStrokeStyle, "none">, { inner: number; outer?: number }> = {
-    stroke: { inner: 9 },
-    double: { inner: 8, outer: 5 },
-    hollow: { inner: 1 },
-  };
-
   const applyStrokeStylePreset = async (style: import("./constants").CoverStrokeStyle): Promise<void> => {
     const palette = await resolveStrokePalette();
-    const preset = strokePresets[style as keyof typeof strokePresets];
+    const preset = COVER_STROKE_STYLE_UI[style];
     if (!preset) return;
 
-    strokeInput.value = String(preset.inner);
+    strokeInput.value = String(preset.stroke.default);
     strokeColorInput.value = palette.inner;
 
-    if (style === "double") {
-      doubleStrokeInput.value = String(preset.outer ?? FIELD_SCHEMAS.coverDoubleStrokePercent.default);
+    if (preset.doubleStroke) {
+      doubleStrokeInput.value = String(preset.doubleStroke.default);
       doubleStrokeColorInput.value = palette.outer;
     }
   };
@@ -835,9 +829,9 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     if (host.syncing) return;
     const style = strokeStyleSelect.value as import("./constants").CoverStrokeStyle;
     host.lastStrokeStyle = style;
-    const preset = strokePresets[style as keyof typeof strokePresets];
-    const newPercent = preset?.inner ?? FIELD_SCHEMAS.coverStrokePercent.default;
-    const newOuterPercent = preset?.outer ?? FIELD_SCHEMAS.coverDoubleStrokePercent.default;
+    const preset = COVER_STROKE_STYLE_UI[style];
+    const newPercent = preset?.stroke.default ?? FIELD_SCHEMAS.coverStrokePercent.default;
+    const newOuterPercent = preset?.doubleStroke?.default ?? FIELD_SCHEMAS.coverDoubleStrokePercent.default;
     await applyStrokeStylePreset(style);
     updateStrokeUi(style);
     if (host.editingNoteConfig) {

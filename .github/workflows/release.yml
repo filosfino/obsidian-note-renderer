@@ -31,11 +31,11 @@ jobs:
           tag="${GITHUB_REF#refs/tags/}"
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" \
-              dist/main.js dist/manifest.json dist/styles.css dist/schema.json \
+              dist/main.js dist/manifest.json dist/styles.css dist/schema.json dist/theme-colors.yaml \
               --clobber
           else
             gh release create "$tag" \
               --title "$tag" \
               --generate-notes \
-              dist/main.js dist/manifest.json dist/styles.css dist/schema.json
+              dist/main.js dist/manifest.json dist/styles.css dist/schema.json dist/theme-colors.yaml
           fi

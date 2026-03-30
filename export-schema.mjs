@@ -6,10 +6,11 @@
  * Functions (toDisplay / fromDisplay) are stripped — JSON only carries data.
  */
 
-import { readFileSync, writeFileSync } from "fs";
+import { readdirSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { fileURLToPath } from "url";
 import { transformSync } from "esbuild";
+import yaml from "js-yaml";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
 const distDir = join(rootDir, "dist");
@@ -31,6 +32,21 @@ const { code } = transformSync(src, {
 const mod = { exports: {} };
 new Function("module", "exports", code)(mod, mod.exports);
 const exported = mod.exports;
+
+const themeColorSrc = readFileSync(
+  join(rootDir, "src/theme-colors.ts"),
+  "utf-8"
+);
+
+const { code: themeColorCode } = transformSync(themeColorSrc, {
+  loader: "ts",
+  format: "cjs",
+  target: "es2020",
+});
+
+const themeColorMod = { exports: {} };
+new Function("module", "exports", themeColorCode)(themeColorMod, themeColorMod.exports);
+const themeColors = themeColorMod.exports;
 
 // ── Note-facing key mapping ─────────────────────────────────────────────────
 
@@ -60,9 +76,38 @@ function cleanFieldSchemas(raw) {
   return out;
 }
 
+function loadBundledThemeCssMap() {
+  const themeDir = join(rootDir, "src/themes");
+  const out = {};
+  for (const file of readdirSync(themeDir)) {
+    if (!file.endsWith(".ts")) continue;
+    const source = readFileSync(join(themeDir, file), "utf-8");
+    const match = source.match(/export const \w+\s*=\s*`([\s\S]*?)`;/);
+    if (!match) continue;
+    out[file.replace(/\.ts$/, "")] = match[1];
+  }
+  return out;
+}
+
+function buildThemeColorSnapshot() {
+  const valuesByTheme = {};
+  const themes = loadBundledThemeCssMap();
+  for (const [name, css] of Object.entries(themes)) {
+    valuesByTheme[name] = Object.fromEntries(
+      Object.entries(themeColors.extractThemeColorValues(css)).filter(([, value]) => Boolean(value))
+    );
+  }
+  return {
+    themeColorSchemas: themeColors.THEME_COLOR_SCHEMAS,
+    themes: valuesByTheme,
+  };
+}
+
 const output = {
   rendererConfigVersion: exported.RENDERER_CONFIG_VERSION,
   rendererConfigVersionKey: exported.RENDERER_CONFIG_VERSION_KEY,
+  coverStrokeStyleUi: exported.COVER_STROKE_STYLE_UI,
+  themeColorSchemas: themeColors.THEME_COLOR_SCHEMAS,
   fieldSchemas: cleanFieldSchemas(exported.FIELD_SCHEMAS),
   effectSchemas: exported.EFFECT_SCHEMAS,
   defaults: (() => {
@@ -89,4 +134,10 @@ writeFileSync(
   JSON.stringify(output, null, 2) + "\n"
 );
 
+writeFileSync(
+  join(distDir, "theme-colors.yaml"),
+  yaml.dump(buildThemeColorSnapshot(), { indent: 2, lineWidth: -1, sortKeys: false })
+);
+
 console.log("  schema.json → dist/");
+console.log("  theme-colors.yaml → dist/");

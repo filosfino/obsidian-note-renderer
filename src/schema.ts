@@ -47,6 +47,19 @@ export type FieldSchema = NumericField | StringField | BooleanField;
 export const RENDERER_CONFIG_VERSION = 1;
 export const RENDERER_CONFIG_VERSION_KEY = "rendererConfigVersion";
 
+export interface StrokeControlSchema {
+  default: number;
+  min: number;
+  max: number;
+  step: number;
+}
+
+export interface StrokeStyleUiSchema {
+  stroke: StrokeControlSchema;
+  doubleStroke?: StrokeControlSchema;
+  showOpacity: boolean;
+}
+
 // ── Field schema definitions ────────────────────────────────────────────────
 
 export const BUILTIN_THEMES = [
@@ -87,20 +100,20 @@ export const FIELD_SCHEMAS = {
 
   // ── Cover text effects ──
   coverStrokeStyle:  { type: "string",  default: "stroke", enum: ["none", "stroke", "double", "hollow"] as const,
-                       description: "封面标题描边样式" } as StringField,
+                       description: "封面标题描边样式。stroke = 单层描边，double = 内外双描边，hollow = 透明填充仅保留外轮廓" } as StringField,
   coverStrokePercent:{ type: "number",  default: 9, min: 0, max: 100, step: 0.5,
-                       description: "描边粗细（相对于字号的百分比）" } as NumericField,
+                       description: "主描边粗细（相对于字号的百分比）。double 模式下表示内描边，hollow 模式下表示镂空轮廓粗细" } as NumericField,
   coverStrokeOpacity:{ type: "number",  default: 90, min: 0, max: 100,
-                       description: "描边不透明度" } as NumericField,
+                       description: "描边不透明度。作用于描边层，不改变文字填充本身透明度；hollow 模式下通常隐藏" } as NumericField,
   coverStrokeColor:  { type: "string",  default: "",
                        description: "描边颜色，留空则跟随主题标题色；支持任意 CSS 颜色值" } as StringField,
   coverDoubleStrokePercent:{ type: "number",  default: 5, min: 0, max: 120, step: 0.5,
-                       description: "第二层描边粗细（相对于字号的百分比，仅 double 生效）" } as NumericField,
+                       description: "第二层描边粗细（相对于字号的百分比，仅 double 生效）。表示外描边" } as NumericField,
   coverDoubleStrokeColor:{ type: "string",  default: "",
-                       description: "第二层描边颜色，留空则跟随文字颜色；支持任意 CSS 颜色值" } as StringField,
+                       description: "第二层描边颜色，留空则跟随 theme 派生的外描边默认色；支持任意 CSS 颜色值" } as StringField,
   coverGlow:         { type: "boolean", default: false,
-                       description: "封面标题是否显示发光" } as BooleanField,
-  coverGlowSize:     { type: "number",  default: 60, min: 0, max: 200,
+                       description: "封面标题是否显示发光。可与描边、投影、色带同时开启" } as BooleanField,
+  coverGlowSize:     { type: "number",  default: 60, min: 0, max: 80, step: 10,
                        description: "发光效果半径" } as NumericField,
   coverGlowColor:    { type: "string",  default: "",
                        description: "发光颜色，留空则跟随文字颜色；支持任意 CSS 颜色值" } as StringField,
@@ -121,6 +134,26 @@ export const FIELD_SCHEMAS = {
   coverBannerSkew:   { type: "number",  default: 6, min: 0, max: 20,
                        description: "banner 倾斜角度（度）" } as NumericField,
 } as const satisfies Record<string, FieldSchema>;
+
+export const COVER_STROKE_STYLE_UI: Record<"none" | "stroke" | "double" | "hollow", StrokeStyleUiSchema> = {
+  none: {
+    stroke: { default: 9, min: 0, max: 100, step: 0.5 },
+    showOpacity: false,
+  },
+  stroke: {
+    stroke: { default: 9, min: 0, max: 100, step: 0.5 },
+    showOpacity: true,
+  },
+  double: {
+    stroke: { default: 8, min: 0, max: 100, step: 0.5 },
+    doubleStroke: { default: 5, min: 0, max: 120, step: 0.5 },
+    showOpacity: true,
+  },
+  hollow: {
+    stroke: { default: 1, min: 0, max: 2, step: 0.2 },
+    showOpacity: false,
+  },
+};
 
 /** Lookup field schema by key. Returns undefined for unknown keys. */
 export function getFieldSchema(key: string): FieldSchema | undefined {
