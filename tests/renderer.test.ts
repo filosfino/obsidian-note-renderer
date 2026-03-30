@@ -474,6 +474,40 @@ describe("renderNote", () => {
     rendered.cleanup();
   });
 
+  it("constrains embedded cover text images instead of auto-scaling them like text", async () => {
+    const markdown = `
+## 标题
+
+封面标题
+
+## 封面文字
+
+![[logo.png]]
+`;
+
+    const rendered = await renderNote(
+      createMockApp({ "logo.png": "app://logo.png" }) as never,
+      markdown,
+      "test.md",
+      ".theme {}",
+      "cream",
+      new Component(),
+      RENDER_DEFAULTS,
+    );
+
+    const imageBlock = rendered.pages[0].querySelector(".nr-cover-content p") as HTMLElement | null;
+    const image = rendered.pages[0].querySelector(".nr-cover-content img") as HTMLElement | null;
+
+    expect(imageBlock).not.toBeNull();
+    expect(image).not.toBeNull();
+    expect(imageBlock?.style.fontSize).toBe("0px");
+    expect(imageBlock?.style.lineHeight).toBe("0");
+    expect(image?.style.maxWidth).toBe("100%");
+    expect(image?.style.objectFit).toBe("contain");
+
+    rendered.cleanup();
+  });
+
 
   it("applies configurable width as an overall network scale", async () => {
     const markdown = `
@@ -520,6 +554,35 @@ describe("renderNote", () => {
     expect(line?.getAttribute("stroke-width")).toBe("3");
     expect(Number(circle?.getAttribute("r"))).toBeGreaterThan(Number(baseCircle?.getAttribute("r")));
     baseRendered.cleanup();
+    rendered.cleanup();
+  });
+
+  it("lets some network nodes spill outside the canvas for softer edge connections", async () => {
+    const rendered = await renderNote(
+      createMockApp() as never,
+      "# Title",
+      "test.md",
+      ".theme {}",
+      "cream",
+      new Component(),
+      {
+        ...RENDER_DEFAULTS,
+        coverEffects: {
+          ...RENDER_DEFAULTS.coverEffects,
+          network: { enabled: true, opacity: 15, count: 8, width: 2 },
+        },
+      },
+    );
+
+    const circles = Array.from(rendered.pages[0].querySelectorAll(".nr-effect-overlay circle"));
+    const hasOutsideNode = circles.some((circle) => {
+      const cx = Number(circle.getAttribute("cx"));
+      const cy = Number(circle.getAttribute("cy"));
+      return cx < 0 || cx > 810 || cy < 0 || cy > 1080;
+    });
+
+    expect(hasOutsideNode).toBe(true);
+
     rendered.cleanup();
   });
 

@@ -364,6 +364,28 @@ function autosizeCoverText(container: HTMLElement, opts: CoverTextOptions): void
 
   for (let i = 0; i < elements.length; i++) {
     const htmlEl = elements[i] as HTMLElement;
+    const embeddedImages = Array.from(htmlEl.querySelectorAll("img")) as HTMLElement[];
+
+    if (embeddedImages.length > 0) {
+      htmlEl.setCssStyles({
+        display: "block",
+        width: "100%",
+        margin: "0 auto",
+        fontSize: "0",
+        lineHeight: "0",
+      });
+      for (const image of embeddedImages) {
+        image.setCssStyles({
+          display: "block",
+          maxWidth: "100%",
+          width: "auto",
+          height: "auto",
+          margin: "0 auto",
+          objectFit: "contain",
+        });
+      }
+      continue;
+    }
 
     // User-controlled inline styles: apply fontScale to existing fontSize, skip auto-sizing
     if (htmlEl.querySelector("[style]") || htmlEl.getAttribute("style")) {

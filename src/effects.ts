@@ -299,10 +299,13 @@ function renderNetwork(container: HTMLElement, params: EffectParams, ctx: Effect
   const cols = params.count ?? 10;
   const scale = Math.max(0.5, params.width ?? 1);
   const lineWidth = scale;
+  const bleedFactor = 0.7 + scale * 0.35;
   const rows = Math.round(cols * ctx.pageHeight / ctx.pageWidth);
   const cellW = ctx.pageWidth / cols;
   const cellH = ctx.pageHeight / rows;
   const threshold = Math.max(cellW, cellH) * (1.6 + (scale - 1) * 0.45);
+  const bleedX = cellW * bleedFactor;
+  const bleedY = cellH * bleedFactor;
 
   let seed = 42;
   const rand = () => { seed = (seed * 16807 + 0) % 2147483647; return seed / 2147483647; };
@@ -310,8 +313,10 @@ function renderNetwork(container: HTMLElement, params: EffectParams, ctx: Effect
   const nodes: { x: number; y: number }[] = [];
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      const x = (c + 0.5) * cellW + (rand() - 0.5) * cellW * 0.8;
-      const y = (r + 0.5) * cellH + (rand() - 0.5) * cellH * 0.8;
+      const baseX = cols <= 1 ? 0.5 : c / (cols - 1);
+      const baseY = rows <= 1 ? 0.5 : r / (rows - 1);
+      const x = -bleedX + baseX * (ctx.pageWidth + bleedX * 2) + (rand() - 0.5) * cellW * 0.75;
+      const y = -bleedY + baseY * (ctx.pageHeight + bleedY * 2) + (rand() - 0.5) * cellH * 0.75;
       nodes.push({ x, y });
     }
   }
