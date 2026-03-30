@@ -146,7 +146,6 @@ ${coverColorCss}
       const sw = Math.max(1, Math.round(fs * strokePercent));
       const accentColor = htmlEl.style.color || coverColor || themeTitleColor;
       const strokeColor = withAlpha(options.coverStrokeColor || strokePalette.inner, options.coverStrokeOpacity ?? 90);
-      const fillColor = hasInlineTextColor(htmlEl) ? htmlEl.style.color : (coverColor || themeTitleColor);
       const doubleStrokeWidth = Math.max(sw + 1, Math.round(fs * ((options.coverDoubleStrokePercent ?? 38) / 100)));
       const doubleStrokeColor = options.coverDoubleStrokeColor || strokePalette.outer;
       const glowColor = options.coverGlowColor || accentColor;
@@ -524,10 +523,6 @@ function withAlpha(color: string, opacityPercent: number): string {
   return `color-mix(in srgb, ${color} ${Math.round(alpha * 100)}%, transparent)`;
 }
 
-function hasInlineTextColor(el: HTMLElement): boolean {
-  return !!(el.style.color && el.style.color !== "");
-}
-
 function ensureDoubleStrokeBackdrop(el: HTMLElement, radius: number, color: string): void {
   const parent = el.parentElement;
   if (!parent) return;
@@ -535,7 +530,7 @@ function ensureDoubleStrokeBackdrop(el: HTMLElement, radius: number, color: stri
   const computed = getComputedStyle(el);
   const wrapper = document.createElement("div");
   wrapper.classList.add("nr-double-stroke-wrap");
-  wrapper.style.position = "relative";
+  wrapper.setCssStyles({ position: "relative" });
   wrapper.style.display = computed.display === "block" ? "block" : "inline-block";
   wrapper.style.width = computed.display === "block" ? "100%" : "fit-content";
   wrapper.style.marginTop = computed.marginTop;
@@ -545,18 +540,22 @@ function ensureDoubleStrokeBackdrop(el: HTMLElement, radius: number, color: stri
 
   const clone = el.cloneNode(true) as HTMLElement;
   clone.style.cssText = el.style.cssText;
-  clone.style.position = "absolute";
-  clone.style.inset = "0";
-  clone.style.zIndex = "0";
-  clone.style.pointerEvents = "none";
-  clone.style.margin = "0";
+  clone.setCssStyles({
+    position: "absolute",
+    inset: "0",
+    zIndex: "0",
+    pointerEvents: "none",
+    margin: "0",
+  });
   clone.style.color = color;
-  clone.style.webkitTextStroke = "0 transparent";
+  clone.setCssStyles({ webkitTextStroke: "0 transparent" });
   clone.style.textShadow = buildOutlineRingShadows(radius, color).join(", ");
 
-  el.style.margin = "0";
-  el.style.position = "relative";
-  el.style.zIndex = "1";
+  el.setCssStyles({
+    margin: "0",
+    position: "relative",
+    zIndex: "1",
+  });
 
   parent.replaceChild(wrapper, el);
   wrapper.appendChild(clone);

@@ -216,7 +216,6 @@ export type { RenderOptions, RenderKey };
 // ── Internal helpers ────────────────────────────────────────────────────────
 
 function buildConfigSection(config: Record<string, unknown>): string {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const yaml = require("js-yaml") as typeof import("js-yaml");
   const yamlStr = yaml.dump(withRendererConfigVersion(config), {
     indent: 2,
