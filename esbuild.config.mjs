@@ -3,11 +3,13 @@ import process from "process";
 import builtins from "builtin-modules";
 import { existsSync, mkdirSync, copyFileSync } from "fs";
 import { join } from "path";
+import { fileURLToPath } from "url";
 import { execFileSync } from "child_process";
 
 const prod = process.argv[2] === "production";
+const rootDir = fileURLToPath(new URL(".", import.meta.url));
 
-const distDir = join(import.meta.dirname, "dist");
+const distDir = join(rootDir, "dist");
 mkdirSync(distDir, { recursive: true });
 
 const ctx = await esbuild.context({

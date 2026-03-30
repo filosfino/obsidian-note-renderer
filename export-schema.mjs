@@ -8,14 +8,16 @@
 
 import { readFileSync, writeFileSync } from "fs";
 import { join } from "path";
+import { fileURLToPath } from "url";
 import { transformSync } from "esbuild";
 
-const distDir = join(import.meta.dirname, "dist");
+const rootDir = fileURLToPath(new URL(".", import.meta.url));
+const distDir = join(rootDir, "dist");
 
 // ── Compile schema.ts to plain JS ──────────────────────────────────────────
 
 const src = readFileSync(
-  join(import.meta.dirname, "src/schema.ts"),
+  join(rootDir, "src/schema.ts"),
   "utf-8"
 );
 
