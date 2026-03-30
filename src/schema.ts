@@ -292,6 +292,9 @@ export interface SemanticFieldMeta {
   key: string;
   noteKey: string;
   description: string;
+  uiLabel?: string;
+  uiControl?: "color" | "number" | "select" | "toggle";
+  uiOrder?: number;
   appliesWhen?: string;
   followsThemeWhenEmpty?: boolean;
   relatedFields?: readonly string[];
@@ -311,13 +314,13 @@ export const COVER_SEMANTIC_SCHEMA = {
     description: "封面标题的基础排版样式。",
     composition: "定义封面标题本身的字体、填充和排版，不包含描边/发光/投影。",
     fields: {
-      fontFamily: { key: "coverFontFamily", noteKey: "coverFontFamily", description: "封面标题字体族", examples: ['"Yuanti SC", "PingFang SC", sans-serif'] },
-      color: { key: "coverFontColor", noteKey: "coverFontColor", description: "封面标题填充色；留空时跟随主题标题色", followsThemeWhenEmpty: true, relatedFields: ["coverGlowColor", "coverStrokeColor"], examples: ["#111111", "#ffffff", ""] },
-      scale: { key: "coverFontScale", noteKey: "coverFontScale", description: "封面标题字号缩放比例", examples: ["100", "180", "240"] },
-      weight: { key: "coverFontWeight", noteKey: "coverFontWeight", description: "封面标题字重", examples: ["700", "800", "900"] },
-      letterSpacing: { key: "coverLetterSpacing", noteKey: "coverLetterSpacing", description: "封面标题字间距", examples: ["0", "5", "12"] },
-      lineHeight: { key: "coverLineHeight", noteKey: "coverLineHeight", description: "封面标题行高", examples: ["1.1", "1.3", "1.6"] },
-      align: { key: "coverTextAlign", noteKey: "coverTextAlign", description: "封面标题对齐方式", examples: ["left", "center", "right"] },
+      fontFamily: { key: "coverFontFamily", noteKey: "coverFontFamily", description: "封面标题字体族", uiLabel: "字体", uiControl: "select", uiOrder: 1, examples: ['"Yuanti SC", "PingFang SC", sans-serif'] },
+      color: { key: "coverFontColor", noteKey: "coverFontColor", description: "封面标题填充色；留空时跟随主题标题色", uiLabel: "文字色", uiControl: "color", uiOrder: 2, followsThemeWhenEmpty: true, relatedFields: ["coverGlowColor", "coverStrokeColor"], examples: ["#111111", "#ffffff", ""] },
+      scale: { key: "coverFontScale", noteKey: "coverFontScale", description: "封面标题字号缩放比例", uiLabel: "缩放", uiControl: "number", uiOrder: 3, examples: ["100", "180", "240"] },
+      weight: { key: "coverFontWeight", noteKey: "coverFontWeight", description: "封面标题字重", uiLabel: "字重", uiControl: "select", uiOrder: 4, examples: ["700", "800", "900"] },
+      letterSpacing: { key: "coverLetterSpacing", noteKey: "coverLetterSpacing", description: "封面标题字间距", uiLabel: "间距", uiControl: "number", uiOrder: 5, examples: ["0", "5", "12"] },
+      lineHeight: { key: "coverLineHeight", noteKey: "coverLineHeight", description: "封面标题行高", uiLabel: "行高", uiControl: "number", uiOrder: 6, examples: ["1.1", "1.3", "1.6"] },
+      align: { key: "coverTextAlign", noteKey: "coverTextAlign", description: "封面标题对齐方式", uiLabel: "对齐", uiControl: "select", uiOrder: 7, examples: ["left", "center", "right"] },
     },
   },
   position: {
@@ -325,8 +328,8 @@ export const COVER_SEMANTIC_SCHEMA = {
     description: "封面标题相对封面中心的偏移。",
     composition: "只影响封面标题块的位置，不改变页面整体布局。",
     fields: {
-      offsetX: { key: "coverOffsetX", noteKey: "coverOffsetX", description: "水平偏移百分比", examples: ["-10", "0", "12"] },
-      offsetY: { key: "coverOffsetY", noteKey: "coverOffsetY", description: "垂直偏移百分比", examples: ["-8", "0", "10"] },
+      offsetX: { key: "coverOffsetX", noteKey: "coverOffsetX", description: "水平偏移百分比", uiLabel: "X", uiControl: "number", uiOrder: 1, examples: ["-10", "0", "12"] },
+      offsetY: { key: "coverOffsetY", noteKey: "coverOffsetY", description: "垂直偏移百分比", uiLabel: "Y", uiControl: "number", uiOrder: 2, examples: ["-8", "0", "10"] },
     },
   },
   stroke: {
@@ -334,12 +337,12 @@ export const COVER_SEMANTIC_SCHEMA = {
     description: "封面标题描边系统，支持单描边、双描边和镂空。",
     composition: "double 表示内外双描边；hollow 表示透明填充，仅保留轮廓线。",
     fields: {
-      style: { key: "coverStrokeStyle", noteKey: "coverStrokeStyle", description: "描边模式：none / stroke / double / hollow", relatedFields: ["coverStrokePercent", "coverDoubleStrokePercent"], examples: ["stroke", "double", "hollow"] },
-      opacity: { key: "coverStrokeOpacity", noteKey: "coverStrokeOpacity", description: "描边透明度；主要作用于描边层，不影响文字填充", appliesWhen: "coverStrokeStyle != none && coverStrokeStyle != hollow", examples: ["60", "90", "100"] },
-      innerWidth: { key: "coverStrokePercent", noteKey: "coverStrokePercent", description: "内描边粗度，相对字号的百分比", appliesWhen: "coverStrokeStyle in [stroke, double, hollow]", relatedFields: ["coverStrokeStyle", "coverStrokeColor"], examples: ["1", "5", "9"] },
-      innerColor: { key: "coverStrokeColor", noteKey: "coverStrokeColor", description: "内描边颜色；留空时跟随当前 theme 派生色", appliesWhen: "coverStrokeStyle in [stroke, double, hollow]", followsThemeWhenEmpty: true, relatedFields: ["coverFontColor", "coverDoubleStrokeColor"], examples: ["#ffffff", "#111111", ""] },
-      outerWidth: { key: "coverDoubleStrokePercent", noteKey: "coverDoubleStrokePercent", description: "外描边粗度，仅 double 模式生效", appliesWhen: "coverStrokeStyle == double", relatedFields: ["coverStrokeStyle", "coverDoubleStrokeColor"], examples: ["3", "5", "10"] },
-      outerColor: { key: "coverDoubleStrokeColor", noteKey: "coverDoubleStrokeColor", description: "外描边颜色，仅 double 模式生效；留空时跟随当前 theme 派生色", appliesWhen: "coverStrokeStyle == double", followsThemeWhenEmpty: true, relatedFields: ["coverStrokeColor"], examples: ["#2b1a1a", "#000000", ""] },
+      style: { key: "coverStrokeStyle", noteKey: "coverStrokeStyle", description: "描边模式：none / stroke / double / hollow", uiLabel: "模式", uiControl: "select", uiOrder: 1, relatedFields: ["coverStrokePercent", "coverDoubleStrokePercent"], examples: ["stroke", "double", "hollow"] },
+      opacity: { key: "coverStrokeOpacity", noteKey: "coverStrokeOpacity", description: "描边透明度；主要作用于描边层，不影响文字填充", uiLabel: "透明", uiControl: "number", uiOrder: 6, appliesWhen: "coverStrokeStyle != none && coverStrokeStyle != hollow", examples: ["60", "90", "100"] },
+      innerWidth: { key: "coverStrokePercent", noteKey: "coverStrokePercent", description: "内描边粗度，相对字号的百分比", uiLabel: "内粗", uiControl: "number", uiOrder: 4, appliesWhen: "coverStrokeStyle in [stroke, double, hollow]", relatedFields: ["coverStrokeStyle", "coverStrokeColor"], examples: ["1", "5", "9"] },
+      innerColor: { key: "coverStrokeColor", noteKey: "coverStrokeColor", description: "内描边颜色；留空时跟随当前 theme 派生色", uiLabel: "内色", uiControl: "color", uiOrder: 2, appliesWhen: "coverStrokeStyle in [stroke, double, hollow]", followsThemeWhenEmpty: true, relatedFields: ["coverFontColor", "coverDoubleStrokeColor"], examples: ["#ffffff", "#111111", ""] },
+      outerWidth: { key: "coverDoubleStrokePercent", noteKey: "coverDoubleStrokePercent", description: "外描边粗度，仅 double 模式生效", uiLabel: "外粗", uiControl: "number", uiOrder: 5, appliesWhen: "coverStrokeStyle == double", relatedFields: ["coverStrokeStyle", "coverDoubleStrokeColor"], examples: ["3", "5", "10"] },
+      outerColor: { key: "coverDoubleStrokeColor", noteKey: "coverDoubleStrokeColor", description: "外描边颜色，仅 double 模式生效；留空时跟随当前 theme 派生色", uiLabel: "外色", uiControl: "color", uiOrder: 3, appliesWhen: "coverStrokeStyle == double", followsThemeWhenEmpty: true, relatedFields: ["coverStrokeColor"], examples: ["#2b1a1a", "#000000", ""] },
     },
   },
   glow: {
@@ -347,9 +350,9 @@ export const COVER_SEMANTIC_SCHEMA = {
     description: "封面标题发光效果，可与描边、投影叠加。",
     composition: "独立开关，不与描边或投影互斥。",
     fields: {
-      enabled: { key: "coverGlow", noteKey: "coverGlow", description: "是否启用发光", relatedFields: ["coverGlowSize", "coverGlowColor"], examples: ["true", "false"] },
-      size: { key: "coverGlowSize", noteKey: "coverGlowSize", description: "发光强度", appliesWhen: "coverGlow == true", examples: ["20", "40", "60"] },
-      color: { key: "coverGlowColor", noteKey: "coverGlowColor", description: "发光颜色；留空时跟随文字填充色", appliesWhen: "coverGlow == true", followsThemeWhenEmpty: true, relatedFields: ["coverFontColor"], examples: ["#ffcc66", "#ffffff", ""] },
+      enabled: { key: "coverGlow", noteKey: "coverGlow", description: "是否启用发光", uiLabel: "发光", uiControl: "toggle", uiOrder: 1, relatedFields: ["coverGlowSize", "coverGlowColor"], examples: ["true", "false"] },
+      size: { key: "coverGlowSize", noteKey: "coverGlowSize", description: "发光强度", uiLabel: "光", uiControl: "number", uiOrder: 2, appliesWhen: "coverGlow == true", examples: ["20", "40", "60"] },
+      color: { key: "coverGlowColor", noteKey: "coverGlowColor", description: "发光颜色；留空时跟随文字填充色", uiLabel: "发光色", uiControl: "color", uiOrder: 3, appliesWhen: "coverGlow == true", followsThemeWhenEmpty: true, relatedFields: ["coverFontColor"], examples: ["#ffcc66", "#ffffff", ""] },
     },
   },
   shadow: {
@@ -357,11 +360,11 @@ export const COVER_SEMANTIC_SCHEMA = {
     description: "封面标题投影效果，可与描边、发光叠加。",
     composition: "独立开关，不与描边或发光互斥。",
     fields: {
-      enabled: { key: "coverShadow", noteKey: "coverShadow", description: "是否启用投影", relatedFields: ["coverShadowBlur", "coverShadowColor"], examples: ["true", "false"] },
-      blur: { key: "coverShadowBlur", noteKey: "coverShadowBlur", description: "投影模糊半径", appliesWhen: "coverShadow == true", examples: ["8", "16", "32"] },
-      offsetX: { key: "coverShadowOffsetX", noteKey: "coverShadowOffsetX", description: "投影水平偏移", appliesWhen: "coverShadow == true", examples: ["0", "2", "-2"] },
-      offsetY: { key: "coverShadowOffsetY", noteKey: "coverShadowOffsetY", description: "投影垂直偏移", appliesWhen: "coverShadow == true", examples: ["2", "4", "8"] },
-      color: { key: "coverShadowColor", noteKey: "coverShadowColor", description: "投影颜色", appliesWhen: "coverShadow == true", relatedFields: ["coverShadowBlur"], examples: ["rgba(0,0,0,0.6)", "#000000"] },
+      enabled: { key: "coverShadow", noteKey: "coverShadow", description: "是否启用投影", uiLabel: "投影", uiControl: "toggle", uiOrder: 1, relatedFields: ["coverShadowBlur", "coverShadowColor"], examples: ["true", "false"] },
+      blur: { key: "coverShadowBlur", noteKey: "coverShadowBlur", description: "投影模糊半径", uiLabel: "模糊", uiControl: "number", uiOrder: 2, appliesWhen: "coverShadow == true", examples: ["8", "16", "32"] },
+      offsetX: { key: "coverShadowOffsetX", noteKey: "coverShadowOffsetX", description: "投影水平偏移", uiLabel: "X", uiControl: "number", uiOrder: 4, appliesWhen: "coverShadow == true", examples: ["0", "2", "-2"] },
+      offsetY: { key: "coverShadowOffsetY", noteKey: "coverShadowOffsetY", description: "投影垂直偏移", uiLabel: "Y", uiControl: "number", uiOrder: 5, appliesWhen: "coverShadow == true", examples: ["2", "4", "8"] },
+      color: { key: "coverShadowColor", noteKey: "coverShadowColor", description: "投影颜色", uiLabel: "投影色", uiControl: "color", uiOrder: 3, appliesWhen: "coverShadow == true", relatedFields: ["coverShadowBlur"], examples: ["rgba(0,0,0,0.6)", "#000000"] },
     },
   },
   banner: {
@@ -369,9 +372,9 @@ export const COVER_SEMANTIC_SCHEMA = {
     description: "封面标题背景色带效果。",
     composition: "在标题文字背后生成一条斜切背景带。",
     fields: {
-      enabled: { key: "coverBanner", noteKey: "coverBanner", description: "是否启用色带", relatedFields: ["coverBannerColor", "coverBannerSkew"], examples: ["true", "false"] },
-      color: { key: "coverBannerColor", noteKey: "coverBannerColor", description: "色带颜色", appliesWhen: "coverBanner == true", examples: ["rgba(0,0,0,0.5)", "#222222"] },
-      skew: { key: "coverBannerSkew", noteKey: "coverBannerSkew", description: "色带切角/倾斜度", appliesWhen: "coverBanner == true", examples: ["4", "6", "10"] },
+      enabled: { key: "coverBanner", noteKey: "coverBanner", description: "是否启用色带", uiLabel: "色带", uiControl: "toggle", uiOrder: 1, relatedFields: ["coverBannerColor", "coverBannerSkew"], examples: ["true", "false"] },
+      color: { key: "coverBannerColor", noteKey: "coverBannerColor", description: "色带颜色", uiLabel: "色带色", uiControl: "color", uiOrder: 2, appliesWhen: "coverBanner == true", examples: ["rgba(0,0,0,0.5)", "#222222"] },
+      skew: { key: "coverBannerSkew", noteKey: "coverBannerSkew", description: "色带切角/倾斜度", uiLabel: "斜", uiControl: "number", uiOrder: 3, appliesWhen: "coverBanner == true", examples: ["4", "6", "10"] },
     },
   },
 } as const satisfies Record<string, SemanticGroupMeta>;
@@ -405,6 +408,13 @@ export function isCoverSemanticFieldActive<G extends CoverSemanticGroupKey>(
   const meta = (COVER_SEMANTIC_SCHEMA[group].fields as Record<string, SemanticFieldMeta>)[field];
   if (!meta.appliesWhen) return true;
   return evaluateSemanticCondition(meta.appliesWhen, values as Record<string, unknown>);
+}
+
+export function getCoverSemanticFieldMeta<G extends CoverSemanticGroupKey>(
+  group: G,
+  field: string,
+): SemanticFieldMeta | null {
+  return (COVER_SEMANTIC_SCHEMA[group].fields as Record<string, SemanticFieldMeta>)[field] ?? null;
 }
 
 // ── Key mapping ──────────────────────────────────────────────────────────────

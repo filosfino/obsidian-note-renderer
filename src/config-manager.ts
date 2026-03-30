@@ -8,7 +8,6 @@
 import {
   RENDER_DEFAULTS,
   RENDER_KEYS,
-  NOTE_KEY_ALIASES,
   INTERNAL_TO_NOTE_KEY,
   withRendererConfigVersion,
   extractRenderOptions,
@@ -22,6 +21,7 @@ import {
 } from "./schema";
 
 import { parseRendererConfig } from "./parser";
+import { migrateRendererConfig } from "./config-migrations";
 
 import type { NoteRendererSettings } from "./main";
 
@@ -143,87 +143,7 @@ export function removeNoteConfig(markdown: string): string {
  * Mutates and returns the same object.
  */
 export function migrateSettings(raw: Record<string, unknown>): Record<string, unknown> {
-  // Key aliases
-  for (const [alias, canonical] of Object.entries(NOTE_KEY_ALIASES)) {
-    if (alias in raw && !(canonical in raw)) {
-      raw[canonical] = raw[alias];
-    }
-    delete raw[alias];
-  }
-
-  // Remove dead keys
-  delete raw["coverStyle"];
-
-  migrateCoverTextEffects(raw);
-
-  // Flat effect keys → nested coverEffects
-  migrateFlatEffects(raw);
-
-  return raw;
-}
-
-function migrateCoverTextEffects(raw: Record<string, unknown>): void {
-  const style = raw.coverStrokeStyle;
-  if (typeof style !== "string") return;
-
-  if (style === "glow") {
-    raw.coverStrokeStyle = "stroke";
-    if (typeof raw.coverGlow !== "boolean") raw.coverGlow = true;
-    return;
-  }
-
-  if (style === "double") {
-    if (typeof raw.coverGlow !== "boolean") raw.coverGlow = true;
-    return;
-  }
-
-  if (style === "shadow") {
-    raw.coverStrokeStyle = "none";
-    if (typeof raw.coverShadow !== "boolean") raw.coverShadow = true;
-  }
-}
-
-/** Convert legacy flat effect keys to nested coverEffects structure. */
-function migrateFlatEffects(raw: Record<string, unknown>): void {
-  const defaults = RENDER_DEFAULTS.coverEffects;
-  // Map from flat key prefix to effect name
-  const flatToEffect: Record<string, string> = {
-    coverOverlay: "overlay",
-    coverGrain: "grain",
-    coverAurora: "aurora",
-    coverBokeh: "bokeh",
-    coverGrid: "grid",
-    coverVignette: "vignette",
-    coverLightLeak: "lightLeak",
-    coverScanlines: "scanlines",
-    coverNetwork: "network",
-  };
-
-  let hasFlat = false;
-  for (const key of Object.keys(flatToEffect)) {
-    if (key in raw || `${key}Opacity` in raw) {
-      hasFlat = true;
-      break;
-    }
-  }
-  if (!hasFlat) return;
-
-  // Build coverEffects from flat keys, falling back to defaults
-  const effects: Record<string, EffectParams> = {};
-  for (const [flatKey, effectName] of Object.entries(flatToEffect)) {
-    const opKey = `${flatKey}Opacity`;
-    effects[effectName] = {
-      enabled: typeof raw[flatKey] === "boolean" ? raw[flatKey] : defaults[effectName].enabled,
-      opacity: typeof raw[opKey] === "number" ? raw[opKey] : defaults[effectName].opacity,
-    };
-    delete raw[flatKey];
-    delete raw[opKey];
-  }
-
-  // Only set if no coverEffects already present (don't overwrite new format)
-  if (!raw.coverEffects) {
-    raw.coverEffects = effects;
-  }
+  return migrateRendererConfig(raw);
 }
 
 // ── Re-exports (so consumers only import from config-manager) ───────────────

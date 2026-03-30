@@ -1,4 +1,5 @@
 import yaml from "js-yaml";
+import { migrateRendererConfig } from "./config-migrations";
 import { validateNoteConfig } from "./schema";
 
 /**
@@ -48,7 +49,8 @@ export function parseRendererConfig(markdown: string): Record<string, unknown> |
 
   const parsed = parseConfigBody(lang, body);
   if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-    return validateNoteConfig(parsed as Record<string, unknown>);
+    const migrated = migrateRendererConfig({ ...(parsed as Record<string, unknown>) });
+    return validateNoteConfig(migrated);
   }
   return null;
 }
