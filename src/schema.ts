@@ -44,6 +44,9 @@ interface BooleanField {
 
 export type FieldSchema = NumericField | StringField | BooleanField;
 
+export const RENDERER_CONFIG_VERSION = 1;
+export const RENDERER_CONFIG_VERSION_KEY = "rendererConfigVersion";
+
 // ── Field schema definitions ────────────────────────────────────────────────
 
 export const BUILTIN_THEMES = [
@@ -83,14 +86,24 @@ export const FIELD_SCHEMAS = {
                        description: "封面标题垂直偏移" } as NumericField,
 
   // ── Cover text effects ──
-  coverStrokeStyle:  { type: "string",  default: "stroke", enum: ["none", "stroke", "double", "shadow", "glow"] as const,
+  coverStrokeStyle:  { type: "string",  default: "stroke", enum: ["none", "stroke", "double", "hollow"] as const,
                        description: "封面标题描边样式" } as StringField,
-  coverStrokePercent:{ type: "number",  default: 20, min: 0, max: 100,
+  coverStrokePercent:{ type: "number",  default: 9, min: 0, max: 100, step: 0.5,
                        description: "描边粗细（相对于字号的百分比）" } as NumericField,
   coverStrokeOpacity:{ type: "number",  default: 90, min: 0, max: 100,
                        description: "描边不透明度" } as NumericField,
+  coverStrokeColor:  { type: "string",  default: "",
+                       description: "描边颜色，留空则跟随主题标题色；支持任意 CSS 颜色值" } as StringField,
+  coverDoubleStrokePercent:{ type: "number",  default: 5, min: 0, max: 120, step: 0.5,
+                       description: "第二层描边粗细（相对于字号的百分比，仅 double 生效）" } as NumericField,
+  coverDoubleStrokeColor:{ type: "string",  default: "",
+                       description: "第二层描边颜色，留空则跟随文字颜色；支持任意 CSS 颜色值" } as StringField,
+  coverGlow:         { type: "boolean", default: false,
+                       description: "封面标题是否显示发光" } as BooleanField,
   coverGlowSize:     { type: "number",  default: 60, min: 0, max: 200,
-                       description: "发光效果半径（仅 glow 样式生效）" } as NumericField,
+                       description: "发光效果半径" } as NumericField,
+  coverGlowColor:    { type: "string",  default: "",
+                       description: "发光颜色，留空则跟随文字颜色；支持任意 CSS 颜色值" } as StringField,
   coverShadow:       { type: "boolean", default: true,
                        description: "封面标题是否显示投影" } as BooleanField,
   coverShadowBlur:   { type: "number",  default: 16, min: 0, max: 200,
@@ -99,6 +112,8 @@ export const FIELD_SCHEMAS = {
                        description: "标题投影水平偏移" } as NumericField,
   coverShadowOffsetY:{ type: "number",  default: 4, min: -100, max: 100,
                        description: "标题投影垂直偏移" } as NumericField,
+  coverShadowColor:  { type: "string",  default: "rgba(0,0,0,0.6)",
+                       description: "标题投影颜色，支持任意 CSS 颜色值含 rgba" } as StringField,
   coverBanner:       { type: "boolean", default: false,
                        description: "封面是否显示斜条 banner 装饰" } as BooleanField,
   coverBannerColor:  { type: "string",  default: "rgba(0,0,0,0.5)",
@@ -193,6 +208,13 @@ export const NOTE_KEY_ALIASES: Record<string, RenderKey> = {
 export const INTERNAL_TO_NOTE_KEY: Partial<Record<RenderKey, string>> = {
   activeTheme: "theme",
 };
+
+export function withRendererConfigVersion(config: Record<string, unknown>): Record<string, unknown> {
+  return {
+    [RENDERER_CONFIG_VERSION_KEY]: RENDERER_CONFIG_VERSION,
+    ...config,
+  };
+}
 
 // ── Validation ───────────────────────────────────────────────────────────────
 

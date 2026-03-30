@@ -21,7 +21,7 @@ export const PAGE_HEIGHT = 1800;
 export const CONTENT_HEIGHT = PAGE_HEIGHT - PAGE_PADDING_TOP - PAGE_PADDING_BOTTOM;
 
 // Cover stroke styles for text-on-image
-export type CoverStrokeStyle = "none" | "stroke" | "double" | "shadow" | "glow";
+export type CoverStrokeStyle = "none" | "stroke" | "double" | "hollow";
 
 // Cover text alignment
 export type CoverTextAlign = "left" | "center" | "right";

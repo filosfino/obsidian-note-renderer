@@ -733,6 +733,62 @@
   color: var(--text-error, #f38ba8);
 }
 
+.nr-color-popover {
+  position: fixed;
+  z-index: 1000;
+  min-width: 180px;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.24);
+}
+
+.nr-color-popover-title {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.nr-color-choice {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-normal);
+  cursor: pointer;
+  text-align: left;
+}
+
+.nr-color-choice:hover {
+  background: var(--background-modifier-hover);
+}
+
+.nr-color-choice-swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid var(--background-modifier-border);
+  flex: none;
+}
+
+.nr-color-choice-label {
+  font-size: 12px;
+}
+
+.nr-color-popover-actions {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--background-modifier-border);
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
 /* ── Utility classes (scanner compliance) ──────────────────────────────── */
 .nr-hidden { display: none !important; }
 .nr-flex-spacer { flex: 1; }

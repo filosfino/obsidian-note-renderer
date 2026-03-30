@@ -1,6 +1,6 @@
 import { App, Component, sanitizeHTMLToDom } from "obsidian";
 import { PAGE_WIDTH, CONTENT_WIDTH, PAGE_PADDING_H, PAGE_PADDING_TOP, PAGE_PADDING_BOTTOM, PAGE_HEIGHTS, getContentHeight, type PageMode } from "./constants";
-import { applyCoverEffects, extractCoverTitleColor } from "./effects";
+import { applyCoverEffects, deriveCoverStrokePalette } from "./effects";
 import { paginateBody } from "./paginator";
 import { parseNoteStructure } from "./parser";
 import { renderMarkdownToHtml, createVaultImageResolver } from "./md-to-html";
@@ -31,7 +31,8 @@ export async function renderNote(
 
   const coverFont = options.coverFontFamily || options.fontFamily;
   const coverColor = options.coverFontColor || "";
-  const themeTitleColor = extractCoverTitleColor(themeCss) || "#e8c36a";
+  const strokePalette = deriveCoverStrokePalette(themeCss);
+  const themeTitleColor = strokePalette.fill || "#e8c36a";
 
   // Build full CSS: theme + font overrides
   const coverColorCss = coverColor ? `
@@ -133,6 +134,7 @@ ${coverColorCss}
   // Apply effects to cover text (works with or without cover image)
   {
     const strokeStyle = options.coverStrokeStyle || "stroke";
+    const hasGlow = options.coverGlow === true;
     const hasShadow = options.coverShadow !== false;
     const shadowBlur = options.coverShadowBlur ?? 16;
     const shadowOffX = options.coverShadowOffsetX ?? 0;
@@ -143,30 +145,41 @@ ${coverColorCss}
       const fs = parseInt(htmlEl.style.fontSize) || 120;
       const sw = Math.max(1, Math.round(fs * strokePercent));
       const accentColor = htmlEl.style.color || coverColor || themeTitleColor;
+      const strokeColor = withAlpha(options.coverStrokeColor || strokePalette.inner, options.coverStrokeOpacity ?? 90);
+      const fillColor = hasInlineTextColor(htmlEl) ? htmlEl.style.color : (coverColor || themeTitleColor);
+      const doubleStrokeWidth = Math.max(sw + 1, Math.round(fs * ((options.coverDoubleStrokePercent ?? 38) / 100)));
+      const doubleStrokeColor = options.coverDoubleStrokeColor || strokePalette.outer;
+      const glowColor = options.coverGlowColor || accentColor;
+      const shadowColor = options.coverShadowColor || "rgba(0,0,0,0.6)";
 
       const hasInlineColor = htmlEl.style.color && htmlEl.style.color !== "";
       const textColor = coverColor || themeTitleColor;
       let css = hasInlineColor ? ";" : `; color: ${textColor} !important;`;
-      const strokeAlpha = (options.coverStrokeOpacity ?? 90) / 100;
       const glowMul = (options.coverGlowSize ?? 60) / 100;
+      const textShadows: string[] = [];
       switch (strokeStyle) {
         case "none":
           break;
         case "stroke":
-          css += ` -webkit-text-stroke: ${sw}px rgba(0,0,0,${strokeAlpha}); paint-order: stroke fill;`;
+          css += ` -webkit-text-stroke: ${sw}px ${strokeColor}; paint-order: stroke fill;`;
           break;
         case "double": {
-          const glowSize = Math.max(2, Math.round(sw * glowMul));
-          css += ` -webkit-text-stroke: ${sw}px rgba(0,0,0,${strokeAlpha}); paint-order: stroke fill;`;
-          css += ` filter: drop-shadow(0 0 ${glowSize}px ${accentColor}) drop-shadow(0 0 ${glowSize}px ${accentColor}) drop-shadow(0 0 ${Math.round(glowSize * 0.5)}px ${accentColor});`;
+          css += ` -webkit-text-stroke: ${sw}px ${strokeColor}; paint-order: stroke fill;`;
+          ensureDoubleStrokeBackdrop(htmlEl, doubleStrokeWidth, doubleStrokeColor);
           break;
         }
-        case "glow": {
-          const gs = Math.max(1, Math.round(sw * glowMul));
-          css += ` -webkit-text-stroke: ${sw}px rgba(0,0,0,${strokeAlpha}); paint-order: stroke fill;`;
-          css += ` text-shadow: 0 0 ${gs}px ${accentColor}, 0 0 ${gs*2}px ${accentColor}, 0 0 ${gs*3}px rgba(0,0,0,0.3);`;
+        case "hollow": {
+          css = hasInlineColor ? ";" : ";";
+          css += ` color: transparent !important; -webkit-text-fill-color: transparent; -webkit-text-stroke: ${sw}px ${strokeColor}; paint-order: stroke fill;`;
           break;
         }
+      }
+
+      if (hasGlow) {
+        const gs = Math.max(1, Math.round(sw * glowMul));
+        textShadows.push(`0 0 ${gs}px ${glowColor}`);
+        textShadows.push(`0 0 ${gs * 2}px ${glowColor}`);
+        textShadows.push(`0 0 ${gs * 3}px ${glowColor}`);
       }
 
       if (options.coverBanner) {
@@ -176,12 +189,11 @@ ${coverColorCss}
       }
 
       if (hasShadow) {
-        const shadowCss = `${shadowOffX}px ${shadowOffY}px ${shadowBlur}px rgba(0,0,0,0.6)`;
-        if (css.includes("text-shadow:")) {
-          css = css.replace("text-shadow:", `text-shadow: ${shadowCss},`);
-        } else {
-          css += ` text-shadow: ${shadowCss};`;
-        }
+        textShadows.unshift(`${shadowOffX}px ${shadowOffY}px ${shadowBlur}px ${shadowColor}`);
+      }
+
+      if (textShadows.length > 0) {
+        css += ` text-shadow: ${textShadows.join(", ")};`;
       }
 
       htmlEl.style.cssText += css;
@@ -483,4 +495,87 @@ function waitForImages(container: HTMLElement): Promise<void> {
 function waitForFonts(): Promise<void> {
   if (!("fonts" in document)) return Promise.resolve();
   return (document as Document & { fonts?: FontFaceSet }).fonts?.ready.then(() => {}) ?? Promise.resolve();
+}
+
+function withAlpha(color: string, opacityPercent: number): string {
+  const alpha = Math.max(0, Math.min(1, opacityPercent / 100));
+
+  if (color.startsWith("#")) {
+    const hex = color.slice(1);
+    const normalized = hex.length === 3
+      ? hex.split("").map((c) => c + c).join("")
+      : hex;
+    if (normalized.length === 6) {
+      const r = parseInt(normalized.slice(0, 2), 16);
+      const g = parseInt(normalized.slice(2, 4), 16);
+      const b = parseInt(normalized.slice(4, 6), 16);
+      return `rgba(${r},${g},${b},${alpha})`;
+    }
+  }
+
+  const rgbMatch = color.match(/^rgba?\(([^)]+)\)$/i);
+  if (rgbMatch) {
+    const parts = rgbMatch[1].split(",").map((part) => part.trim());
+    if (parts.length >= 3) {
+      return `rgba(${parts[0]},${parts[1]},${parts[2]},${alpha})`;
+    }
+  }
+
+  return `color-mix(in srgb, ${color} ${Math.round(alpha * 100)}%, transparent)`;
+}
+
+function hasInlineTextColor(el: HTMLElement): boolean {
+  return !!(el.style.color && el.style.color !== "");
+}
+
+function ensureDoubleStrokeBackdrop(el: HTMLElement, radius: number, color: string): void {
+  const parent = el.parentElement;
+  if (!parent) return;
+
+  const computed = getComputedStyle(el);
+  const wrapper = document.createElement("div");
+  wrapper.classList.add("nr-double-stroke-wrap");
+  wrapper.style.position = "relative";
+  wrapper.style.display = computed.display === "block" ? "block" : "inline-block";
+  wrapper.style.width = computed.display === "block" ? "100%" : "fit-content";
+  wrapper.style.marginTop = computed.marginTop;
+  wrapper.style.marginRight = computed.marginRight;
+  wrapper.style.marginBottom = computed.marginBottom;
+  wrapper.style.marginLeft = computed.marginLeft;
+
+  const clone = el.cloneNode(true) as HTMLElement;
+  clone.style.cssText = el.style.cssText;
+  clone.style.position = "absolute";
+  clone.style.inset = "0";
+  clone.style.zIndex = "0";
+  clone.style.pointerEvents = "none";
+  clone.style.margin = "0";
+  clone.style.color = color;
+  clone.style.webkitTextStroke = "0 transparent";
+  clone.style.textShadow = buildOutlineRingShadows(radius, color).join(", ");
+
+  el.style.margin = "0";
+  el.style.position = "relative";
+  el.style.zIndex = "1";
+
+  parent.replaceChild(wrapper, el);
+  wrapper.appendChild(clone);
+  wrapper.appendChild(el);
+}
+
+function buildOutlineRingShadows(radius: number, color: string): string[] {
+  const offsets = new Set<string>();
+  const steps = Math.max(16, radius * 10);
+
+  for (let i = 0; i < steps; i++) {
+    const angle = (Math.PI * 2 * i) / steps;
+    const x = Math.round(Math.cos(angle) * radius);
+    const y = Math.round(Math.sin(angle) * radius);
+    offsets.add(`${x},${y}`);
+  }
+
+  return Array.from(offsets).map((offset) => {
+    const [x, y] = offset.split(",");
+    return `${x}px ${y}px 0 ${color}`;
+  });
 }

@@ -59,6 +59,8 @@ function cleanFieldSchemas(raw) {
 }
 
 const output = {
+  rendererConfigVersion: exported.RENDERER_CONFIG_VERSION,
+  rendererConfigVersionKey: exported.RENDERER_CONFIG_VERSION_KEY,
   fieldSchemas: cleanFieldSchemas(exported.FIELD_SCHEMAS),
   effectSchemas: exported.EFFECT_SCHEMAS,
   defaults: (() => {

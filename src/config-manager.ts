@@ -10,6 +10,7 @@ import {
   RENDER_KEYS,
   NOTE_KEY_ALIASES,
   INTERNAL_TO_NOTE_KEY,
+  withRendererConfigVersion,
   extractRenderOptions,
   toNoteConfigKeys,
   getFieldSchema,
@@ -135,10 +136,33 @@ export function migrateSettings(raw: Record<string, unknown>): Record<string, un
   // Remove dead keys
   delete raw["coverStyle"];
 
+  migrateCoverTextEffects(raw);
+
   // Flat effect keys → nested coverEffects
   migrateFlatEffects(raw);
 
   return raw;
+}
+
+function migrateCoverTextEffects(raw: Record<string, unknown>): void {
+  const style = raw.coverStrokeStyle;
+  if (typeof style !== "string") return;
+
+  if (style === "glow") {
+    raw.coverStrokeStyle = "stroke";
+    if (typeof raw.coverGlow !== "boolean") raw.coverGlow = true;
+    return;
+  }
+
+  if (style === "double") {
+    if (typeof raw.coverGlow !== "boolean") raw.coverGlow = true;
+    return;
+  }
+
+  if (style === "shadow") {
+    raw.coverStrokeStyle = "none";
+    if (typeof raw.coverShadow !== "boolean") raw.coverShadow = true;
+  }
 }
 
 /** Convert legacy flat effect keys to nested coverEffects structure. */
@@ -194,7 +218,11 @@ export type { RenderOptions, RenderKey };
 function buildConfigSection(config: Record<string, unknown>): string {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const yaml = require("js-yaml") as typeof import("js-yaml");
-  const yamlStr = yaml.dump(config, { indent: 2, lineWidth: -1, sortKeys: false });
+  const yamlStr = yaml.dump(withRendererConfigVersion(config), {
+    indent: 2,
+    lineWidth: -1,
+    sortKeys: false,
+  });
   return `\n## renderer_config\n\n\`\`\`yaml\n${yamlStr}\`\`\`\n`;
 }
 

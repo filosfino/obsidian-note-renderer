@@ -8,7 +8,7 @@ import {
 import { VIEW_TYPE, PAGE_WIDTH, PAGE_HEIGHTS } from "./constants";
 import { renderNote, RenderedPages } from "./renderer";
 import { exportPages, exportSinglePage } from "./exporter";
-import { extractCoverTitleColor } from "./effects";
+import { deriveCoverStrokePalette, extractCoverTitleColor } from "./effects";
 import {
   readNoteConfig,
   mergeConfigs,
@@ -21,6 +21,22 @@ import type NoteRendererPlugin from "./main";
 import { PRESET_KEYS } from "./main";
 import type { NoteRendererSettings } from "./main";
 import { buildSettingsPanel, setSelectValue as setFontSelectValue, type PanelHost, type PanelRefs } from "./settings-panel";
+
+function parseColorValue(color: string, fallback = "#000000"): string {
+  if (!color) return fallback;
+  if (color.startsWith("#")) return color;
+  const parts = color.match(/[\d.]+/g);
+  if (!parts || parts.length < 3) return fallback;
+  return "#" + [0, 1, 2]
+    .map((index) => Math.round(Number(parts[index])).toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function parseAlphaPercent(color: string, fallback = 100): string {
+  const parts = color.match(/[\d.]+/g);
+  if (!parts || parts.length < 4) return String(fallback);
+  return String(Math.round(parseFloat(parts[3]) * 100));
+}
 
 export class PreviewView extends ItemView implements PanelHost {
   plugin: NoteRendererPlugin;
@@ -301,7 +317,12 @@ export class PreviewView extends ItemView implements PanelHost {
     setFontSelectValue(r.coverFontSelect, s.coverFontFamily);
     // Sync cover color: saved value → theme default
     void this.plugin.loadTheme(s.activeTheme).then(css => {
-      r.coverColorInput.value = s.coverFontColor || extractCoverTitleColor(css) || "#e07c5a";
+      const themeColor = extractCoverTitleColor(css) || "#e07c5a";
+      const strokePalette = deriveCoverStrokePalette(css);
+      r.coverColorInput.value = s.coverFontColor || themeColor;
+      r.strokeColorInput.value = parseColorValue(s.coverStrokeColor, strokePalette.inner);
+      r.doubleStrokeColorInput.value = parseColorValue(s.coverDoubleStrokeColor, strokePalette.outer);
+      r.glowColorInput.value = parseColorValue(s.coverGlowColor, s.coverFontColor || themeColor);
     });
     r.scaleInput.value = String(s.coverFontScale);
     r.lsInput.value = String(s.coverLetterSpacing);
@@ -309,7 +330,13 @@ export class PreviewView extends ItemView implements PanelHost {
     r.strokeStyleSelect.value = s.coverStrokeStyle;
     r.strokeInput.value = String(s.coverStrokePercent);
     r.opInput.value = String(s.coverStrokeOpacity);
+    r.doubleStrokeInput.value = String(s.coverDoubleStrokePercent);
+    r.glowToggle.classList.toggle("active", s.coverGlow);
     r.glowInput.value = String(s.coverGlowSize);
+    r.strokeColorInput.value = parseColorValue(s.coverStrokeColor, "#000000");
+    r.doubleStrokeColorInput.value = parseColorValue(s.coverDoubleStrokeColor, s.coverFontColor || "#e07c5a");
+    r.strokeAlphaInput.value = String(s.coverStrokeOpacity);
+    r.glowColorInput.value = parseColorValue(s.coverGlowColor, s.coverFontColor || "#e07c5a");
     r.overlayToggle.classList.toggle("active", s.coverEffects?.overlay?.enabled ?? false);
     // Sync all effect chips, param rows, and input values
     for (const [name, chip] of Object.entries(r.effectChips)) {
@@ -328,10 +355,15 @@ export class PreviewView extends ItemView implements PanelHost {
     r.oyInput.value = String(s.coverOffsetY);
     r.shadowToggle.classList.toggle("active", s.coverShadow);
     r.blurInput.value = String(s.coverShadowBlur);
+    r.shadowColorInput.value = parseColorValue(s.coverShadowColor, "#000000");
+    r.shadowAlphaInput.value = parseAlphaPercent(s.coverShadowColor, 60);
     r.bannerToggle.classList.toggle("active", s.coverBanner);
     const strokeOn = s.coverStrokeStyle !== "none";
     r.strokeToggle.classList.toggle("active", strokeOn);
     r.strokeParamsRow.classList.toggle("nr-hidden", !strokeOn);
+    r.doubleStrokeField.classList.toggle("nr-hidden", s.coverStrokeStyle !== "double");
+    r.doubleStrokeColorField.classList.toggle("nr-hidden", s.coverStrokeStyle !== "double");
+    r.glowParamsRow.classList.toggle("nr-hidden", !s.coverGlow);
     r.bannerParamsRow.classList.toggle("nr-hidden", !s.coverBanner);
     r.shadowParamsRow.classList.toggle("nr-hidden", !s.coverShadow);
     const align = s.coverTextAlign ?? "left";
