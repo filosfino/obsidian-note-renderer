@@ -82,6 +82,8 @@ export const FIELD_SCHEMAS = {
                        description: "封面标题字体族" } as StringField,
   coverFontColor:    { type: "string",  default: "",
                        description: "封面标题颜色，留空则跟随主题；支持任意 CSS 颜色值" } as StringField,
+  coverFontOpacity:  { type: "number",  default: 100, min: 0, max: 100, step: 10, unit: "%",
+                       description: "封面标题整体透明度；同时作用于填充、描边、下划线和阴影" } as NumericField,
   coverFontScale:    { type: "number",  default: 100, min: 50, max: 300, step: 10, unit: "%",
                        description: "封面标题字号缩放比例" } as NumericField,
   coverFontWeight:   { type: "number",  default: 800, min: 100, max: 900, step: 100,
@@ -133,6 +135,8 @@ export const FIELD_SCHEMAS = {
                        description: "banner 颜色，支持 CSS 颜色值含 rgba" } as StringField,
   coverBannerSkew:   { type: "number",  default: 6, min: 0, max: 20,
                        description: "banner 倾斜角度（度）" } as NumericField,
+  coverBannerPaddingPercent: { type: "number", default: 40, min: 0, max: 120, step: 5, unit: "%",
+                       description: "banner 左右额外留白，按当前字号的百分比计算" } as NumericField,
 } as const satisfies Record<string, FieldSchema>;
 
 export const COVER_STROKE_STYLE_UI: Record<"none" | "stroke" | "double" | "hollow", StrokeStyleUiSchema> = {
@@ -166,6 +170,10 @@ export interface EffectParams {
   enabled: boolean;
   opacity: number;
   count?: number;
+  width?: number;
+  spacing?: number;
+  size?: number;
+  color?: string;
 }
 
 export interface EffectSchema {
@@ -179,6 +187,23 @@ export interface EffectSchema {
   defaultCount?: number;
   countMin?: number;
   countMax?: number;
+  /** Width parameter — for effects whose line/stroke thickness is adjustable. */
+  defaultWidth?: number;
+  widthMin?: number;
+  widthMax?: number;
+  widthStep?: number;
+  /** Spacing parameter — for effects whose repetition/gap is adjustable. */
+  defaultSpacing?: number;
+  spacingMin?: number;
+  spacingMax?: number;
+  spacingStep?: number;
+  /** Size parameter — for effects whose element size should be adjustable. */
+  defaultSize?: number;
+  sizeMin?: number;
+  sizeMax?: number;
+  sizeStep?: number;
+  /** Color parameter — for effects that support explicit tint overrides. */
+  defaultColor?: string;
 }
 
 /** Effect definitions — single source of truth for defaults + UI constraints. 仅作用于封面页。 */
@@ -192,15 +217,22 @@ export const EFFECT_SCHEMAS: Record<string, EffectSchema> = {
   aurora:    { label: "极光",   description: "封面特效。彩色光带，count 控制光带数量",
                defaultEnabled: false, defaultOpacity: 30, min: 5,  max: 80, defaultCount: 3,  countMin: 2, countMax: 6 },
   bokeh:     { label: "散景",   description: "封面特效。虚化光斑，count 控制光斑数量",
-               defaultEnabled: false, defaultOpacity: 12, min: 1,  max: 50, defaultCount: 16, countMin: 4, countMax: 40 },
+               defaultEnabled: false, defaultOpacity: 12, min: 1,  max: 50, defaultCount: 16, countMin: 4, countMax: 40, defaultColor: "" },
+  dots:      { label: "波点",   description: "封面特效。规则点阵，像画画笔记本的点阵纸",
+               defaultEnabled: false, defaultOpacity: 14, min: 1,  max: 40,
+               defaultSpacing: 28, spacingMin: 16, spacingMax: 64, spacingStep: 2,
+               defaultSize: 4, sizeMin: 1, sizeMax: 12, sizeStep: 1,
+               defaultColor: "" },
   grid:      { label: "网格",   description: "封面特效。细线网格纹理",
-               defaultEnabled: false, defaultOpacity: 6,  min: 1,  max: 30 },
+               defaultEnabled: false, defaultOpacity: 6,  min: 1,  max: 50,
+               defaultSpacing: 60, spacingMin: 24, spacingMax: 140, spacingStep: 4 },
   lightLeak: { label: "漏光",   description: "封面特效。模拟胶片漏光，count 控制漏光区域数",
                defaultEnabled: false, defaultOpacity: 25, min: 5,  max: 80, defaultCount: 2,  countMin: 1, countMax: 5 },
   scanlines: { label: "扫描线", description: "封面特效。水平扫描线，CRT 显示器风格",
                defaultEnabled: false, defaultOpacity: 8,  min: 1,  max: 30 },
   network:   { label: "网络",   description: "封面特效。随机连线节点图案，count 控制节点数",
-               defaultEnabled: false, defaultOpacity: 15, min: 5,  max: 50, defaultCount: 10, countMin: 4, countMax: 20 },
+               defaultEnabled: false, defaultOpacity: 15, min: 5,  max: 50, defaultCount: 10, countMin: 4, countMax: 20,
+               defaultWidth: 1, widthMin: 0.5, widthMax: 6, widthStep: 0.5 },
 };
 
 export const EFFECT_NAMES: string[] = Object.keys(EFFECT_SCHEMAS);
@@ -217,6 +249,10 @@ export const RENDER_DEFAULTS = {
       enabled: s.defaultEnabled,
       opacity: s.defaultOpacity,
       ...(s.defaultCount != null ? { count: s.defaultCount } : {}),
+      ...(s.defaultWidth != null ? { width: s.defaultWidth } : {}),
+      ...(s.defaultSpacing != null ? { spacing: s.defaultSpacing } : {}),
+      ...(s.defaultSize != null ? { size: s.defaultSize } : {}),
+      ...(s.defaultColor != null ? { color: s.defaultColor } : {}),
     }])
   ) as Record<string, EffectParams>,
 } as {
@@ -235,6 +271,7 @@ export const RENDER_KEYS: RenderKey[] = Object.keys(RENDER_DEFAULTS) as RenderKe
 export interface CoverTypographyConfig {
   fontFamily: string;
   color: string;
+  opacity: number;
   scale: number;
   weight: number;
   letterSpacing: number;
@@ -277,6 +314,7 @@ export interface CoverBannerConfig {
   enabled: boolean;
   color: string;
   skew: number;
+  paddingPercent: number;
 }
 
 export interface CoverConfig {
@@ -318,11 +356,12 @@ export const COVER_SEMANTIC_SCHEMA = {
     fields: {
       fontFamily: { key: "coverFontFamily", noteKey: "coverFontFamily", description: "封面标题字体族", uiLabel: "字体", uiControl: "select", uiOrder: 1, examples: ['"Yuanti SC", "PingFang SC", sans-serif'] },
       color: { key: "coverFontColor", noteKey: "coverFontColor", description: "封面标题填充色；留空时跟随主题标题色", uiLabel: "文字色", uiControl: "color", uiOrder: 2, followsThemeWhenEmpty: true, relatedFields: ["coverGlowColor", "coverStrokeColor"], examples: ["#111111", "#ffffff", ""] },
-      scale: { key: "coverFontScale", noteKey: "coverFontScale", description: "封面标题字号缩放比例", uiLabel: "缩放", uiControl: "number", uiOrder: 3, examples: ["100", "180", "240"] },
-      weight: { key: "coverFontWeight", noteKey: "coverFontWeight", description: "封面标题字重", uiLabel: "字重", uiControl: "select", uiOrder: 4, examples: ["700", "800", "900"] },
-      letterSpacing: { key: "coverLetterSpacing", noteKey: "coverLetterSpacing", description: "封面标题字间距", uiLabel: "间距", uiControl: "number", uiOrder: 5, examples: ["0", "5", "12"] },
-      lineHeight: { key: "coverLineHeight", noteKey: "coverLineHeight", description: "封面标题行高", uiLabel: "行高", uiControl: "number", uiOrder: 6, examples: ["1.1", "1.3", "1.6"] },
-      align: { key: "coverTextAlign", noteKey: "coverTextAlign", description: "封面标题对齐方式", uiLabel: "对齐", uiControl: "select", uiOrder: 7, examples: ["left", "center", "right"] },
+      opacity: { key: "coverFontOpacity", noteKey: "coverFontOpacity", description: "封面标题整体透明度", uiLabel: "透明", uiControl: "number", uiOrder: 3, examples: ["40", "70", "100"] },
+      scale: { key: "coverFontScale", noteKey: "coverFontScale", description: "封面标题字号缩放比例", uiLabel: "缩放", uiControl: "number", uiOrder: 4, examples: ["100", "180", "240"] },
+      weight: { key: "coverFontWeight", noteKey: "coverFontWeight", description: "封面标题字重", uiLabel: "字重", uiControl: "select", uiOrder: 5, examples: ["700", "800", "900"] },
+      letterSpacing: { key: "coverLetterSpacing", noteKey: "coverLetterSpacing", description: "封面标题字间距", uiLabel: "间距", uiControl: "number", uiOrder: 6, examples: ["0", "5", "12"] },
+      lineHeight: { key: "coverLineHeight", noteKey: "coverLineHeight", description: "封面标题行高", uiLabel: "行高", uiControl: "number", uiOrder: 7, examples: ["1.1", "1.3", "1.6"] },
+      align: { key: "coverTextAlign", noteKey: "coverTextAlign", description: "封面标题对齐方式", uiLabel: "对齐", uiControl: "select", uiOrder: 8, examples: ["left", "center", "right"] },
     },
   },
   position: {
@@ -374,9 +413,10 @@ export const COVER_SEMANTIC_SCHEMA = {
     description: "封面标题背景色带效果。",
     composition: "在标题文字背后生成一条斜切背景带。",
     fields: {
-      enabled: { key: "coverBanner", noteKey: "coverBanner", description: "是否启用色带", uiLabel: "色带", uiControl: "toggle", uiOrder: 1, relatedFields: ["coverBannerColor", "coverBannerSkew"], examples: ["true", "false"] },
+      enabled: { key: "coverBanner", noteKey: "coverBanner", description: "是否启用色带", uiLabel: "色带", uiControl: "toggle", uiOrder: 1, relatedFields: ["coverBannerColor", "coverBannerSkew", "coverBannerPaddingPercent"], examples: ["true", "false"] },
       color: { key: "coverBannerColor", noteKey: "coverBannerColor", description: "色带颜色", uiLabel: "色带色", uiControl: "color", uiOrder: 2, appliesWhen: "coverBanner == true", examples: ["rgba(0,0,0,0.5)", "#222222"] },
       skew: { key: "coverBannerSkew", noteKey: "coverBannerSkew", description: "色带切角/倾斜度", uiLabel: "斜", uiControl: "number", uiOrder: 3, appliesWhen: "coverBanner == true", examples: ["4", "6", "10"] },
+      paddingPercent: { key: "coverBannerPaddingPercent", noteKey: "coverBannerPaddingPercent", description: "色带左右额外留白，按当前字号百分比计算，值越大越不容易被斜角压到文字", uiLabel: "宽", uiControl: "number", uiOrder: 4, appliesWhen: "coverBanner == true", examples: ["20", "40", "60"] },
     },
   },
 } as const satisfies Record<string, SemanticGroupMeta>;
@@ -384,6 +424,7 @@ export const COVER_SEMANTIC_SCHEMA = {
 const COVER_SEMANTIC_FIELD_PATHS: Record<string, CoverSemanticFieldPath> = {
   coverFontFamily: ["typography", "fontFamily"],
   coverFontColor: ["typography", "color"],
+  coverFontOpacity: ["typography", "opacity"],
   coverFontScale: ["typography", "scale"],
   coverFontWeight: ["typography", "weight"],
   coverLetterSpacing: ["typography", "letterSpacing"],
@@ -408,6 +449,7 @@ const COVER_SEMANTIC_FIELD_PATHS: Record<string, CoverSemanticFieldPath> = {
   coverBanner: ["banner", "enabled"],
   coverBannerColor: ["banner", "color"],
   coverBannerSkew: ["banner", "skew"],
+  coverBannerPaddingPercent: ["banner", "paddingPercent"],
 };
 
 type CoverSemanticGroupKey = keyof typeof COVER_SEMANTIC_SCHEMA;
@@ -575,6 +617,24 @@ function validateCoverEffects(raw: Record<string, unknown>): Record<string, Effe
         ? Math.max(schema.countMin!, Math.min(schema.countMax!, Math.round(v.count)))
         : schema.defaultCount;
     }
+    if (schema.defaultWidth != null) {
+      params.width = typeof v.width === "number"
+        ? Math.max(schema.widthMin!, Math.min(schema.widthMax!, v.width))
+        : schema.defaultWidth;
+    }
+    if (schema.defaultSpacing != null) {
+      params.spacing = typeof v.spacing === "number"
+        ? Math.max(schema.spacingMin!, Math.min(schema.spacingMax!, v.spacing))
+        : schema.defaultSpacing;
+    }
+    if (schema.defaultSize != null) {
+      params.size = typeof v.size === "number"
+        ? Math.max(schema.sizeMin!, Math.min(schema.sizeMax!, v.size))
+        : schema.defaultSize;
+    }
+    if (schema.defaultColor != null) {
+      params.color = typeof v.color === "string" ? v.color : schema.defaultColor;
+    }
     result[name] = params;
   }
   return result;
@@ -606,6 +666,7 @@ export function buildCoverConfig(options: RenderOptions): CoverConfig {
     typography: {
       fontFamily: options.coverFontFamily || options.fontFamily,
       color: options.coverFontColor || "",
+      opacity: options.coverFontOpacity ?? 100,
       scale: options.coverFontScale ?? 100,
       weight: options.coverFontWeight ?? 800,
       letterSpacing: options.coverLetterSpacing ?? 5,
@@ -644,6 +705,7 @@ export function buildCoverConfig(options: RenderOptions): CoverConfig {
       enabled: options.coverBanner === true,
       color: options.coverBannerColor || "rgba(0,0,0,0.5)",
       skew: options.coverBannerSkew ?? 6,
+      paddingPercent: options.coverBannerPaddingPercent ?? 40,
     },
   };
 }

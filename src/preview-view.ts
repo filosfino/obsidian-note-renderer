@@ -9,7 +9,7 @@ import { VIEW_TYPE, PAGE_WIDTH, PAGE_HEIGHTS } from "./constants";
 import { renderNote, RenderedPages } from "./renderer";
 import { exportPages, exportSinglePage } from "./exporter";
 import { deriveCoverStrokePalette, extractCoverTitleColor } from "./effects";
-import { isCoverSemanticFieldActive } from "./schema";
+import { EFFECT_SCHEMAS, isCoverSemanticFieldActive } from "./schema";
 import {
   readNoteConfig,
   resolveMergedRenderConfig,
@@ -328,6 +328,7 @@ export class PreviewView extends ItemView implements PanelHost {
       r.glowColorInput.value = parseColorValue(s.coverGlowColor, s.coverFontColor || themeColor);
     });
     r.scaleInput.value = String(s.coverFontScale);
+    r.coverOpacityInput.value = String(s.coverFontOpacity ?? 100);
     r.lsInput.value = String(s.coverLetterSpacing);
     r.lhInput.value = String(s.coverLineHeight);
     r.strokeStyleSelect.value = s.coverStrokeStyle;
@@ -351,7 +352,27 @@ export class PreviewView extends ItemView implements PanelHost {
         row.classList.toggle("nr-hidden", !enabled);
         const inputs = row.querySelectorAll<HTMLInputElement>(".nr-field-input");
         if (inputs[0] && params?.opacity != null) inputs[0].value = String(params.opacity);
-        if (inputs[1] && params?.count != null) inputs[1].value = String(params.count);
+        let inputIndex = 1;
+        const meta = EFFECT_SCHEMAS[name];
+        if (meta?.defaultCount != null && inputs[inputIndex]) {
+          inputs[inputIndex].value = String(params?.count ?? meta.defaultCount);
+          inputIndex += 1;
+        }
+        if (meta?.defaultWidth != null && inputs[inputIndex]) {
+          inputs[inputIndex].value = String(params?.width ?? meta.defaultWidth);
+          inputIndex += 1;
+        }
+        if (meta?.defaultSpacing != null && inputs[inputIndex]) {
+          inputs[inputIndex].value = String(params?.spacing ?? meta.defaultSpacing);
+          inputIndex += 1;
+        }
+        if (meta?.defaultSize != null && inputs[inputIndex]) {
+          inputs[inputIndex].value = String(params?.size ?? meta.defaultSize);
+        }
+        const colorInput = row.querySelector<HTMLInputElement>(".nr-color-dot");
+        if (colorInput && meta?.defaultColor != null && params?.color) {
+          colorInput.value = parseColorValue(params.color, colorInput.value || "#000000");
+        }
       }
     }
     r.oxInput.value = String(s.coverOffsetX);

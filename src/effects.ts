@@ -49,28 +49,74 @@ function createOverlay(dynamicStyles: Record<string, string>): HTMLElement {
   return div;
 }
 
+function colorToRgbaPrefix(color: string | undefined, fallback: string): string {
+  if (!color) return fallback;
+  if (color.startsWith("#")) {
+    const raw = color.slice(1);
+    const hex = raw.length === 3 ? raw.split("").map((c) => c + c).join("") : raw;
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+    return `rgba(${r},${g},${b},`;
+  }
+  const parts = color.match(/[\d.]+/g);
+  if (!parts || parts.length < 3) return fallback;
+  return `rgba(${Math.round(Number(parts[0]))},${Math.round(Number(parts[1]))},${Math.round(Number(parts[2]))},`;
+}
+
 // ── Effect renderers ────────────────────────────────────────────────────────
 
-function renderGrain(container: HTMLElement, params: EffectParams): void {
+function renderGrain(container: HTMLElement, params: EffectParams, ctx: EffectContext): void {
   const op = params.opacity / 100;
   const id = `nr-grain-${Date.now()}`;
-  const el = createOverlay({ opacity: String(op), mixBlendMode: "overlay" });
+  const el = createOverlay({
+    opacity: String(Math.min(1, op * 1.35)),
+    mixBlendMode: ctx.effectBlend,
+  });
   const NS = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(NS, "svg");
   svg.setAttribute("width", "100%");
   svg.setAttribute("height", "100%");
+  svg.setAttribute("viewBox", `0 0 ${ctx.pageWidth} ${ctx.pageHeight}`);
   const filter = document.createElementNS(NS, "filter");
   filter.setAttribute("id", id);
+  filter.setAttribute("x", "0");
+  filter.setAttribute("y", "0");
+  filter.setAttribute("width", "100%");
+  filter.setAttribute("height", "100%");
   const turb = document.createElementNS(NS, "feTurbulence");
   turb.setAttribute("type", "fractalNoise");
-  turb.setAttribute("baseFrequency", "0.65");
-  turb.setAttribute("numOctaves", "3");
+  turb.setAttribute("baseFrequency", ctx.isDark ? "0.95" : "0.85");
+  turb.setAttribute("numOctaves", "2");
   turb.setAttribute("stitchTiles", "stitch");
+  turb.setAttribute("result", "noise");
   filter.appendChild(turb);
+
+  const mono = document.createElementNS(NS, "feColorMatrix");
+  mono.setAttribute("in", "noise");
+  mono.setAttribute("type", "saturate");
+  mono.setAttribute("values", "0");
+  mono.setAttribute("result", "monoNoise");
+  filter.appendChild(mono);
+
+  const contrast = document.createElementNS(NS, "feComponentTransfer");
+  contrast.setAttribute("in", "monoNoise");
+  contrast.setAttribute("result", "contrastNoise");
+  for (const channel of ["R", "G", "B", "A"] as const) {
+    const func = document.createElementNS(NS, `feFunc${channel}`);
+    func.setAttribute("type", "gamma");
+    func.setAttribute("amplitude", "1");
+    func.setAttribute("exponent", ctx.isDark ? "1.9" : "1.6");
+    func.setAttribute("offset", "0");
+    contrast.appendChild(func);
+  }
+  filter.appendChild(contrast);
+
   svg.appendChild(filter);
   const rect = document.createElementNS(NS, "rect");
   rect.setAttribute("width", "100%");
   rect.setAttribute("height", "100%");
+  rect.setAttribute("fill", ctx.isDark ? "white" : "black");
   rect.setAttribute("filter", `url(#${id})`);
   svg.appendChild(rect);
   el.appendChild(svg);
@@ -133,6 +179,7 @@ function renderAurora(container: HTMLElement, params: EffectParams, ctx: EffectC
 function renderBokeh(container: HTMLElement, params: EffectParams, ctx: EffectContext): void {
   const op = params.opacity / 100;
   const count = params.count ?? 16;
+  const effectColor = colorToRgbaPrefix(params.color, ctx.effectColor);
   const el = createOverlay({ opacity: String(op) });
   const circles: string[] = [];
   // Extend seed array to support up to 40 circles
@@ -152,7 +199,7 @@ function renderBokeh(container: HTMLElement, params: EffectParams, ctx: EffectCo
     const edgeWeight = Math.min(1, centerDistance / 0.8);
     const centerFade = 0.18 + 0.82 * edgeWeight;
 
-    circles.push(`${x}px ${y}px 0 ${size}px ${ctx.effectColor}${(alpha * centerFade).toFixed(2)})`);
+    circles.push(`${x}px ${y}px 0 ${size}px ${effectColor}${(alpha * centerFade).toFixed(2)})`);
   }
   const dot = document.createElement("div");
   dot.setCssStyles({ position: "absolute", width: "1px", height: "1px", top: "0", left: "0", borderRadius: "50%", boxShadow: circles.join(",") });
@@ -160,10 +207,30 @@ function renderBokeh(container: HTMLElement, params: EffectParams, ctx: EffectCo
   container.appendChild(el);
 }
 
+function renderDots(container: HTMLElement, params: EffectParams, ctx: EffectContext): void {
+  const op = params.opacity / 100;
+  const spacing = params.spacing ?? 28;
+  const effectColor = colorToRgbaPrefix(params.color, ctx.effectColor);
+  const dotAlpha = Math.min(0.45, 0.12 + op * 0.72);
+  const dotSize = Math.max(1, params.size ?? Math.round(spacing * 0.14));
+  const dotColor = `${effectColor}${dotAlpha.toFixed(2)})`;
+  const el = createOverlay({
+    opacity: String(Math.min(1, op * 1.1)),
+    backgroundImage: `radial-gradient(circle, ${dotColor} 0, ${dotColor} ${dotSize}px, transparent ${dotSize + 1}px)`,
+    backgroundSize: `${spacing}px ${spacing}px`,
+    backgroundPosition: `${Math.round(spacing / 2)}px ${Math.round(spacing / 2)}px`,
+  });
+  container.appendChild(el);
+}
+
 function renderGrid(container: HTMLElement, params: EffectParams, ctx: EffectContext): void {
   const op = params.opacity / 100;
+  const spacing = params.spacing ?? 60;
   const lineColor = ctx.effectColor + "0.3)";
-  const el = createOverlay({ opacity: String(op), backgroundImage: `repeating-linear-gradient(0deg,${lineColor} 0px,${lineColor} 1px,transparent 1px,transparent 60px),repeating-linear-gradient(90deg,${lineColor} 0px,${lineColor} 1px,transparent 1px,transparent 60px)` });
+  const el = createOverlay({
+    opacity: String(op),
+    backgroundImage: `repeating-linear-gradient(0deg,${lineColor} 0px,${lineColor} 1px,transparent 1px,transparent ${spacing}px),repeating-linear-gradient(90deg,${lineColor} 0px,${lineColor} 1px,transparent 1px,transparent ${spacing}px)`,
+  });
   container.appendChild(el);
 }
 
@@ -230,10 +297,12 @@ function renderScanlines(container: HTMLElement, params: EffectParams, ctx: Effe
 function renderNetwork(container: HTMLElement, params: EffectParams, ctx: EffectContext): void {
   const op = params.opacity / 100;
   const cols = params.count ?? 10;
+  const scale = Math.max(0.5, params.width ?? 1);
+  const lineWidth = scale;
   const rows = Math.round(cols * ctx.pageHeight / ctx.pageWidth);
   const cellW = ctx.pageWidth / cols;
   const cellH = ctx.pageHeight / rows;
-  const threshold = Math.max(cellW, cellH) * 1.6;
+  const threshold = Math.max(cellW, cellH) * (1.6 + (scale - 1) * 0.45);
 
   let seed = 42;
   const rand = () => { seed = (seed * 16807 + 0) % 2147483647; return seed / 2147483647; };
@@ -265,7 +334,7 @@ function renderNetwork(container: HTMLElement, params: EffectParams, ctx: Effect
         line.setAttribute("x2", String(nodes[j].x));
         line.setAttribute("y2", String(nodes[j].y));
         line.setAttribute("stroke", "currentColor");
-        line.setAttribute("stroke-width", "1");
+        line.setAttribute("stroke-width", String(lineWidth));
         line.setAttribute("opacity", lineOp);
         svg.appendChild(line);
       }
@@ -275,7 +344,7 @@ function renderNetwork(container: HTMLElement, params: EffectParams, ctx: Effect
     const circle = document.createElementNS(NS, "circle");
     circle.setAttribute("cx", String(n.x));
     circle.setAttribute("cy", String(n.y));
-    circle.setAttribute("r", String(2 + rand() * 2));
+    circle.setAttribute("r", String((2 + rand() * 2) * scale));
     circle.setAttribute("fill", "currentColor");
     circle.setAttribute("opacity", (0.4 + rand() * 0.3).toFixed(2));
     svg.appendChild(circle);
@@ -294,6 +363,7 @@ const EFFECT_RENDERERS: Record<string, EffectRenderer> = {
   grain: renderGrain,
   aurora: renderAurora,
   bokeh: renderBokeh,
+  dots: renderDots,
   grid: renderGrid,
   vignette: renderVignette,
   lightLeak: renderLightLeak,
@@ -313,7 +383,11 @@ export function applyCoverEffects(
   themeCss: string,
   pageHeight: number,
 ): void {
-  container.setCssStyles({ position: "relative", overflow: "hidden" });
+  const computedPosition = window.getComputedStyle(container).position;
+  if (!computedPosition || computedPosition === "static") {
+    container.setCssStyles({ position: "relative" });
+  }
+  container.setCssStyles({ overflow: "hidden" });
 
   const isDark = detectThemeBrightness(themeCss);
   const ctx: EffectContext = {

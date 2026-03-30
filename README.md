@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo1.png" alt="Obsidian Note Renderer" width="900">
+</p>
+
 # Note Renderer
 
 Obsidian 插件，将 markdown 笔记渲染为分页图片，用于小红书图文发布。

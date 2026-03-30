@@ -563,12 +563,17 @@
 .nr-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
   min-height: 28px;
 }
 
 .nr-row + .nr-row {
   margin-top: 4px;
+}
+
+.nr-row-label {
+  margin-right: 2px;
 }
 
 /* ── V2: Compact stepper (for sub-params) ── */

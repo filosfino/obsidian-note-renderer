@@ -102,9 +102,11 @@ ${coverColorCss}
   border-radius: 16px;
   z-index: 0;
 }
-.nr-cover-has-image .nr-cover-content {
+.nr-page-cover .nr-cover-content {
   position: relative;
-  z-index: 1;
+  z-index: 3;
+}
+.nr-cover-has-image .nr-cover-content {
   padding: ${PAGE_PADDING_TOP}px ${PAGE_PADDING_H}px ${PAGE_PADDING_BOTTOM}px;
 }
 .nr-cover-has-image { padding: 0; }
@@ -120,7 +122,7 @@ ${coverColorCss}
   top: 0; left: 0;
   width: 100%; height: 100%;
   pointer-events: none;
-  z-index: 2;
+  z-index: 1;
 }
 `;
   const fullCss = themeCss + fontOverrideCss + pageCss;
@@ -158,18 +160,21 @@ ${coverColorCss}
       const fs = parseInt(htmlEl.style.fontSize) || 120;
       const sw = Math.max(1, Math.round(fs * strokePercent));
       const accentColor = htmlEl.style.color || coverColor || themeTitleColor;
+      const textOpacity = Math.max(0, Math.min(1, cover.typography.opacity / 100));
       const strokeColor = withAlpha(cover.stroke.inner.color || strokePalette.inner, cover.stroke.opacity);
       const doubleStrokeWidth = Math.max(sw + 1, Math.round(fs * (cover.stroke.outer.widthPercent / 100)));
       const doubleStrokeColor = cover.stroke.outer.color || strokePalette.outer;
       const glowColor = cover.glow.color || accentColor;
       const shadowColor = cover.shadow.color;
 
-      const hasInlineColor = htmlEl.style.color && htmlEl.style.color !== "";
-      const textColor = coverColor || themeTitleColor;
-      let css = hasInlineColor ? ";" : `; color: ${textColor} !important;`;
-      const glowMul = cover.glow.size / 100;
-      const textShadows: string[] = [];
-      switch (strokeStyle) {
+    const hasInlineColor = htmlEl.style.color && htmlEl.style.color !== "";
+    const textColor = coverColor || themeTitleColor;
+    let css = hasInlineColor ? ";" : `; color: ${textColor} !important;`;
+    const glowMul = cover.glow.size / 100;
+    const textShadows: string[] = [];
+    let bannerPadding: string | null = null;
+    let bannerClipPath: string | null = null;
+    switch (strokeStyle) {
         case "none":
           break;
         case "stroke":
@@ -177,7 +182,10 @@ ${coverColorCss}
           break;
         case "double": {
           css += ` -webkit-text-stroke: ${sw}px ${strokeColor}; paint-order: stroke fill;`;
-          ensureDoubleStrokeBackdrop(htmlEl, doubleStrokeWidth, doubleStrokeColor);
+          const clone = ensureDoubleStrokeBackdrop(htmlEl, doubleStrokeWidth, doubleStrokeColor, textOpacity);
+          if (clone) {
+            applyUnderlineScale(clone, fs, { overrideColor: doubleStrokeColor });
+          }
           break;
         }
         case "hollow": {
@@ -194,10 +202,14 @@ ${coverColorCss}
         textShadows.push(`0 0 ${gs * 3}px ${glowColor}`);
       }
 
-      if (cover.banner.enabled) {
+      const containsImage = htmlEl.querySelector("img") !== null;
+      if (cover.banner.enabled && !containsImage) {
         const bannerColor = cover.banner.color;
         const skew = cover.banner.skew;
-        css += ` background: ${bannerColor}; display: inline-block; padding: 8px 32px; clip-path: polygon(${skew}% 0%, 100% 0%, ${100-skew}% 100%, 0% 100%);`;
+        const horizontalPadding = Math.round(fs * (cover.banner.paddingPercent / 100));
+        css += ` background: ${bannerColor}; display: inline-block;`;
+        bannerPadding = `8px ${horizontalPadding}px`;
+        bannerClipPath = `polygon(${skew}% 0%, 100% 0%, ${100-skew}% 100%, 0% 100%)`;
       }
 
       if (hasShadow) {
@@ -207,8 +219,17 @@ ${coverColorCss}
       if (textShadows.length > 0) {
         css += ` text-shadow: ${textShadows.join(", ")};`;
       }
+      css += ` opacity: ${textOpacity};`;
 
       htmlEl.style.cssText += css;
+      if (bannerPadding) {
+        htmlEl.style.padding = bannerPadding;
+        htmlEl.style.clipPath = bannerClipPath ?? "";
+      }
+      applyUnderlineScale(htmlEl, fs, {
+        overrideColor: strokeStyle === "none" ? undefined : strokeColor,
+        suppress: strokeStyle === "double",
+      });
     }
   }
 
@@ -387,6 +408,9 @@ function createPageDiv(extraClass: string, css: string, pageHeight: number): HTM
   pageDiv.classList.add("nr-page", extraClass);
   pageDiv.style.width = `${PAGE_WIDTH}px`;
   pageDiv.style.height = `${pageHeight}px`;
+  pageDiv.style.position = "relative";
+  pageDiv.style.overflow = "hidden";
+  pageDiv.style.boxSizing = "border-box";
 
   // eslint-disable-next-line obsidianmd/no-forbidden-elements -- Offscreen export pages must inline theme CSS; styles.css does not reach html-to-image clones.
   pageDiv.createEl("style", { text: css });
@@ -536,9 +560,9 @@ function withAlpha(color: string, opacityPercent: number): string {
   return `color-mix(in srgb, ${color} ${Math.round(alpha * 100)}%, transparent)`;
 }
 
-function ensureDoubleStrokeBackdrop(el: HTMLElement, radius: number, color: string): void {
+function ensureDoubleStrokeBackdrop(el: HTMLElement, radius: number, color: string, opacity = 1): HTMLElement | null {
   const parent = el.parentElement;
-  if (!parent) return;
+  if (!parent) return null;
 
   const computed = getComputedStyle(el);
   const wrapper = document.createElement("div");
@@ -560,6 +584,7 @@ function ensureDoubleStrokeBackdrop(el: HTMLElement, radius: number, color: stri
     pointerEvents: "none",
     margin: "0",
   });
+  clone.style.opacity = String(opacity);
   clone.style.color = color;
   clone.setCssStyles({ webkitTextStroke: "0 transparent" });
   clone.style.textShadow = buildOutlineRingShadows(radius, color).join(", ");
@@ -573,6 +598,72 @@ function ensureDoubleStrokeBackdrop(el: HTMLElement, radius: number, color: stri
   parent.replaceChild(wrapper, el);
   wrapper.appendChild(clone);
   wrapper.appendChild(el);
+  return clone;
+}
+
+interface UnderlineRenderOptions {
+  overrideColor?: string;
+  suppress?: boolean;
+}
+
+function applyUnderlineScale(container: HTMLElement, fallbackFontSize: number, options: UnderlineRenderOptions = {}): void {
+  const underlines = Array.from(container.querySelectorAll("u")) as HTMLElement[];
+  if (underlines.length === 0) return;
+
+  for (const underline of underlines) {
+    const fontSize = resolveUnderlineFontSize(underline, fallbackFontSize);
+    const waveHeight = Math.max(12, Math.round(10 + fontSize * 0.22));
+    const paddingBottom = Math.max(8, Math.round(6 + fontSize * 0.12));
+    const strokeWidth = Math.max(3, Number((2 + fontSize * 0.055).toFixed(1)));
+    const color = options.overrideColor || resolveUnderlineColor(underline);
+    underline.style.backgroundImage = options.suppress
+      ? "none"
+      : `url("${buildUnderlineSvgDataUri(color, strokeWidth, waveHeight)}")`;
+    underline.style.backgroundSize = options.suppress ? "" : `200px ${waveHeight}px`;
+    underline.style.paddingBottom = `${paddingBottom}px`;
+  }
+}
+
+function resolveUnderlineFontSize(underline: HTMLElement, fallbackFontSize: number): number {
+  let current: HTMLElement | null = underline;
+  while (current) {
+    const inlineSize = Number.parseFloat(current.style.fontSize);
+    if (Number.isFinite(inlineSize) && inlineSize > 0) return inlineSize;
+    current = current.parentElement;
+  }
+
+  const computed = window.getComputedStyle(underline);
+  const parsed = Number.parseFloat(computed.fontSize);
+  if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  return fallbackFontSize > 0 ? fallbackFontSize : 68;
+}
+
+function resolveUnderlineColor(underline: HTMLElement): string {
+  const computed = window.getComputedStyle(underline);
+  return computed.color || "#000000";
+}
+
+function buildUnderlineSvgDataUri(color: string, strokeWidth: number, waveHeight: number): string {
+  const svg = [
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 ${waveHeight}">`,
+    `<path d="${buildUnderlinePath(waveHeight)}" fill="none" stroke="${color}" stroke-width="${strokeWidth}" stroke-linecap="round"/>`,
+    "</svg>",
+  ].join("");
+
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
+function buildUnderlinePath(waveHeight: number): string {
+  const midY = Math.max(8, Math.round(waveHeight * 0.67));
+  const crestY = Math.max(2, Math.round(waveHeight * 0.17));
+  const checkpoints = [
+    `M2 ${midY}`,
+    `Q30 ${crestY} 50 ${midY - 1}`,
+    `T100 ${midY - 2}`,
+    `T150 ${midY}`,
+    `T198 ${Math.max(crestY + 1, midY - 3)}`,
+  ];
+  return checkpoints.join(" ");
 }
 
 function buildOutlineRingShadows(radius: number, color: string): string[] {

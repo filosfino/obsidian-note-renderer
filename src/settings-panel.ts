@@ -3,7 +3,7 @@ import type { App } from "obsidian";
 import { FIELD_SCHEMAS, EFFECT_SCHEMAS, RENDER_DEFAULTS, COVER_STROKE_STYLE_UI, COVER_SEMANTIC_SCHEMA, isCoverSemanticFieldActive, getFieldSchema } from "./schema";
 import { InputModal, ConfirmModal, FontManagerModal } from "./modals";
 import { getCoverFontList, getBodyFontList, type FontEntry } from "./fonts";
-import { deriveCoverStrokePalette, extractThemeColorChoices, extractCoverTitleColor, type ThemeColorChoice } from "./effects";
+import { deriveCoverStrokePalette, extractThemeColorChoices, extractCoverTitleColor, detectThemeBrightness, type ThemeColorChoice } from "./effects";
 import { PRESET_KEYS } from "./main";
 import type NoteRendererPlugin from "./main";
 import type { NoteRendererSettings } from "./main";
@@ -40,6 +40,7 @@ export interface PanelRefs {
   fontSelect: HTMLSelectElement;
   coverFontSelect: HTMLSelectElement;
   scaleInput: HTMLInputElement;
+  coverOpacityInput: HTMLInputElement;
   lsInput: HTMLInputElement;
   lhInput: HTMLInputElement;
   strokeStyleSelect: HTMLSelectElement;
@@ -184,6 +185,11 @@ function buildRgba(hex: string, alphaPercent: number): string {
   const b = parseInt(hex.slice(5, 7), 16);
   const alpha = Math.max(0, Math.min(100, alphaPercent)) / 100;
   return `rgba(${r},${g},${b},${alpha})`;
+}
+
+async function resolveEffectFallbackColor(host: PanelHost): Promise<string> {
+  const themeCss = await host.plugin.loadTheme(host.effective.activeTheme);
+  return detectThemeBrightness(themeCss, host.effective.activeTheme) ? "#ffffff" : "#000000";
 }
 
 interface DynamicNumberOpts {
@@ -408,6 +414,10 @@ function buildBannerControls(
   makeField(host, row, "斜", String(host.plugin.settings.coverBannerSkew),
     schemaOpts("coverBannerSkew"),
     (val) => host.updateSetting("coverBannerSkew", val));
+
+  makeField(host, row, "宽", String(host.plugin.settings.coverBannerPaddingPercent),
+    schemaOpts("coverBannerPaddingPercent"),
+    (val) => host.updateSetting("coverBannerPaddingPercent", val));
 
   colorInput.addEventListener("input", () => { void updateBannerColor(); });
 
@@ -1142,6 +1152,10 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     getThemeName: () => themeSelect.value,
   });
 
+  const coverOpacityInput = makeField(host, styleRow, "透明", String(host.plugin.settings.coverFontOpacity ?? 100),
+    schemaOpts("coverFontOpacity"),
+    (val) => host.updateSetting("coverFontOpacity", val));
+
   const weightSelect = styleRow.createEl("select", { cls: "dropdown nr-dropdown-narrow" });
   [
     { label: "极细 100", value: "100" },
@@ -1272,6 +1286,60 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
           return host.updateSetting("coverEffects", updated);
         });
     }
+    if (meta.defaultWidth != null) {
+      makeField(host, row, "宽", String(params?.width ?? meta.defaultWidth),
+        { min: meta.widthMin!, max: meta.widthMax!, step: meta.widthStep ?? 1 },
+        (val) => {
+          const eff = host.effective.coverEffects ?? effects;
+          const updated = { ...eff, [name]: { ...eff[name], width: val } };
+          return host.updateSetting("coverEffects", updated);
+        });
+    }
+    if (meta.defaultSpacing != null) {
+      makeField(host, row, "间距", String(params?.spacing ?? meta.defaultSpacing),
+        { min: meta.spacingMin!, max: meta.spacingMax!, step: meta.spacingStep ?? 1, unit: "px" },
+        (val) => {
+          const eff = host.effective.coverEffects ?? effects;
+          const updated = { ...eff, [name]: { ...eff[name], spacing: val } };
+          return host.updateSetting("coverEffects", updated);
+        });
+    }
+    if (meta.defaultSize != null) {
+      makeField(host, row, "点", String(params?.size ?? meta.defaultSize),
+        { min: meta.sizeMin!, max: meta.sizeMax!, step: meta.sizeStep ?? 1, unit: "px" },
+        (val) => {
+          const eff = host.effective.coverEffects ?? effects;
+          const updated = { ...eff, [name]: { ...eff[name], size: val } };
+          return host.updateSetting("coverEffects", updated);
+        });
+    }
+    if (meta.defaultColor != null) {
+      const colorInput = row.createEl("input", { cls: "nr-color-dot", type: "color" });
+      colorInput.title = `${meta.label}颜色（双击跟随主题）`;
+      void resolveEffectFallbackColor(host).then((fallbackColor) => {
+        colorInput.value = parseColorValue(params?.color || "", fallbackColor);
+      });
+      bindThemeBoundColorInput({
+        host,
+        input: colorInput,
+        popoverTitle: `${meta.label}颜色`,
+        resolveDisplayValue: async () => {
+          const eff = host.effective.coverEffects ?? effects;
+          return eff[name]?.color || await resolveEffectFallbackColor(host);
+        },
+        storeValue: (value) => {
+          const eff = host.effective.coverEffects ?? effects;
+          const updated = { ...eff, [name]: { ...eff[name], color: value } };
+          void host.updateSetting("coverEffects", updated);
+        },
+        resetValue: () => {
+          const eff = host.effective.coverEffects ?? effects;
+          const updated = { ...eff, [name]: { ...eff[name], color: "" } };
+          void host.updateSetting("coverEffects", updated);
+        },
+        getThemeName: () => host.effective.activeTheme,
+      });
+    }
     // Wire chip toggle to show/hide this row
     const chips = effectChips.querySelectorAll(".nr-chip");
     for (const chip of chips) {
@@ -1401,6 +1469,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     fontSelect,
     coverFontSelect,
     scaleInput,
+    coverOpacityInput,
     lsInput,
     lhInput,
     strokeStyleSelect,

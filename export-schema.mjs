@@ -54,6 +54,7 @@ const INTERNAL_TO_NOTE = exported.INTERNAL_TO_NOTE_KEY || {};
 const COVER_FIELD_PATHS = {
   coverFontFamily: ["cover", "typography", "fontFamily"],
   coverFontColor: ["cover", "typography", "color"],
+  coverFontOpacity: ["cover", "typography", "opacity"],
   coverFontScale: ["cover", "typography", "scale"],
   coverFontWeight: ["cover", "typography", "weight"],
   coverLetterSpacing: ["cover", "typography", "letterSpacing"],
@@ -78,6 +79,7 @@ const COVER_FIELD_PATHS = {
   coverBanner: ["cover", "banner", "enabled"],
   coverBannerColor: ["cover", "banner", "color"],
   coverBannerSkew: ["cover", "banner", "skew"],
+  coverBannerPaddingPercent: ["cover", "banner", "paddingPercent"],
 };
 
 function noteKey(internalKey) {
@@ -158,6 +160,39 @@ function buildGroupedFieldSchemas(fieldSchemas, effectSchemas) {
         step: 1,
       };
     }
+    if (schema.defaultWidth != null) {
+      effectSchema.width = {
+        type: "number",
+        default: schema.defaultWidth,
+        min: schema.widthMin,
+        max: schema.widthMax,
+        step: schema.widthStep ?? 1,
+      };
+    }
+    if (schema.defaultSpacing != null) {
+      effectSchema.spacing = {
+        type: "number",
+        default: schema.defaultSpacing,
+        min: schema.spacingMin,
+        max: schema.spacingMax,
+        step: schema.spacingStep ?? 1,
+      };
+    }
+    if (schema.defaultSize != null) {
+      effectSchema.size = {
+        type: "number",
+        default: schema.defaultSize,
+        min: schema.sizeMin,
+        max: schema.sizeMax,
+        step: schema.sizeStep ?? 1,
+      };
+    }
+    if (schema.defaultColor != null) {
+      effectSchema.color = {
+        type: "string",
+        default: schema.defaultColor,
+      };
+    }
     grouped.cover.effects[name] = effectSchema;
   }
 
@@ -176,6 +211,10 @@ function buildFlatDefaults(fieldSchemas, effectSchemas) {
   for (const [name, s] of Object.entries(effectSchemas)) {
     const params = { enabled: s.defaultEnabled, opacity: s.defaultOpacity };
     if (s.defaultCount != null) params.count = s.defaultCount;
+    if (s.defaultWidth != null) params.width = s.defaultWidth;
+    if (s.defaultSpacing != null) params.spacing = s.defaultSpacing;
+    if (s.defaultSize != null) params.size = s.defaultSize;
+    if (s.defaultColor != null) params.color = s.defaultColor;
     defaults.coverEffects[name] = params;
   }
   return defaults;
