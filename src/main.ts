@@ -12,7 +12,13 @@ import { THEME_MIST } from "./themes/mist";
 import { THEME_ROSE } from "./themes/rose";
 
 import { RENDER_DEFAULTS, RENDER_KEYS, type RenderOptions } from "./schema";
-import { migrateSettings, readNoteConfig, resolveMergedRenderConfig } from "./config-manager";
+import {
+  migrateSettings,
+  readGroupedNoteConfig,
+  readNoteConfig,
+  resolveMergedRenderConfig,
+  writeGroupedNoteConfig,
+} from "./config-manager";
 import { renderNote } from "./renderer";
 import { exportSinglePage } from "./exporter";
 import { DEFAULT_FONTS, getFontDisplayName, type FontEntry } from "./fonts";
@@ -258,6 +264,33 @@ export default class NoteRendererPlugin extends Plugin {
   }
 
   /**
+   * Read renderer_config from a note and return the latest grouped note-facing schema.
+   *
+   * Usage via Obsidian CLI:
+   *   obsidian eval code="JSON.stringify(await app.plugins.plugins['note-renderer'].loadRendererConfigFromNote('path/to/note.md'), null, 2)"
+   */
+  async loadRendererConfigFromNote(noteFilePath: string): Promise<Record<string, unknown> | null> {
+    const file = this.getMarkdownFile(noteFilePath);
+    const markdown = await this.app.vault.read(file);
+    return readGroupedNoteConfig(markdown);
+  }
+
+  /**
+   * Write renderer_config to a note.
+   * Accepts grouped or legacy flat config and always writes grouped schema.
+   *
+   * Usage via Obsidian CLI:
+   *   obsidian eval code="await app.plugins.plugins['note-renderer'].writeRendererConfigToNote('path/to/note.md', { theme: 'cream', cover: { typography: { align: 'center' } } })"
+   */
+  async writeRendererConfigToNote(noteFilePath: string, rendererConfig: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const file = this.getMarkdownFile(noteFilePath);
+    const markdown = await this.app.vault.read(file);
+    const updated = writeGroupedNoteConfig(markdown, rendererConfig);
+    await this.app.vault.modify(file, updated);
+    return (await this.loadRendererConfigFromNote(noteFilePath)) ?? {};
+  }
+
+  /**
    * 渲染指定页面到文件。
    *
    * @param filePath - vault 内的 markdown 文件相对路径
@@ -376,5 +409,13 @@ export default class NoteRendererPlugin extends Plugin {
 
   async saveSettings(): Promise<void> {
     await this.saveData(this.settings);
+  }
+
+  private getMarkdownFile(filePath: string): TFile {
+    const file = this.app.vault.getAbstractFileByPath(filePath);
+    if (!(file instanceof TFile) || file.extension !== "md") {
+      throw new Error(`Not a markdown file: ${filePath}`);
+    }
+    return file;
   }
 }

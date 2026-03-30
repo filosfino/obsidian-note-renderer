@@ -144,11 +144,13 @@ function renderBokeh(container: HTMLElement, params: EffectParams, ctx: EffectCo
     const size = 20 + Math.round(seed(i + 3) * 60);
     const alpha = 0.3 + seed(i + 7) * 0.5;
 
-    // Soften the visual weight in the center to keep the title area cleaner.
+    // Make the center feel lighter and more transparent; towards the edges the
+    // bokeh becomes more solid so the title area stays cleaner.
     const dx = Math.abs(x - ctx.pageWidth / 2) / (ctx.pageWidth / 2);
     const dy = Math.abs(y - ctx.pageHeight / 2) / (ctx.pageHeight / 2);
     const centerDistance = Math.sqrt(dx * dx + dy * dy);
-    const centerFade = 0.35 + 0.65 * Math.min(1, centerDistance / 0.75);
+    const edgeWeight = Math.min(1, centerDistance / 0.8);
+    const centerFade = 0.18 + 0.82 * edgeWeight;
 
     circles.push(`${x}px ${y}px 0 ${size}px ${ctx.effectColor}${(alpha * centerFade).toFixed(2)})`);
   }

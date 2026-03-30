@@ -321,7 +321,7 @@ function bindBooleanChipToggle(
     const val = !Boolean(host.effective[key]);
     toggle.classList.toggle("active", val);
     row.classList.toggle("nr-hidden", !val);
-    void host.updateSetting(key, val as NoteRendererSettings[typeof key]);
+    void host.updateSetting(key, val);
   });
 }
 
@@ -402,7 +402,7 @@ function buildBannerControls(
   );
 
   makeField(host, row, "", String(bannerAlpha),
-    { min: 0, max: 100, unit: "%" },
+    { min: 0, max: 100, step: 10, unit: "%" },
     async (val) => { currentAlpha = val / 100; await updateBannerColor(); });
 
   makeField(host, row, "斜", String(host.plugin.settings.coverBannerSkew),
@@ -456,7 +456,7 @@ function buildShadowControls(
   );
 
   alphaInput = makeField(host, row, "", String(parseAlphaPercent(host.plugin.settings.coverShadowColor, 60)),
-    { min: 0, max: 100, unit: "%" },
+    { min: 0, max: 100, step: 10, unit: "%" },
     async (val) => {
       await host.updateSetting("coverShadowColor", buildRgba(colorInput.value, val));
     });
@@ -572,7 +572,7 @@ function buildStrokeControls(options: StrokeControlsOptions): StrokeControlsResu
   );
 
   const opacityInput = makeField(host, row, "透明", String(host.plugin.settings.coverStrokeOpacity),
-    schemaOpts("coverStrokeOpacity"),
+    { ...schemaOpts("coverStrokeOpacity"), step: 10 },
     (val) => host.updateSetting("coverStrokeOpacity", val));
 
   const doubleStrokeInput = makeDynamicNumberField(
@@ -1257,7 +1257,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     row.classList.toggle("nr-hidden", !params?.enabled);
     effectParamRows[name] = row;
     makeField(host, row, "强度", String(params?.opacity ?? 50),
-      { min: meta.min, max: meta.max, unit: "%" },
+      { min: meta.min, max: meta.max, step: 10, unit: "%" },
       (val) => {
         const eff = host.effective.coverEffects ?? effects;
         const updated = { ...eff, [name]: { ...eff[name], opacity: val } };
@@ -1332,6 +1332,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     sizeInput.value = String(val);
     void host.updateSetting("fontSize", val);
   }, { passive: false });
+  // eslint-disable-next-line obsidianmd/ui/sentence-case -- Unit label, not sentence UI copy.
   bodyControls.createEl("span", { cls: "nr-size-unit", text: "px" });
 
   // Preview area

@@ -14,6 +14,7 @@ import {
   toNoteConfigKeys,
   toSemanticNoteConfig,
   getFieldSchema,
+  validateNoteConfig,
   type RenderOptions,
   type RenderKey,
   type EffectParams,
@@ -36,6 +37,13 @@ export interface ResolvedRenderConfig {
 /** Parse renderer_config from markdown. Returns null if absent or invalid. */
 export function readNoteConfig(markdown: string): Partial<RenderOptions> | null {
   return parseRendererConfig(markdown) as Partial<RenderOptions> | null;
+}
+
+/** Read note renderer_config and return the latest grouped note-facing schema. */
+export function readGroupedNoteConfig(markdown: string): Record<string, unknown> | null {
+  const noteConfig = readNoteConfig(markdown);
+  if (!noteConfig) return null;
+  return withRendererConfigVersion(toSemanticNoteConfig(toNoteConfigKeys(noteConfig as Record<string, unknown>)));
 }
 
 /**
@@ -125,6 +133,20 @@ export function saveFullNoteConfig(
 ): string {
   const configSection = buildConfigSection(options as unknown as Record<string, unknown>);
   return insertConfigSection(markdown, configSection);
+}
+
+/**
+ * Save note-facing renderer_config object into markdown.
+ * Accepts grouped or legacy flat config, normalizes it, then writes grouped schema.
+ */
+export function writeGroupedNoteConfig(
+  markdown: string,
+  rendererConfig: Record<string, unknown>,
+): string {
+  const migrated = migrateRendererConfig({ ...rendererConfig });
+  const validated = validateNoteConfig(migrated);
+  const configSection = buildConfigSection(validated as Record<string, unknown>);
+  return insertConfigSection(removeConfigSection(markdown), configSection);
 }
 
 /** Remove renderer_config section from markdown. Returns modified markdown. */

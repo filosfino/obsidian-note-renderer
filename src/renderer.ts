@@ -14,6 +14,16 @@ export interface RenderedPages {
   hasCoverImage: boolean;
 }
 
+function extractCoverImageSrc(
+  coverImageMarkdown: string | null,
+  resolveImage: (name: string) => string,
+): string | null {
+  if (!coverImageMarkdown) return null;
+  const imgHtml = renderMarkdownToHtml(coverImageMarkdown, resolveImage);
+  const imgMatch = imgHtml.match(/src="([^"]+)"/);
+  return imgMatch?.[1] ?? null;
+}
+
 export async function renderNote(
   app: App,
   markdown: string,
@@ -119,7 +129,8 @@ ${coverColorCss}
 
   // --- Cover page ---
   const strokePercent = cover.stroke.inner.widthPercent / 100;
-  const hasCoverImage = !!structure.coverImageMarkdown;
+  const coverImageSrc = extractCoverImageSrc(structure.coverImageMarkdown, resolveImage);
+  const hasCoverImage = coverImageSrc !== null;
   const coverTextOpts: CoverTextOptions = {
     strokePercent,
     fontScale: cover.typography.scale,
@@ -202,28 +213,24 @@ ${coverColorCss}
   }
 
   // If cover image exists, add it as background
-  if (structure.coverImageMarkdown) {
-    const imgHtml = renderMarkdownToHtml(structure.coverImageMarkdown, resolveImage);
-    const imgMatch = imgHtml.match(/src="([^"]+)"/);
-    if (imgMatch) {
-      coverPage.classList.add("nr-cover-has-image");
+  if (coverImageSrc) {
+    coverPage.classList.add("nr-cover-has-image");
 
-      const imgEl = document.createElement("img");
-      imgEl.src = imgMatch[1];
-      imgEl.classList.add("nr-cover-bg-image");
-      // Insert image before cover content
-      const content = coverPage.querySelector(".nr-cover-content") as HTMLElement;
-      coverPage.appendChild(imgEl);
-      if (content) {
-        coverPage.appendChild(content); // re-append on top
-        // Adjust overlay opacity
-        const overlayEffect = options.coverEffects?.overlay;
-        if (overlayEffect && !overlayEffect.enabled) {
-          content.setCssStyles({ background: "none" });
-        } else if (overlayEffect && overlayEffect.opacity !== 55) {
-          const op = overlayEffect.opacity / 100;
-          content.setCssStyles({ background: `linear-gradient(to top, rgba(0,0,0,${op}) 0%, rgba(0,0,0,${op * 0.36}) 50%, transparent 100%)` });
-        }
+    const imgEl = document.createElement("img");
+    imgEl.src = coverImageSrc;
+    imgEl.classList.add("nr-cover-bg-image");
+    // Insert image before cover content
+    const content = coverPage.querySelector(".nr-cover-content") as HTMLElement;
+    coverPage.appendChild(imgEl);
+    if (content) {
+      coverPage.appendChild(content); // re-append on top
+      // Adjust overlay opacity
+      const overlayEffect = options.coverEffects?.overlay;
+      if (overlayEffect && !overlayEffect.enabled) {
+        content.setCssStyles({ background: "none" });
+      } else if (overlayEffect && overlayEffect.opacity !== 55) {
+        const op = overlayEffect.opacity / 100;
+        content.setCssStyles({ background: `linear-gradient(to top, rgba(0,0,0,${op}) 0%, rgba(0,0,0,${op * 0.36}) 50%, transparent 100%)` });
       }
     }
   }
@@ -381,6 +388,7 @@ function createPageDiv(extraClass: string, css: string, pageHeight: number): HTM
   pageDiv.style.width = `${PAGE_WIDTH}px`;
   pageDiv.style.height = `${pageHeight}px`;
 
+  // eslint-disable-next-line obsidianmd/no-forbidden-elements -- Offscreen export pages must inline theme CSS; styles.css does not reach html-to-image clones.
   pageDiv.createEl("style", { text: css });
 
   return pageDiv;
@@ -406,6 +414,7 @@ async function renderBodyPages(
   });
   document.body.appendChild(measurer);
 
+  // eslint-disable-next-line obsidianmd/no-forbidden-elements -- Measurement must use the same inline theme CSS as the exported offscreen page.
   measurer.createEl("style", { text: css });
 
   // Match the final body-page shell so pagination measures the same box model.
@@ -437,6 +446,7 @@ async function renderBodyPages(
       pageDiv.style.width = `${PAGE_WIDTH}px`;
       pageDiv.style.height = `${pageHeight}px`;
 
+      // eslint-disable-next-line obsidianmd/no-forbidden-elements -- Full-page exports are rendered offscreen and need embedded CSS for html-to-image.
       pageDiv.createEl("style", { text: css });
 
       for (const el of page.elements) {
@@ -454,6 +464,7 @@ async function renderBodyPages(
       pageDiv.style.width = `${PAGE_WIDTH}px`;
       pageDiv.style.height = `${pageHeight}px`;
 
+      // eslint-disable-next-line obsidianmd/no-forbidden-elements -- Body-page exports are rendered offscreen and need embedded CSS for html-to-image.
       pageDiv.createEl("style", { text: css });
 
       const pageContent = document.createElement("div");
