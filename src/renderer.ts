@@ -19,6 +19,7 @@ export async function renderNote(
   markdown: string,
   sourcePath: string,
   themeCss: string,
+  themeName: string,
   parentComponent: Component,
   options: RenderOptions
 ): Promise<RenderedPages> {
@@ -31,7 +32,7 @@ export async function renderNote(
 
   const coverFont = options.coverFontFamily || options.fontFamily;
   const coverColor = options.coverFontColor || "";
-  const strokePalette = deriveCoverStrokePalette(themeCss);
+  const strokePalette = deriveCoverStrokePalette(themeCss, themeName);
   const themeTitleColor = strokePalette.fill || "#e8c36a";
 
   // Build full CSS: theme + font overrides

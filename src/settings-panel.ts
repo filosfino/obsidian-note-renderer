@@ -186,6 +186,109 @@ function buildRgba(hex: string, alphaPercent: number): string {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
+interface DynamicNumberOpts {
+  min: number;
+  max: number;
+  step: number;
+  defaultValue: number;
+}
+
+function makeDynamicNumberField(
+  host: PanelHost,
+  parent: HTMLElement,
+  label: string,
+  value: string,
+  resolveOpts: () => DynamicNumberOpts,
+  onUpdate: (value: number) => Promise<void>,
+): HTMLInputElement {
+  const field = parent.createDiv("nr-field");
+  if (label) field.createEl("span", { cls: "nr-field-label", text: label });
+  const input = field.createEl("input", { cls: "nr-field-input", type: "text" });
+  input.value = value;
+
+  const apply = async () => {
+    if (host.syncing) return;
+    const opts = resolveOpts();
+    const val = Math.max(opts.min, Math.min(opts.max, parseFloat(input.value) || opts.defaultValue));
+    input.value = String(val);
+    await onUpdate(val);
+  };
+
+  input.addEventListener("blur", () => { void apply(); });
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      void apply();
+    }
+  });
+  input.addEventListener("wheel", (e) => {
+    if (document.activeElement !== input) return;
+    e.preventDefault();
+    const opts = resolveOpts();
+    const current = parseFloat(input.value) || opts.defaultValue;
+    input.value = String(current + (e.deltaY < 0 ? opts.step : -opts.step));
+    void apply();
+  }, { passive: false });
+
+  return input;
+}
+
+interface ThemeBoundColorInputOptions {
+  host: PanelHost;
+  input: HTMLInputElement;
+  popoverTitle: string;
+  resolveDisplayValue: () => Promise<string>;
+  storeValue: (value: string) => void;
+  resetValue: () => void;
+  getThemeName?: () => string;
+}
+
+function bindThemeBoundColorInput(options: ThemeBoundColorInputOptions): void {
+  const {
+    host,
+    input,
+    popoverTitle,
+    resolveDisplayValue,
+    storeValue,
+    resetValue,
+    getThemeName,
+  } = options;
+
+  void resolveDisplayValue().then((value) => {
+    input.value = value;
+  });
+
+  input.addEventListener("input", () => {
+    storeValue(input.value);
+  });
+
+  attachThemeColorPopover(
+    host,
+    input,
+    popoverTitle,
+    (value) => {
+      input.value = value;
+      storeValue(value);
+    },
+    () => {
+      void resolveDisplayValue().then((value) => {
+        input.value = value;
+        resetValue();
+      });
+    },
+    getThemeName,
+  );
+
+  input.addEventListener("dblclick", (e) => {
+    e.preventDefault();
+    if (host.syncing) return;
+    void resolveDisplayValue().then((value) => {
+      input.value = value;
+      resetValue();
+    });
+  });
+}
+
 let activeColorPopover: HTMLElement | null = null;
 let activeColorPopoverCleanup: (() => void) | null = null;
 
@@ -198,7 +301,7 @@ function closeColorPopover(): void {
 
 async function getThemeColorChoices(host: PanelHost, themeName?: string): Promise<ThemeColorChoice[]> {
   const css = await host.plugin.loadTheme(themeName || host.effective.activeTheme || host.plugin.settings.activeTheme);
-  return extractThemeColorChoices(css);
+  return extractThemeColorChoices(css, themeName);
 }
 
 function openColorPopover(
@@ -510,43 +613,27 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   const colorInput = styleRow.createEl("input", { cls: "nr-color-dot", type: "color" });
   // Resolve display color: saved value → theme default → fallback
   const resolveThemeColor = async (): Promise<string> => {
-    const css = await host.plugin.loadTheme(host.effective.activeTheme || host.plugin.settings.activeTheme);
-    return extractCoverTitleColor(css) || "#e07c5a";
+    const themeName = themeSelect.value || host.effective.activeTheme || host.plugin.settings.activeTheme;
+    const css = await host.plugin.loadTheme(themeName);
+    return extractCoverTitleColor(css, themeName) || "#e07c5a";
   };
   const resolveStrokePalette = async (): Promise<import("./effects").CoverStrokePalette> => {
-    const css = await host.plugin.loadTheme(host.effective.activeTheme || host.plugin.settings.activeTheme);
-    return deriveCoverStrokePalette(css);
+    const themeName = themeSelect.value || host.effective.activeTheme || host.plugin.settings.activeTheme;
+    const css = await host.plugin.loadTheme(themeName);
+    return deriveCoverStrokePalette(css, themeName);
   };
   void resolveThemeColor().then(c => {
     colorInput.value = host.plugin.settings.coverFontColor || c;
   });
   colorInput.title = "封面文字颜色（双击重置为主题默认）";
-  colorInput.addEventListener("input", () => {
-    void host.updateSetting("coverFontColor", colorInput.value);
-  });
-  attachThemeColorPopover(
+  bindThemeBoundColorInput({
     host,
-    colorInput,
-    "封面文字颜色",
-    (value) => {
-      colorInput.value = value;
-      void host.updateSetting("coverFontColor", value);
-    },
-    () => {
-      void resolveThemeColor().then(c => {
-        colorInput.value = c;
-        void host.updateSetting("coverFontColor", "");
-      });
-    },
-    () => themeSelect.value,
-  );
-  colorInput.addEventListener("dblclick", (e) => {
-    e.preventDefault();
-    if (host.syncing) return;
-    void resolveThemeColor().then(c => {
-      colorInput.value = c;
-      void host.updateSetting("coverFontColor", "");
-    });
+    input: colorInput,
+    popoverTitle: "封面文字颜色",
+    resolveDisplayValue: async () => host.plugin.settings.coverFontColor || await resolveThemeColor(),
+    storeValue: (value) => { void host.updateSetting("coverFontColor", value); },
+    resetValue: () => { void host.updateSetting("coverFontColor", ""); },
+    getThemeName: () => themeSelect.value,
   });
 
   const weightSelect = styleRow.createEl("select", { cls: "dropdown nr-dropdown-narrow" });
@@ -614,124 +701,68 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   const strokeColorInput = strokeParamsRow.createEl("input", { cls: "nr-color-dot", type: "color" });
   strokeColorInput.value = "#000000";
   strokeColorInput.title = "描边颜色（双击跟随主题标题色）";
-  void resolveStrokePalette().then((palette) => {
-    strokeColorInput.value = parseColorValue(host.plugin.settings.coverStrokeColor, palette.inner);
-  });
-  strokeColorInput.addEventListener("input", () => {
-    void host.updateSetting("coverStrokeColor", strokeColorInput.value);
-  });
-  attachThemeColorPopover(
+  bindThemeBoundColorInput({
     host,
-    strokeColorInput,
-    "描边颜色",
-    (value) => {
-      strokeColorInput.value = value;
-      void host.updateSetting("coverStrokeColor", value);
+    input: strokeColorInput,
+    popoverTitle: "描边颜色",
+    resolveDisplayValue: async () => {
+      const palette = await resolveStrokePalette();
+      return parseColorValue(host.plugin.settings.coverStrokeColor, palette.inner);
     },
-    () => {
-      void resolveStrokePalette().then((palette) => {
-        strokeColorInput.value = palette.inner;
-        void host.updateSetting("coverStrokeColor", "");
-      });
-    },
-    () => themeSelect.value,
-  );
-  strokeColorInput.addEventListener("dblclick", (e) => {
-    e.preventDefault();
-    if (host.syncing) return;
-    void resolveStrokePalette().then((palette) => {
-      strokeColorInput.value = palette.inner;
-      void host.updateSetting("coverStrokeColor", "");
-    });
+    storeValue: (value) => { void host.updateSetting("coverStrokeColor", value); },
+    resetValue: () => { void host.updateSetting("coverStrokeColor", ""); },
+    getThemeName: () => themeSelect.value,
   });
 
   const doubleStrokeColorInput = strokeParamsRow.createEl("input", { cls: "nr-color-dot", type: "color" });
   doubleStrokeColorInput.value = parseColorValue(host.plugin.settings.coverDoubleStrokeColor, host.plugin.settings.coverFontColor || "#e07c5a");
   doubleStrokeColorInput.title = "外描边颜色（双击跟随 theme 默认）";
-  void resolveStrokePalette().then((palette) => {
-    if (!host.plugin.settings.coverDoubleStrokeColor) {
-      doubleStrokeColorInput.value = palette.outer;
-    }
-  });
-  doubleStrokeColorInput.addEventListener("input", () => {
-    void host.updateSetting("coverDoubleStrokeColor", doubleStrokeColorInput.value);
-  });
-  attachThemeColorPopover(
+  bindThemeBoundColorInput({
     host,
-    doubleStrokeColorInput,
-    "外描边颜色",
-    (value) => {
-      doubleStrokeColorInput.value = value;
-      void host.updateSetting("coverDoubleStrokeColor", value);
+    input: doubleStrokeColorInput,
+    popoverTitle: "外描边颜色",
+    resolveDisplayValue: async () => {
+      const palette = await resolveStrokePalette();
+      return host.plugin.settings.coverDoubleStrokeColor
+        ? parseColorValue(host.plugin.settings.coverDoubleStrokeColor, palette.outer)
+        : palette.outer;
     },
-    () => {
-      void resolveStrokePalette().then((palette) => {
-        doubleStrokeColorInput.value = palette.outer;
-        void host.updateSetting("coverDoubleStrokeColor", "");
-      });
-    },
-    () => themeSelect.value,
-  );
-  doubleStrokeColorInput.addEventListener("dblclick", (e) => {
-    e.preventDefault();
-    if (host.syncing) return;
-    void resolveStrokePalette().then((palette) => {
-      doubleStrokeColorInput.value = palette.outer;
-      void host.updateSetting("coverDoubleStrokeColor", "");
-    });
+    storeValue: (value) => { void host.updateSetting("coverDoubleStrokeColor", value); },
+    resetValue: () => { void host.updateSetting("coverDoubleStrokeColor", ""); },
+    getThemeName: () => themeSelect.value,
   });
   const doubleStrokeColorField = doubleStrokeColorInput;
 
-  const strokeField = strokeParamsRow.createDiv("nr-field");
-  strokeField.createEl("span", { cls: "nr-field-label", text: "内粗" });
-  const strokeInput = strokeField.createEl("input", { cls: "nr-field-input", type: "text" });
-  strokeInput.value = String(host.plugin.settings.coverStrokePercent);
-  const applyStroke = async () => {
-    if (host.syncing) return;
-    const limits = strokeLimits(currentStrokeStyle());
-    const val = Math.max(limits.min, Math.min(limits.max, parseFloat(strokeInput.value) || 0));
-    strokeInput.value = String(val);
-    await host.updateSetting("coverStrokePercent", val);
-  };
-  strokeInput.addEventListener("blur", () => { void applyStroke(); });
-  strokeInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); void applyStroke(); } });
-  strokeInput.addEventListener("wheel", (e) => {
-    if (document.activeElement !== strokeInput) return;
-    e.preventDefault();
-    const limits = strokeLimits(currentStrokeStyle());
-    const current = parseFloat(strokeInput.value) || 0;
-    const next = current + (e.deltaY < 0 ? limits.step : -limits.step);
-    strokeInput.value = String(next);
-    void applyStroke();
-  }, { passive: false });
+  const strokeInput = makeDynamicNumberField(
+    host,
+    strokeParamsRow,
+    "内粗",
+    String(host.plugin.settings.coverStrokePercent),
+    () => {
+      const limits = strokeLimits(currentStrokeStyle());
+      return { ...limits, defaultValue: FIELD_SCHEMAS.coverStrokePercent.default };
+    },
+    (val) => host.updateSetting("coverStrokePercent", val),
+  );
 
   const opInput = makeField(host, strokeParamsRow, "透明", String(host.plugin.settings.coverStrokeOpacity),
     schemaOpts("coverStrokeOpacity"),
     (val) => host.updateSetting("coverStrokeOpacity", val));
 
-  const doubleStrokeField = strokeParamsRow.createDiv("nr-field");
-  doubleStrokeField.createEl("span", { cls: "nr-field-label", text: "外粗" });
-  const doubleStrokeInput = doubleStrokeField.createEl("input", { cls: "nr-field-input", type: "text" });
-  doubleStrokeInput.value = String(host.plugin.settings.coverDoubleStrokePercent);
-  const applyDoubleStroke = async () => {
-    if (host.syncing) return;
-    const ds = FIELD_SCHEMAS.coverDoubleStrokePercent;
-    const val = Math.max(ds.min, Math.min(ds.max, parseFloat(doubleStrokeInput.value) || 0));
-    doubleStrokeInput.value = String(val);
-    await host.updateSetting("coverDoubleStrokePercent", val);
-  };
-  doubleStrokeInput.addEventListener("blur", () => { void applyDoubleStroke(); });
-  doubleStrokeInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); void applyDoubleStroke(); } });
-  doubleStrokeInput.addEventListener("wheel", (e) => {
-    if (document.activeElement !== doubleStrokeInput) return;
-    e.preventDefault();
-    const ds = FIELD_SCHEMAS.coverDoubleStrokePercent;
-    const step = ds.step ?? 0.5;
-    const current = parseFloat(doubleStrokeInput.value) || ds.default;
-    const next = current + (e.deltaY < 0 ? step : -step);
-    doubleStrokeInput.value = String(next);
-    void applyDoubleStroke();
-  }, { passive: false });
+  const doubleStrokeInput = makeDynamicNumberField(
+    host,
+    strokeParamsRow,
+    "外粗",
+    String(host.plugin.settings.coverDoubleStrokePercent),
+    () => {
+      const ds = FIELD_SCHEMAS.coverDoubleStrokePercent;
+      return { min: ds.min, max: ds.max, step: ds.step ?? 0.5, defaultValue: ds.default };
+    },
+    (val) => host.updateSetting("coverDoubleStrokePercent", val),
+  );
+
+  const strokeField = strokeInput.parentElement as HTMLElement;
+  const doubleStrokeField = doubleStrokeInput.parentElement as HTMLElement;
 
   const updateStrokeUi = (style: import("./constants").CoverStrokeStyle) => {
     const mode = COVER_STROKE_STYLE_UI[style] ?? COVER_STROKE_STYLE_UI.stroke;
@@ -767,62 +798,30 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
 
   const glowField = glowParamsRow.createDiv("nr-field");
   glowField.createEl("span", { cls: "nr-field-label", text: "光" });
-  const glowInput = glowField.createEl("input", { cls: "nr-field-input", type: "text" });
-  glowInput.value = String(host.plugin.settings.coverGlowSize);
-  const applyGlow = async () => {
-    if (host.syncing) return;
-    const gs = FIELD_SCHEMAS.coverGlowSize;
-    const val = Math.max(gs.min, Math.min(gs.max, parseInt(glowInput.value) || 0));
-    glowInput.value = String(val);
-    await host.updateSetting("coverGlowSize", val);
-  };
-  glowInput.addEventListener("blur", () => { void applyGlow(); });
-  glowInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); void applyGlow(); } });
-  glowInput.addEventListener("wheel", (e) => {
-    if (document.activeElement !== glowInput) return;
-    e.preventDefault();
-    const gs = FIELD_SCHEMAS.coverGlowSize;
-    const step = gs.step ?? 1;
-    const current = parseInt(glowInput.value) || gs.default;
-    const next = current + (e.deltaY < 0 ? step : -step);
-    glowInput.value = String(next);
-    void applyGlow();
-  }, { passive: false });
+  const glowInput = makeDynamicNumberField(
+    host,
+    glowParamsRow,
+    "光",
+    String(host.plugin.settings.coverGlowSize),
+    () => {
+      const gs = FIELD_SCHEMAS.coverGlowSize;
+      return { min: gs.min, max: gs.max, step: gs.step ?? 1, defaultValue: gs.default };
+    },
+    (val) => host.updateSetting("coverGlowSize", val),
+  );
+  glowField.remove();
 
   const glowColorInput = glowParamsRow.createEl("input", { cls: "nr-color-dot", type: "color" });
   glowColorInput.value = parseColorValue(host.plugin.settings.coverGlowColor, host.plugin.settings.coverFontColor || "#e07c5a");
   glowColorInput.title = "发光颜色（双击跟随文字颜色）";
-  void resolveThemeColor().then((themeColor) => {
-    if (!host.plugin.settings.coverGlowColor) {
-      glowColorInput.value = host.plugin.settings.coverFontColor || themeColor;
-    }
-  });
-  glowColorInput.addEventListener("input", () => {
-    void host.updateSetting("coverGlowColor", glowColorInput.value);
-  });
-  attachThemeColorPopover(
+  bindThemeBoundColorInput({
     host,
-    glowColorInput,
-    "发光颜色",
-    (value) => {
-      glowColorInput.value = value;
-      void host.updateSetting("coverGlowColor", value);
-    },
-    () => {
-      void resolveThemeColor().then((themeColor) => {
-        glowColorInput.value = host.effective.coverFontColor || themeColor;
-        void host.updateSetting("coverGlowColor", "");
-      });
-    },
-    () => themeSelect.value,
-  );
-  glowColorInput.addEventListener("dblclick", (e) => {
-    e.preventDefault();
-    if (host.syncing) return;
-    void resolveThemeColor().then((themeColor) => {
-      glowColorInput.value = host.effective.coverFontColor || themeColor;
-      void host.updateSetting("coverGlowColor", "");
-    });
+    input: glowColorInput,
+    popoverTitle: "发光颜色",
+    resolveDisplayValue: async () => host.plugin.settings.coverGlowColor || host.effective.coverFontColor || await resolveThemeColor(),
+    storeValue: (value) => { void host.updateSetting("coverGlowColor", value); },
+    resetValue: () => { void host.updateSetting("coverGlowColor", ""); },
+    getThemeName: () => themeSelect.value,
   });
 
   strokeStyleSelect.addEventListener("change", () => { void (async () => {

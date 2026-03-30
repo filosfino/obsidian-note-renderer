@@ -199,6 +199,7 @@ export class PreviewView extends ItemView implements PanelHost {
       markdown,
       file.path,
       themeCss,
+      merged.activeTheme,
       this.plugin,
       extractRenderOptions(merged as unknown as Record<string, unknown>),
     );
@@ -317,8 +318,8 @@ export class PreviewView extends ItemView implements PanelHost {
     setFontSelectValue(r.coverFontSelect, s.coverFontFamily);
     // Sync cover color: saved value → theme default
     void this.plugin.loadTheme(s.activeTheme).then(css => {
-      const themeColor = extractCoverTitleColor(css) || "#e07c5a";
-      const strokePalette = deriveCoverStrokePalette(css);
+      const themeColor = extractCoverTitleColor(css, s.activeTheme) || "#e07c5a";
+      const strokePalette = deriveCoverStrokePalette(css, s.activeTheme);
       r.coverColorInput.value = s.coverFontColor || themeColor;
       r.strokeColorInput.value = parseColorValue(s.coverStrokeColor, strokePalette.inner);
       r.doubleStrokeColorInput.value = parseColorValue(s.coverDoubleStrokeColor, strokePalette.outer);

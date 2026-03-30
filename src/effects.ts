@@ -143,7 +143,14 @@ function renderBokeh(container: HTMLElement, params: EffectParams, ctx: EffectCo
     const y = Math.round(seed(i + 5) * ctx.pageHeight);
     const size = 20 + Math.round(seed(i + 3) * 60);
     const alpha = 0.3 + seed(i + 7) * 0.5;
-    circles.push(`${x}px ${y}px 0 ${size}px ${ctx.effectColor}${alpha.toFixed(2)})`);
+
+    // Soften the visual weight in the center to keep the title area cleaner.
+    const dx = Math.abs(x - ctx.pageWidth / 2) / (ctx.pageWidth / 2);
+    const dy = Math.abs(y - ctx.pageHeight / 2) / (ctx.pageHeight / 2);
+    const centerDistance = Math.sqrt(dx * dx + dy * dy);
+    const centerFade = 0.35 + 0.65 * Math.min(1, centerDistance / 0.75);
+
+    circles.push(`${x}px ${y}px 0 ${size}px ${ctx.effectColor}${(alpha * centerFade).toFixed(2)})`);
   }
   const dot = document.createElement("div");
   dot.setCssStyles({ position: "absolute", width: "1px", height: "1px", top: "0", left: "0", borderRadius: "50%", boxShadow: circles.join(",") });

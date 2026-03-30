@@ -6,7 +6,7 @@
  * Functions (toDisplay / fromDisplay) are stripped — JSON only carries data.
  */
 
-import { readdirSync, readFileSync, writeFileSync } from "fs";
+import { readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { fileURLToPath } from "url";
 import { transformSync } from "esbuild";
@@ -76,30 +76,10 @@ function cleanFieldSchemas(raw) {
   return out;
 }
 
-function loadBundledThemeCssMap() {
-  const themeDir = join(rootDir, "src/themes");
-  const out = {};
-  for (const file of readdirSync(themeDir)) {
-    if (!file.endsWith(".ts")) continue;
-    const source = readFileSync(join(themeDir, file), "utf-8");
-    const match = source.match(/export const \w+\s*=\s*`([\s\S]*?)`;/);
-    if (!match) continue;
-    out[file.replace(/\.ts$/, "")] = match[1];
-  }
-  return out;
-}
-
 function buildThemeColorSnapshot() {
-  const valuesByTheme = {};
-  const themes = loadBundledThemeCssMap();
-  for (const [name, css] of Object.entries(themes)) {
-    valuesByTheme[name] = Object.fromEntries(
-      Object.entries(themeColors.extractThemeColorValues(css)).filter(([, value]) => Boolean(value))
-    );
-  }
   return {
     themeColorSchemas: themeColors.THEME_COLOR_SCHEMAS,
-    themes: valuesByTheme,
+    themes: themeColors.BUILT_IN_THEME_COLOR_TOKENS,
   };
 }
 

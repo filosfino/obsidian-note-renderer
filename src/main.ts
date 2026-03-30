@@ -229,7 +229,7 @@ export default class NoteRendererPlugin extends Plugin {
     const themeCss = await this.loadTheme(merged.activeTheme);
     const options = extractRenderOptions(merged as unknown as Record<string, unknown>);
 
-    const rendered = await renderNote(this.app, markdown, file.path, themeCss, this, options);
+    const rendered = await renderNote(this.app, markdown, file.path, themeCss, merged.activeTheme, this, options);
 
     // Ensure output directory exists
     const fs = require("fs") as typeof import("fs");
@@ -283,7 +283,7 @@ export default class NoteRendererPlugin extends Plugin {
     const themeCss = await this.loadTheme(merged.activeTheme);
     const options = extractRenderOptions(merged as unknown as Record<string, unknown>);
 
-    const rendered = await renderNote(this.app, markdown, file.path, themeCss, this, options);
+    const rendered = await renderNote(this.app, markdown, file.path, themeCss, merged.activeTheme, this, options);
 
     const totalPages = rendered.pages.length;
     if (pageIndex < 1 || pageIndex > totalPages) {
