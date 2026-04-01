@@ -68,44 +68,48 @@ export const BUILTIN_THEMES = [
 
 export const FIELD_SCHEMAS = {
   // ── Basic ──
-  activeTheme:       { type: "string",  default: "cream", enum: BUILTIN_THEMES,
+  activeTheme:       { type: "string",  default: "mist", enum: BUILTIN_THEMES,
                        description: "配色主题。浅色：paper / cream / latte / sage / mist / rose；深色：graphite / ink-gold / amber。也可填自定义主题文件名（不含 .css）" } as StringField,
-  fontSize:          { type: "number",  default: 42, min: 24, max: 72, step: 2, unit: "px",
+  fontSize:          { type: "number",  default: 40, min: 24, max: 72, step: 2, unit: "px",
                        description: "正文字号" } as NumericField,
-  fontFamily:        { type: "string",  default: '"PingFang SC", "Noto Sans SC", sans-serif',
+  fontFamily:        { type: "string",  default: '"Source Han Sans SC", "PingFang SC", sans-serif',
                        description: "正文字体族，CSS font-family 格式" } as StringField,
-  pageMode:          { type: "string",  default: "long", enum: ["long", "card"] as const,
+  pageMode:          { type: "string",  default: "card", enum: ["long", "card"] as const,
                        description: "页面比例：long = 3:5，card = 3:4" } as StringField,
+  listStyle:         { type: "string",  default: "default", enum: ["default", "capsule"] as const,
+                       description: "列表样式：default = 常规列表，capsule = 胶囊卡片" } as StringField,
 
   // ── Cover text ──
-  coverFontFamily:   { type: "string",  default: '"Yuanti SC", "PingFang SC", sans-serif',
+  coverFontFamily:   { type: "string",  default: '"Noto Serif SC", "Songti SC", serif',
                        description: "封面标题字体族" } as StringField,
   coverFontColor:    { type: "string",  default: "",
                        description: "封面标题颜色，留空则跟随主题；支持任意 CSS 颜色值" } as StringField,
   coverFontOpacity:  { type: "number",  default: 100, min: 0, max: 100, step: 10, unit: "%",
                        description: "封面标题整体透明度；同时作用于填充、描边、下划线和阴影" } as NumericField,
-  coverFontScale:    { type: "number",  default: 100, min: 50, max: 300, step: 10, unit: "%",
+  coverFontScale:    { type: "number",  default: 150, min: 50, max: 300, step: 10, unit: "%",
                        description: "封面标题字号缩放比例" } as NumericField,
   coverFontWeight:   { type: "number",  default: 800, min: 100, max: 900, step: 100,
                        description: "封面标题字重（100 最细，900 最粗）" } as NumericField,
-  coverLetterSpacing:{ type: "number",  default: 5, min: -5, max: 30,
+  coverLetterSpacing:{ type: "number",  default: 0, min: -5, max: 30,
                        description: "封面标题字间距（px）" } as NumericField,
-  coverLineHeight:   { type: "number",  default: 1.3, min: 0.8, max: 2.5, step: 0.1,
+  coverLineHeight:   { type: "number",  default: 1.5, min: 0.8, max: 2.5, step: 0.1,
                        description: "封面标题行高倍数",
                      } as NumericField,
   coverTextAlign:    { type: "string",  default: "left", enum: ["left", "center", "right"] as const,
                        description: "封面标题对齐方式" } as StringField,
   coverOffsetX:      { type: "number",  default: 0, min: -50, max: 50, unit: "%",
                        description: "封面标题水平偏移" } as NumericField,
-  coverOffsetY:      { type: "number",  default: 0, min: -50, max: 50, unit: "%",
+  coverOffsetY:      { type: "number",  default: -5, min: -50, max: 50, unit: "%",
                        description: "封面标题垂直偏移" } as NumericField,
+  coverPagePaddingX: { type: "number",  default: 90, min: 0, max: 180, step: 10, unit: "px",
+                       description: "封面文字左右边距；0 表示铺满整页宽度" } as NumericField,
 
   // ── Cover text effects ──
-  coverStrokeStyle:  { type: "string",  default: "stroke", enum: ["none", "stroke", "double", "hollow"] as const,
+  coverStrokeStyle:  { type: "string",  default: "none", enum: ["none", "stroke", "double", "hollow"] as const,
                        description: "封面标题描边样式。stroke = 单层描边，double = 内外双描边，hollow = 透明填充仅保留外轮廓" } as StringField,
-  coverStrokePercent:{ type: "number",  default: 9, min: 0, max: 100, step: 0.5,
+  coverStrokePercent:{ type: "number",  default: 8, min: 0, max: 100, step: 0.5,
                        description: "主描边粗细（相对于字号的百分比）。double 模式下表示内描边，hollow 模式下表示镂空轮廓粗细" } as NumericField,
-  coverStrokeOpacity:{ type: "number",  default: 90, min: 0, max: 100,
+  coverStrokeOpacity:{ type: "number",  default: 34, min: 0, max: 100,
                        description: "描边不透明度。作用于描边层，不改变文字填充本身透明度；hollow 模式下通常隐藏" } as NumericField,
   coverStrokeColor:  { type: "string",  default: "",
                        description: "描边颜色，留空则跟随主题标题色；支持任意 CSS 颜色值" } as StringField,
@@ -119,13 +123,13 @@ export const FIELD_SCHEMAS = {
                        description: "发光效果半径" } as NumericField,
   coverGlowColor:    { type: "string",  default: "",
                        description: "发光颜色，留空则跟随文字颜色；支持任意 CSS 颜色值" } as StringField,
-  coverShadow:       { type: "boolean", default: true,
+  coverShadow:       { type: "boolean", default: false,
                        description: "封面标题是否显示投影" } as BooleanField,
-  coverShadowBlur:   { type: "number",  default: 16, min: 0, max: 200,
+  coverShadowBlur:   { type: "number",  default: 42, min: 0, max: 200,
                        description: "标题投影模糊半径" } as NumericField,
-  coverShadowOffsetX:{ type: "number",  default: 0, min: -100, max: 100,
+  coverShadowOffsetX:{ type: "number",  default: 5, min: -100, max: 100,
                        description: "标题投影水平偏移" } as NumericField,
-  coverShadowOffsetY:{ type: "number",  default: 4, min: -100, max: 100,
+  coverShadowOffsetY:{ type: "number",  default: 10, min: -100, max: 100,
                        description: "标题投影垂直偏移" } as NumericField,
   coverShadowColor:  { type: "string",  default: "rgba(0,0,0,0.6)",
                        description: "标题投影颜色，支持任意 CSS 颜色值含 rgba" } as StringField,
@@ -133,7 +137,7 @@ export const FIELD_SCHEMAS = {
                        description: "封面是否显示斜条 banner 装饰" } as BooleanField,
   coverBannerColor:  { type: "string",  default: "rgba(0,0,0,0.5)",
                        description: "banner 颜色，支持 CSS 颜色值含 rgba" } as StringField,
-  coverBannerSkew:   { type: "number",  default: 6, min: 0, max: 20,
+  coverBannerSkew:   { type: "number",  default: 4, min: 0, max: 20,
                        description: "banner 倾斜角度（度）" } as NumericField,
   coverBannerPaddingPercent: { type: "number", default: 40, min: 0, max: 120, step: 5, unit: "%",
                        description: "banner 左右额外留白，按当前字号的百分比计算" } as NumericField,
@@ -209,27 +213,27 @@ export interface EffectSchema {
 /** Effect definitions — single source of truth for defaults + UI constraints. 仅作用于封面页。 */
 export const EFFECT_SCHEMAS: Record<string, EffectSchema> = {
   overlay:   { label: "遮罩",   description: "封面特效。纯色半透明遮罩，压暗背景突出文字",
-               defaultEnabled: true,  defaultOpacity: 55, min: 0,  max: 100 },
+               defaultEnabled: false, defaultOpacity: 55, min: 0,  max: 100 },
   vignette:  { label: "暗角",   description: "封面特效。四角渐暗，模拟镜头暗角",
                defaultEnabled: false, defaultOpacity: 50, min: 0,  max: 100 },
   grain:     { label: "噪点",   description: "封面特效。胶片颗粒质感",
-               defaultEnabled: false, defaultOpacity: 8,  min: 1,  max: 50 },
+               defaultEnabled: false, defaultOpacity: 50, min: 1,  max: 50 },
   aurora:    { label: "极光",   description: "封面特效。彩色光带，count 控制光带数量",
                defaultEnabled: false, defaultOpacity: 30, min: 5,  max: 80, defaultCount: 3,  countMin: 2, countMax: 6 },
   bokeh:     { label: "散景",   description: "封面特效。虚化光斑，count 控制光斑数量",
                defaultEnabled: false, defaultOpacity: 12, min: 1,  max: 50, defaultCount: 16, countMin: 4, countMax: 40, defaultColor: "" },
   dots:      { label: "波点",   description: "封面特效。规则点阵，像画画笔记本的点阵纸",
-               defaultEnabled: false, defaultOpacity: 14, min: 1,  max: 40,
+               defaultEnabled: false, defaultOpacity: 10, min: 1,  max: 40,
                defaultSpacing: 28, spacingMin: 16, spacingMax: 64, spacingStep: 2,
                defaultSize: 4, sizeMin: 1, sizeMax: 12, sizeStep: 1,
                defaultColor: "" },
   grid:      { label: "网格",   description: "封面特效。细线网格纹理",
-               defaultEnabled: false, defaultOpacity: 6,  min: 1,  max: 50,
+               defaultEnabled: false, defaultOpacity: 36, min: 1,  max: 50,
                defaultSpacing: 60, spacingMin: 24, spacingMax: 140, spacingStep: 4 },
   lightLeak: { label: "漏光",   description: "封面特效。模拟胶片漏光，count 控制漏光区域数",
                defaultEnabled: false, defaultOpacity: 25, min: 5,  max: 80, defaultCount: 2,  countMin: 1, countMax: 5 },
   scanlines: { label: "扫描线", description: "封面特效。水平扫描线，CRT 显示器风格",
-               defaultEnabled: false, defaultOpacity: 8,  min: 1,  max: 30 },
+               defaultEnabled: false, defaultOpacity: 27, min: 1,  max: 30 },
   network:   { label: "网络",   description: "封面特效。随机连线节点图案，count 控制节点数",
                defaultEnabled: false, defaultOpacity: 15, min: 5,  max: 50, defaultCount: 10, countMin: 4, countMax: 20,
                defaultWidth: 1, widthMin: 0.5, widthMax: 6, widthStep: 0.5 },
@@ -282,6 +286,7 @@ export interface CoverTypographyConfig {
 export interface CoverPositionConfig {
   offsetX: number;
   offsetY: number;
+  paddingX: number;
 }
 
 export interface CoverStrokeLayerConfig {
@@ -371,6 +376,7 @@ export const COVER_SEMANTIC_SCHEMA = {
     fields: {
       offsetX: { key: "coverOffsetX", noteKey: "coverOffsetX", description: "水平偏移百分比", uiLabel: "X", uiControl: "number", uiOrder: 1, examples: ["-10", "0", "12"] },
       offsetY: { key: "coverOffsetY", noteKey: "coverOffsetY", description: "垂直偏移百分比", uiLabel: "Y", uiControl: "number", uiOrder: 2, examples: ["-8", "0", "10"] },
+      paddingX: { key: "coverPagePaddingX", noteKey: "coverPagePaddingX", description: "封面页左右边距；0 表示铺满整页宽度，自动换行也会同步按可用宽度计算", uiLabel: "边距", uiControl: "number", uiOrder: 3, examples: ["0", "40", "90"] },
     },
   },
   stroke: {
@@ -432,6 +438,7 @@ const COVER_SEMANTIC_FIELD_PATHS: Record<string, CoverSemanticFieldPath> = {
   coverTextAlign: ["typography", "align"],
   coverOffsetX: ["position", "offsetX"],
   coverOffsetY: ["position", "offsetY"],
+  coverPagePaddingX: ["position", "paddingX"],
   coverStrokeStyle: ["stroke", "style"],
   coverStrokeOpacity: ["stroke", "opacity"],
   coverStrokePercent: ["stroke", "inner", "widthPercent"],
@@ -453,6 +460,11 @@ const COVER_SEMANTIC_FIELD_PATHS: Record<string, CoverSemanticFieldPath> = {
 };
 
 type CoverSemanticGroupKey = keyof typeof COVER_SEMANTIC_SCHEMA;
+type PlainObject = Record<string, unknown>;
+
+function isPlainObject(value: unknown): value is PlainObject {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 function evaluateSemanticCondition(expression: string, values: Record<string, unknown>): boolean {
   const inMatch = expression.match(/^(\w+)\s+in\s+\[([^\]]+)\]$/);
@@ -480,7 +492,7 @@ export function isCoverSemanticFieldActive<G extends CoverSemanticGroupKey>(
 ): boolean {
   const meta = (COVER_SEMANTIC_SCHEMA[group].fields as Record<string, SemanticFieldMeta>)[field];
   if (!meta.appliesWhen) return true;
-  return evaluateSemanticCondition(meta.appliesWhen, values as Record<string, unknown>);
+  return evaluateSemanticCondition(meta.appliesWhen, values);
 }
 
 export function getCoverSemanticFieldMeta<G extends CoverSemanticGroupKey>(
@@ -490,39 +502,39 @@ export function getCoverSemanticFieldMeta<G extends CoverSemanticGroupKey>(
   return (COVER_SEMANTIC_SCHEMA[group].fields as Record<string, SemanticFieldMeta>)[field] ?? null;
 }
 
-function setNestedValue(target: Record<string, unknown>, path: readonly string[], value: unknown): void {
-  let current = target;
+function setNestedValue(target: PlainObject, path: readonly string[], value: unknown): void {
+  let current: PlainObject = target;
   for (let i = 0; i < path.length - 1; i++) {
     const key = path[i];
     const existing = current[key];
-    if (!existing || typeof existing !== "object" || Array.isArray(existing)) {
+    if (!isPlainObject(existing)) {
       current[key] = {};
     }
-    current = current[key] as Record<string, unknown>;
+    current = current[key] as PlainObject;
   }
   current[path[path.length - 1]] = value;
 }
 
-function getNestedValue(source: Record<string, unknown>, path: readonly string[]): unknown {
+function getNestedValue(source: PlainObject, path: readonly string[]): unknown {
   let current: unknown = source;
   for (const key of path) {
-    if (!current || typeof current !== "object" || Array.isArray(current)) return undefined;
-    current = (current as Record<string, unknown>)[key];
+    if (!isPlainObject(current)) return undefined;
+    current = current[key];
   }
   return current;
 }
 
-export function expandSemanticNoteConfig(raw: Record<string, unknown>): Record<string, unknown> {
-  const result: Record<string, unknown> = { ...raw };
+export function expandSemanticNoteConfig(raw: PlainObject): PlainObject {
+  const result: PlainObject = { ...raw };
   const cover = raw.cover;
-  if (cover && typeof cover === "object" && !Array.isArray(cover)) {
-    const coverObject = cover as Record<string, unknown>;
+  if (isPlainObject(cover)) {
+    const coverObject = cover;
     for (const [key, path] of Object.entries(COVER_SEMANTIC_FIELD_PATHS)) {
       const value = getNestedValue(coverObject, path as readonly string[]);
       if (value !== undefined) result[key] = value;
     }
     const effects = coverObject.effects;
-    if (effects && typeof effects === "object" && !Array.isArray(effects)) {
+    if (isPlainObject(effects)) {
       result.coverEffects = effects;
     }
   }
@@ -539,7 +551,7 @@ export const INTERNAL_TO_NOTE_KEY: Partial<Record<RenderKey, string>> = {
   activeTheme: "theme",
 };
 
-export function withRendererConfigVersion(config: Record<string, unknown>): Record<string, unknown> {
+export function withRendererConfigVersion(config: PlainObject): PlainObject {
   return {
     [RENDERER_CONFIG_VERSION_KEY]: RENDERER_CONFIG_VERSION,
     ...config,
@@ -555,17 +567,17 @@ export function withRendererConfigVersion(config: Record<string, unknown>): Reco
  * - Validates coverEffects as nested object
  * - Drops unknown keys
  */
-export function validateNoteConfig(raw: Record<string, unknown>): Partial<RenderOptions> {
+export function validateNoteConfig(raw: PlainObject): Partial<RenderOptions> {
   const normalized = expandSemanticNoteConfig(raw);
-  const result: Record<string, unknown> = {};
+  const result: PlainObject = {};
   for (const [key, value] of Object.entries(normalized)) {
     if (value === undefined || value === null) continue;
     const canonicalKey = (NOTE_KEY_ALIASES[key] || key) as string;
     if (!(canonicalKey in RENDER_DEFAULTS)) continue;
 
     if (canonicalKey === "coverEffects") {
-      if (typeof value === "object" && !Array.isArray(value)) {
-        const validated = validateCoverEffects(value as Record<string, unknown>);
+      if (isPlainObject(value)) {
+        const validated = validateCoverEffects(value);
         if (Object.keys(validated).length > 0) {
           result[canonicalKey] = validated;
         }
@@ -598,42 +610,41 @@ export function clampToSchema(value: number, schema: NumericField): number {
   return Math.max(schema.min, Math.min(schema.max, value));
 }
 
-function validateCoverEffects(raw: Record<string, unknown>): Record<string, EffectParams> {
+function validateCoverEffects(raw: PlainObject): Record<string, EffectParams> {
   const result: Record<string, EffectParams> = {};
   for (const [name, value] of Object.entries(raw)) {
     const schema = EFFECT_SCHEMAS[name];
     if (!schema) continue;
-    if (typeof value !== "object" || value === null || Array.isArray(value)) continue;
-    const v = value as Record<string, unknown>;
-    const opacity = typeof v.opacity === "number"
-      ? Math.max(schema.min, Math.min(schema.max, v.opacity))
+    if (!isPlainObject(value)) continue;
+    const opacity = typeof value.opacity === "number"
+      ? Math.max(schema.min, Math.min(schema.max, value.opacity))
       : schema.defaultOpacity;
     const params: EffectParams = {
-      enabled: typeof v.enabled === "boolean" ? v.enabled : schema.defaultEnabled,
+      enabled: typeof value.enabled === "boolean" ? value.enabled : schema.defaultEnabled,
       opacity,
     };
     if (schema.defaultCount != null) {
-      params.count = typeof v.count === "number"
-        ? Math.max(schema.countMin!, Math.min(schema.countMax!, Math.round(v.count)))
+      params.count = typeof value.count === "number"
+        ? Math.max(schema.countMin!, Math.min(schema.countMax!, Math.round(value.count)))
         : schema.defaultCount;
     }
     if (schema.defaultWidth != null) {
-      params.width = typeof v.width === "number"
-        ? Math.max(schema.widthMin!, Math.min(schema.widthMax!, v.width))
+      params.width = typeof value.width === "number"
+        ? Math.max(schema.widthMin!, Math.min(schema.widthMax!, value.width))
         : schema.defaultWidth;
     }
     if (schema.defaultSpacing != null) {
-      params.spacing = typeof v.spacing === "number"
-        ? Math.max(schema.spacingMin!, Math.min(schema.spacingMax!, v.spacing))
+      params.spacing = typeof value.spacing === "number"
+        ? Math.max(schema.spacingMin!, Math.min(schema.spacingMax!, value.spacing))
         : schema.defaultSpacing;
     }
     if (schema.defaultSize != null) {
-      params.size = typeof v.size === "number"
-        ? Math.max(schema.sizeMin!, Math.min(schema.sizeMax!, v.size))
+      params.size = typeof value.size === "number"
+        ? Math.max(schema.sizeMin!, Math.min(schema.sizeMax!, value.size))
         : schema.defaultSize;
     }
     if (schema.defaultColor != null) {
-      params.color = typeof v.color === "string" ? v.color : schema.defaultColor;
+      params.color = typeof value.color === "string" ? value.color : schema.defaultColor;
     }
     result[name] = params;
   }
@@ -642,19 +653,21 @@ function validateCoverEffects(raw: Record<string, unknown>): Record<string, Effe
 
 // ── Extraction ──────────────────────────────────────────────────────────────
 
-export function extractRenderOptions(settings: Record<string, unknown>): RenderOptions {
-  const options = { ...RENDER_DEFAULTS, coverEffects: { ...RENDER_DEFAULTS.coverEffects } };
+export function extractRenderOptions(settings: Partial<RenderOptions>): RenderOptions {
+  const options: RenderOptions = { ...RENDER_DEFAULTS, coverEffects: { ...RENDER_DEFAULTS.coverEffects } };
+  const optionsMutable = options as Record<string, unknown>;
   for (const key of RENDER_KEYS) {
-    if (key in settings && settings[key] !== undefined) {
+    const value = settings[key];
+    if (value !== undefined) {
       if (key === "coverEffects") {
-        const src = settings[key] as Record<string, EffectParams>;
+        const src = value;
         for (const [name, params] of Object.entries(src)) {
           if (name in options.coverEffects) {
             options.coverEffects[name] = { ...params };
           }
         }
       } else {
-        (options as Record<string, unknown>)[key] = settings[key];
+        optionsMutable[key] = value;
       }
     }
   }
@@ -676,6 +689,7 @@ export function buildCoverConfig(options: RenderOptions): CoverConfig {
     position: {
       offsetX: options.coverOffsetX ?? 0,
       offsetY: options.coverOffsetY ?? 0,
+      paddingX: options.coverPagePaddingX ?? 90,
     },
     stroke: {
       style: (options.coverStrokeStyle || "stroke") as CoverStrokeConfig["style"],

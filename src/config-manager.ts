@@ -24,12 +24,19 @@ import {
 import { parseRendererConfig } from "./parser";
 import { migrateRendererConfig } from "./config-migrations";
 
-import type { NoteRendererSettings } from "./main";
+import type { RendererConfig } from "./main";
 
 export interface ResolvedRenderConfig {
-  settings: NoteRendererSettings;
+  settings: RendererConfig;
   options: RenderOptions;
   cover: CoverConfig;
+}
+
+interface ParsedFrontmatter {
+  data: Record<string, unknown>;
+  body: string;
+  hasFrontmatter: boolean;
+  parseError: boolean;
 }
 
 // ── Read ────────────────────────────────────────────────────────────────────
@@ -43,29 +50,30 @@ export function readNoteConfig(markdown: string): Partial<RenderOptions> | null 
 export function readGroupedNoteConfig(markdown: string): Record<string, unknown> | null {
   const noteConfig = readNoteConfig(markdown);
   if (!noteConfig) return null;
-  return withRendererConfigVersion(toSemanticNoteConfig(toNoteConfigKeys(noteConfig as Record<string, unknown>)));
+  return withRendererConfigVersion(toSemanticNoteConfig(toNoteConfigKeys(noteConfig)));
 }
 
 /**
- * Merge global settings with per-note overrides.
- * Note config values win; missing keys fall back to global.
+ * Merge plugin defaults with per-note overrides.
+ * Note config values win; missing keys fall back to plugin settings.
  * Deep-merges coverEffects (per-effect override, not all-or-nothing).
  */
 export function mergeConfigs(
-  global: NoteRendererSettings,
+  global: RendererConfig,
   noteConfig: Partial<RenderOptions> | null,
-): NoteRendererSettings {
-  const merged: NoteRendererSettings = {
+): RendererConfig {
+  const merged: RendererConfig = {
     ...global,
     coverEffects: deepCopyEffects(global.coverEffects),
   };
   if (!noteConfig) return merged;
+  const mergedMutable = merged as Record<string, unknown>;
 
   for (const [key, value] of Object.entries(noteConfig)) {
     if (!(key in merged) || value === undefined || value === null) continue;
 
     if (key === "coverEffects" && typeof value === "object") {
-      // Deep merge: note overrides individual effects, rest kept from global
+      // Deep merge: note overrides individual effects, rest kept from plugin defaults
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- value is narrowed from unknown
       for (const [name, params] of Object.entries(value as Record<string, EffectParams>)) {
         if (name in merged.coverEffects) {
@@ -73,18 +81,18 @@ export function mergeConfigs(
         }
       }
     } else {
-      (merged as unknown as Record<string, unknown>)[key] = value;
+      mergedMutable[key] = value;
     }
   }
   return merged;
 }
 
 export function resolveMergedRenderConfig(
-  global: NoteRendererSettings,
+  global: RendererConfig,
   noteConfig: Partial<RenderOptions> | null,
 ): ResolvedRenderConfig {
   const settings = mergeConfigs(global, noteConfig);
-  const options = extractRenderOptions(settings as unknown as Record<string, unknown>);
+  const options = extractRenderOptions(settings);
   const cover = buildCoverConfig(options);
   return { settings, options, cover };
 }
@@ -119,8 +127,7 @@ export function updateNoteConfigKey(
     noteConfig[key] = value;
   }
 
-  const configSection = buildConfigSection(noteConfig);
-  return insertConfigSection(removeConfigSection(markdown), configSection);
+  return writeFrontmatter(markdown, noteConfig);
 }
 
 /**
@@ -131,8 +138,7 @@ export function saveFullNoteConfig(
   markdown: string,
   options: RenderOptions,
 ): string {
-  const configSection = buildConfigSection(options as unknown as Record<string, unknown>);
-  return insertConfigSection(markdown, configSection);
+  return writeFrontmatter(markdown, options);
 }
 
 /**
@@ -145,13 +151,12 @@ export function writeGroupedNoteConfig(
 ): string {
   const migrated = migrateRendererConfig({ ...rendererConfig });
   const validated = validateNoteConfig(migrated);
-  const configSection = buildConfigSection(validated as Record<string, unknown>);
-  return insertConfigSection(removeConfigSection(markdown), configSection);
+  return writeFrontmatter(markdown, validated as Record<string, unknown>);
 }
 
 /** Remove renderer_config section from markdown. Returns modified markdown. */
 export function removeNoteConfig(markdown: string): string {
-  return removeConfigSection(markdown);
+  return writeFrontmatter(markdown, null);
 }
 
 // ── Migration ───────────────────────────────────────────────────────────────
@@ -173,30 +178,62 @@ export type { RenderOptions, RenderKey, CoverConfig };
 
 // ── Internal helpers ────────────────────────────────────────────────────────
 
-function buildConfigSection(config: Record<string, unknown>): string {
+function buildFrontmatterRendererConfig(config: Record<string, unknown>): Record<string, unknown> {
+  return withRendererConfigVersion(toSemanticNoteConfig(toNoteConfigKeys(config)));
+}
+
+function parseFrontmatter(markdown: string): ParsedFrontmatter {
   const yaml = require("js-yaml") as typeof import("js-yaml");
-  const semanticConfig = toSemanticNoteConfig(toNoteConfigKeys(config));
-  const yamlStr = yaml.dump(withRendererConfigVersion(semanticConfig), {
+  const match = markdown.match(/^---\n([\s\S]*?)\n---\n?/);
+  if (!match) return { data: {}, body: markdown, hasFrontmatter: false, parseError: false };
+
+  let data: Record<string, unknown> = {};
+  let parseError = false;
+  try {
+    const parsed = yaml.load(match[1]);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      data = parsed as Record<string, unknown>;
+    }
+  } catch {
+    parseError = true;
+  }
+
+  return {
+    data,
+    body: markdown.slice(match[0].length),
+    hasFrontmatter: true,
+    parseError,
+  };
+}
+
+function writeFrontmatter(markdown: string, rendererConfig: Record<string, unknown> | null): string {
+  const yaml = require("js-yaml") as typeof import("js-yaml");
+  const { data, body, hasFrontmatter, parseError } = parseFrontmatter(markdown);
+  if (hasFrontmatter && parseError) {
+    return markdown;
+  }
+  const next = { ...data };
+
+  if (rendererConfig) {
+    next.renderer_config = buildFrontmatterRendererConfig(rendererConfig);
+  } else {
+    delete next.renderer_config;
+  }
+
+  const cleanedBody = removeConfigSection(body).replace(/^\n+/, "");
+  if (Object.keys(next).length === 0) {
+    return cleanedBody.trimStart();
+  }
+
+  const yamlStr = yaml.dump(next, {
     indent: 2,
     lineWidth: -1,
     sortKeys: false,
   });
-  return `\n## renderer_config\n\n\`\`\`yaml\n${yamlStr}\`\`\`\n`;
+  return `---\n${yamlStr}---\n\n${cleanedBody}`;
 }
 
 /** Remove `## renderer_config` section (and its content) from markdown. */
 function removeConfigSection(markdown: string): string {
-  return markdown.replace(/\n## renderer_config\n[\s\S]*?(?=\n## |\n*$)/, "").trimEnd() + "\n";
-}
-
-/**
- * Insert renderer_config section into markdown.
- * Inserts before `## 正文描述` if present, otherwise appends at end.
- */
-function insertConfigSection(markdown: string, configSection: string): string {
-  const insertBefore = /(\n## 正文描述\n)/;
-  if (insertBefore.test(markdown)) {
-    return markdown.replace(insertBefore, `${configSection}$1`);
-  }
-  return markdown.trimEnd() + "\n" + configSection;
+  return markdown.replace(/(?:^|\n)## renderer_config\n[\s\S]*?(?=\n## |\n*$)/, "").trimEnd() + "\n";
 }

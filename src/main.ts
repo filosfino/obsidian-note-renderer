@@ -20,24 +20,32 @@ import {
   writeGroupedNoteConfig,
 } from "./config-manager";
 import { renderNote } from "./renderer";
-import { exportSinglePage } from "./exporter";
+import { exportSinglePage, scaleBlob } from "./exporter";
 import { DEFAULT_FONTS, getFontDisplayName, type FontEntry } from "./fonts";
 
 // ── Types (derived from schema) ──────────────────────────────────────────────
 
-export type RendererPreset = RenderOptions;
+export type RendererConfig = RenderOptions;
+export type RendererPreset = RendererConfig;
+export interface RendererPresetEntry {
+  values: Partial<RendererPreset>;
+  locked: boolean;
+}
 
-export interface NoteRendererSettings extends RenderOptions {
+export interface PluginUiState {
   activePreset: string;
-  presets: Record<string, Partial<RendererPreset>>;
+  presets: Record<string, RendererPresetEntry>;
   customFonts: FontEntry[];
 }
+
+type PresetValues = Partial<RendererPreset>;
+
+type PersistedNoteRendererSettings = PluginUiState;
 
 // Preset keys = all render keys (auto-derived)
 export const PRESET_KEYS = RENDER_KEYS;
 
-const DEFAULT_SETTINGS: NoteRendererSettings = {
-  ...RENDER_DEFAULTS,
+const DEFAULT_PERSISTED_SETTINGS: PersistedNoteRendererSettings = {
   activePreset: "",
   presets: {},
   customFonts: [],
@@ -46,7 +54,8 @@ const DEFAULT_SETTINGS: NoteRendererSettings = {
 // ── Plugin ───────────────────────────────────────────────────────────────────
 
 export default class NoteRendererPlugin extends Plugin {
-  settings: NoteRendererSettings = DEFAULT_SETTINGS;
+  private pluginState: PluginUiState = { ...DEFAULT_PERSISTED_SETTINGS };
+  private fallbackRenderConfig: RendererConfig = { ...RENDER_DEFAULTS, coverEffects: { ...RENDER_DEFAULTS.coverEffects } };
 
   // Theme cache: name → CSS string
   private themeCache: Map<string, string> = new Map();
@@ -173,46 +182,130 @@ export default class NoteRendererPlugin extends Plugin {
     return this.themeCache.get(name) ?? this.themeCache.get("cream") ?? "";
   }
 
+  getFallbackRenderConfig(): RendererConfig {
+    return this.fallbackRenderConfig;
+  }
+
+  setFallbackRenderValue<K extends keyof RendererConfig>(key: K, value: RendererConfig[K]): void {
+    this.fallbackRenderConfig[key] = value;
+  }
+
+  getActivePresetName(): string {
+    return this.pluginState.activePreset;
+  }
+
+  setActivePresetName(name: string): void {
+    this.pluginState.activePreset = name;
+  }
+
+  clearActivePreset(): void {
+    this.pluginState.activePreset = "";
+  }
+
+  getCustomFonts(): FontEntry[] {
+    return this.pluginState.customFonts;
+  }
+
+  setCustomFonts(fonts: FontEntry[]): void {
+    this.pluginState.customFonts = fonts;
+  }
+
+  getPresetEntry(name: string): RendererPresetEntry | undefined {
+    return this.pluginState.presets[name];
+  }
+
+  getPresetValues(name: string): Partial<RendererPreset> | undefined {
+    return this.getPresetEntry(name)?.values;
+  }
+
+  replacePluginState(state: PluginUiState): void {
+    this.pluginState = {
+      activePreset: state.activePreset,
+      presets: state.presets,
+      customFonts: state.customFonts,
+    };
+  }
+
   // ── Preset management ──
 
   /** Snapshot current settings (excluding meta fields) as a named preset. */
-  savePreset(name: string): void {
-    const preset: Record<string, unknown> = {};
+  savePreset(name: string, source?: Partial<RendererPreset>): boolean {
+    const existing = this.pluginState.presets[name];
+    if (existing?.locked) return false;
+
+    const preset: Partial<RendererPreset> = {};
+    const presetMutable = preset as Record<string, unknown>;
     for (const key of RENDER_KEYS) {
-      preset[key] = (this.settings as unknown as Record<string, unknown>)[key];
+      presetMutable[key] = source?.[key] ?? this.getFallbackRenderValue(key);
     }
-    this.settings.presets[name] = preset as RendererPreset;
-    this.settings.activePreset = name;
+    this.pluginState.presets[name] = {
+      values: preset,
+      locked: existing?.locked ?? false,
+    };
+    this.setActivePresetName(name);
+    return true;
   }
 
   /** Apply a preset's values to current settings. Falls back to defaults for missing keys. */
   loadPreset(name: string): void {
-    const preset = this.settings.presets[name];
+    const preset = this.getPresetValues(name);
     if (!preset) return;
     for (const key of RENDER_KEYS) {
-      const val = (preset as unknown as Record<string, unknown>)[key];
-      (this.settings as unknown as Record<string, unknown>)[key] = val !== undefined ? val : (RENDER_DEFAULTS as unknown as Record<string, unknown>)[key];
+      this.setFallbackRenderValue(
+        key,
+        this.getPresetValueOrDefault(preset, key),
+      );
     }
-    this.settings.activePreset = name;
+    this.setActivePresetName(name);
   }
 
   /** Delete a preset by name. Clears activePreset if it was the deleted one. */
   deletePreset(name: string): void {
-    delete this.settings.presets[name];
-    if (this.settings.activePreset === name) {
-      this.settings.activePreset = "";
+    delete this.pluginState.presets[name];
+    if (this.getActivePresetName() === name) {
+      this.clearActivePreset();
     }
   }
 
   getPresetNames(): string[] {
-    return Object.keys(this.settings.presets);
+    return Object.keys(this.pluginState.presets);
+  }
+
+  getPresetDisplayName(name: string): string {
+    return `${name}${this.isPresetLocked(name) ? " 🔒" : ""}`;
+  }
+
+  isPresetLocked(name: string): boolean {
+    return this.getPresetEntry(name)?.locked ?? false;
+  }
+
+  togglePresetLock(name: string): boolean {
+    const preset = this.getPresetEntry(name);
+    if (!preset) return false;
+    preset.locked = !preset.locked;
+    return preset.locked;
+  }
+
+  private getFallbackRenderValue<K extends keyof RendererConfig>(key: K): RendererConfig[K] {
+    return this.fallbackRenderConfig[key];
+  }
+
+  private getDefaultRenderValue<K extends keyof RendererConfig>(key: K): RendererConfig[K] {
+    return RENDER_DEFAULTS[key];
+  }
+
+  private getPresetValueOrDefault<K extends keyof RendererConfig>(
+    preset: PresetValues | undefined,
+    key: K,
+  ): RendererConfig[K] {
+    return preset?.[key] ?? this.getDefaultRenderValue(key);
   }
 
   // ── Headless render API ──
 
   /**
    * Render a markdown file to PNG images and save to a directory.
-   * Uses the note's renderer_config merged with global settings.
+   * Uses the note's renderer_config, falling back to plugin defaults when absent.
    *
    * @param filePath - vault-relative path, e.g. "4.projects/小红书分享/notes/xxx.md"
    * @param outputDir - absolute filesystem path, e.g. "/tmp/nr-output"
@@ -231,7 +324,7 @@ export default class NoteRendererPlugin extends Plugin {
 
     const markdown = await this.app.vault.read(file);
     const noteConfig = readNoteConfig(markdown);
-    const resolved = resolveMergedRenderConfig(this.settings, noteConfig);
+    const resolved = resolveMergedRenderConfig(this.getFallbackRenderConfig(), noteConfig);
     const themeCss = await this.loadTheme(resolved.settings.activeTheme);
 
     const rendered = await renderNote(this.app, markdown, file.path, themeCss, resolved.settings.activeTheme, this, resolved.options);
@@ -247,14 +340,8 @@ export default class NoteRendererPlugin extends Plugin {
     for (let i = 0; i < rendered.pages.length; i++) {
       const pageNum = String(i + 1).padStart(2, "0");
       const pngName = `${baseName}_${pageNum}`;
-      const blob = await exportSinglePage(rendered.pages[i], pngName);
-      const buffer = Buffer.from(await blob.arrayBuffer());
       const outPath = path.join(outputDir, `${pngName}.png`);
-      fs.writeFileSync(outPath, buffer);
-      if (scale !== undefined && scale > 0 && scale < 1) {
-        const maxDim = Math.round(1800 * scale);
-        require("child_process").execSync(`sips -Z ${maxDim} "${outPath}"`, { stdio: "ignore" });
-      }
+      await this.writeRenderedPageToFile(rendered.pages[i], pngName, outPath, scale);
       outputPaths.push(outPath);
     }
 
@@ -311,7 +398,7 @@ export default class NoteRendererPlugin extends Plugin {
 
     const markdown = await this.app.vault.read(file);
     const noteConfig = readNoteConfig(markdown);
-    const resolved = resolveMergedRenderConfig(this.settings, noteConfig);
+    const resolved = resolveMergedRenderConfig(this.getFallbackRenderConfig(), noteConfig);
     const themeCss = await this.loadTheme(resolved.settings.activeTheme);
 
     const rendered = await renderNote(this.app, markdown, file.path, themeCss, resolved.settings.activeTheme, this, resolved.options);
@@ -328,14 +415,8 @@ export default class NoteRendererPlugin extends Plugin {
 
     const pageNum = String(pageIndex).padStart(2, "0");
     const pngName = `${file.basename}_${pageNum}`;
-    const blob = await exportSinglePage(rendered.pages[pageIndex - 1], pngName);
-    const buffer = Buffer.from(await blob.arrayBuffer());
     const outPath = path.join(outputDir, `${pngName}.png`);
-    fs.writeFileSync(outPath, buffer);
-    if (scale !== undefined && scale > 0 && scale < 1) {
-      const maxDim = Math.round(1800 * scale);
-      require("child_process").execSync(`sips -Z ${maxDim} "${outPath}"`, { stdio: "ignore" });
-    }
+    await this.writeRenderedPageToFile(rendered.pages[pageIndex - 1], pngName, outPath, scale);
 
     rendered.cleanup();
     new Notice(`Rendered page ${pageIndex}/${totalPages} → ${outPath}`);
@@ -345,38 +426,36 @@ export default class NoteRendererPlugin extends Plugin {
   async loadSettings(): Promise<void> {
     const raw = await this.loadData();
     const migrated = raw ? migrateSettings({ ...raw }) : {};
-
-    // Deep merge: Object.assign is shallow, so coverEffects needs special handling
-    const defaultEffects = { ...RENDER_DEFAULTS.coverEffects };
-    for (const [name, params] of Object.entries(defaultEffects)) {
-      defaultEffects[name] = { ...params };
-    }
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, migrated);
-    // Merge coverEffects: defaults + migrated (migrated may be incomplete)
-    if (migrated.coverEffects && typeof migrated.coverEffects === "object") {
-      const merged: Record<string, { enabled: boolean; opacity: number }> = { ...defaultEffects };
-      for (const [name, params] of Object.entries(migrated.coverEffects as Record<string, { enabled: boolean; opacity: number }>)) {
-        if (name in merged) {
-          merged[name] = { ...merged[name], ...params };
-        }
-      }
-      this.settings.coverEffects = merged;
-    } else {
-      this.settings.coverEffects = defaultEffects;
-    }
+    const persisted = this.extractPersistedSettings(migrated);
+    this.fallbackRenderConfig = { ...RENDER_DEFAULTS, coverEffects: { ...RENDER_DEFAULTS.coverEffects } };
+    this.pluginState = {
+      activePreset: persisted.activePreset,
+      presets: persisted.presets,
+      customFonts: persisted.customFonts,
+    };
 
     // Also migrate presets
-    if (this.settings.presets) {
-      for (const [name, preset] of Object.entries(this.settings.presets)) {
-        this.settings.presets[name] = migrateSettings({ ...preset as Record<string, unknown> }) as Partial<RendererPreset>;
+    if (this.pluginState.presets) {
+      for (const [name, preset] of Object.entries(this.pluginState.presets as Record<string, RendererPresetEntry | Partial<RendererPreset>>)) {
+        const isEntry = typeof preset === "object" && preset !== null && "values" in preset;
+        const values = isEntry ? preset.values : preset;
+        this.pluginState.presets[name] = {
+          values: migrateSettings({ ...values }) as Partial<RendererPreset>,
+          locked: isEntry ? Boolean(preset.locked) : false,
+        };
       }
     }
 
     // Ensure customFonts exists (migration from older data.json)
-    this.settings.customFonts ??= [];
+    this.pluginState.customFonts ??= [];
 
     // Auto-import fonts used in current settings and presets into customFonts
     this.importUsedFonts();
+
+    const activePreset = this.getActivePresetName();
+    if (activePreset && !this.getPresetEntry(activePreset)) {
+      this.clearActivePreset();
+    }
 
     // Persist migrated settings so data.json gets updated
     await this.saveSettings();
@@ -385,30 +464,51 @@ export default class NoteRendererPlugin extends Plugin {
   /** Auto-add fonts from current settings and presets into customFonts if not already in default list */
   private importUsedFonts(): void {
     const defaultValues = new Set(DEFAULT_FONTS.map(f => f.value));
-    const customValues = new Set(this.settings.customFonts.map(f => f.value));
+    const customValues = new Set(this.pluginState.customFonts.map(f => f.value));
 
     const maybeAdd = (value: string) => {
       if (!value || defaultValues.has(value) || customValues.has(value)) return;
       // Extract primary font name from CSS font-family for the label
       const match = value.match(/^"([^"]+)"/);
       const label = match ? getFontDisplayName(match[1]) : value.split(",")[0].trim();
-      this.settings.customFonts.push({ label, value });
+      this.pluginState.customFonts.push({ label, value });
       customValues.add(value);
     };
 
     // Current settings
-    maybeAdd(this.settings.fontFamily);
-    maybeAdd(this.settings.coverFontFamily);
+    const fallback = this.getFallbackRenderConfig();
+    maybeAdd(fallback.fontFamily);
+    maybeAdd(fallback.coverFontFamily);
 
     // All presets
-    for (const preset of Object.values(this.settings.presets)) {
-      if (preset.fontFamily) maybeAdd(preset.fontFamily);
-      if (preset.coverFontFamily) maybeAdd(preset.coverFontFamily);
+    for (const preset of Object.values(this.pluginState.presets)) {
+      if (preset.values.fontFamily) maybeAdd(preset.values.fontFamily);
+      if (preset.values.coverFontFamily) maybeAdd(preset.values.coverFontFamily);
     }
   }
 
   async saveSettings(): Promise<void> {
-    await this.saveData(this.settings);
+    await this.saveData(this.toPersistedSettings());
+  }
+
+  private extractPersistedSettings(raw: Record<string, unknown>): PersistedNoteRendererSettings {
+    return {
+      activePreset: typeof raw.activePreset === "string" ? raw.activePreset : DEFAULT_PERSISTED_SETTINGS.activePreset,
+      presets: raw.presets && typeof raw.presets === "object"
+        ? raw.presets as PersistedNoteRendererSettings["presets"]
+        : DEFAULT_PERSISTED_SETTINGS.presets,
+      customFonts: Array.isArray(raw.customFonts)
+        ? raw.customFonts as PersistedNoteRendererSettings["customFonts"]
+        : DEFAULT_PERSISTED_SETTINGS.customFonts,
+    };
+  }
+
+  private toPersistedSettings(): PersistedNoteRendererSettings {
+    return {
+      activePreset: this.pluginState.activePreset,
+      presets: this.pluginState.presets,
+      customFonts: this.pluginState.customFonts,
+    };
   }
 
   private getMarkdownFile(filePath: string): TFile {
@@ -417,5 +517,20 @@ export default class NoteRendererPlugin extends Plugin {
       throw new Error(`Not a markdown file: ${filePath}`);
     }
     return file;
+  }
+
+  private async writeRenderedPageToFile(
+    page: HTMLElement,
+    pngName: string,
+    outPath: string,
+    scale?: number,
+  ): Promise<void> {
+    const blob = await exportSinglePage(page, pngName);
+    const finalBlob = scale !== undefined && scale > 0 && scale < 1
+      ? await scaleBlob(blob, scale)
+      : blob;
+    const buffer = Buffer.from(await finalBlob.arrayBuffer());
+    const fs = require("fs") as typeof import("fs");
+    fs.writeFileSync(outPath, buffer);
   }
 }

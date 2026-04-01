@@ -4,9 +4,8 @@ import { FIELD_SCHEMAS, EFFECT_SCHEMAS, RENDER_DEFAULTS, COVER_STROKE_STYLE_UI, 
 import { InputModal, ConfirmModal, FontManagerModal } from "./modals";
 import { getCoverFontList, getBodyFontList, type FontEntry } from "./fonts";
 import { deriveCoverStrokePalette, extractThemeColorChoices, extractCoverTitleColor, detectThemeBrightness, type ThemeColorChoice } from "./effects";
-import { PRESET_KEYS } from "./main";
 import type NoteRendererPlugin from "./main";
-import type { NoteRendererSettings } from "./main";
+import type { RendererConfig } from "./main";
 
 // ── Interfaces ──────────────────────────────────────────────────────────────
 
@@ -14,17 +13,18 @@ import type { NoteRendererSettings } from "./main";
 export interface PanelHost {
   plugin: NoteRendererPlugin;
   app: App;
-  effective: NoteRendererSettings;
+  effective: RendererConfig;
   syncing: boolean;
   editingNoteConfig: boolean;
   lastStrokeStyle: string;
 
-  updateSetting<K extends keyof NoteRendererSettings>(key: K, value: NoteRendererSettings[K]): Promise<void>;
+  updateSetting<K extends keyof RendererConfig>(key: K, value: RendererConfig[K]): Promise<void>;
   updateNoteConfig(key: string, value: unknown): Promise<void>;
   refresh(): Promise<void>;
   goPage(delta: number): void;
   handleExportCurrentPage(): Promise<void>;
   handleExport(): Promise<void>;
+  applyPreset(name: string): Promise<void>;
   handleSaveToNote(): Promise<void>;
   handleRemoveFromNote(): Promise<void>;
   rebuildPresetOptions(): void;
@@ -33,6 +33,7 @@ export interface PanelHost {
 /** DOM element references returned by the panel builder. */
 export interface PanelRefs {
   presetSelect: HTMLSelectElement;
+  presetLockBtn: HTMLButtonElement;
   themeSelect: HTMLSelectElement;
   modeSelect: HTMLSelectElement;
   modeBtns: { long: HTMLElement; card: HTMLElement };
@@ -56,6 +57,7 @@ export interface PanelRefs {
   overlayToggle: HTMLElement;
   oxInput: HTMLInputElement;
   oyInput: HTMLInputElement;
+  coverPaddingInput: HTMLInputElement;
   shadowToggle: HTMLElement;
   blurInput: HTMLInputElement;
   shadowColorInput: HTMLInputElement;
@@ -76,26 +78,31 @@ export interface PanelRefs {
   removeFromNoteBtn: HTMLElement;
   coverSection: HTMLElement;
   bodySection: HTMLElement;
+  listStyleBtns: { default: HTMLElement; capsule: HTMLElement };
   previewContainer: HTMLElement;
   pageDisplay: HTMLElement;
   pageIndicator: HTMLElement;
-  modeIndicator: HTMLElement;
 }
 
 // ── Font helpers ────────────────────────────────────────────────────────────
 
 /** Set a select's value, adding a temporary "[未安装]" option if value isn't in the list */
-export function setSelectValue(select: HTMLSelectElement, value: string): void {
-  select.value = value;
-  if (select.value === value) return;
+export function setSelectValue(select: HTMLSelectElement, value: string | null | undefined): void {
+  const normalized = value ?? "";
+  select.value = normalized;
+  if (select.value === normalized) return;
+  if (!normalized) {
+    select.selectedIndex = 0;
+    return;
+  }
   // Value not in current options — add a temporary placeholder
-  const label = value.replace(/"/g, "").split(",")[0].trim();
-  select.createEl("option", { text: `${label} [未安装]`, value });
-  select.value = value;
+  const label = normalized.replace(/"/g, "").split(",")[0].trim();
+  select.createEl("option", { text: `${label} [未安装]`, value: normalized });
+  select.value = normalized;
 }
 
 /** Rebuild a font select's options from a font list */
-function rebuildFontOptions(select: HTMLSelectElement, fonts: FontEntry[], currentValue: string): void {
+function rebuildFontOptions(select: HTMLSelectElement, fonts: FontEntry[], currentValue: string | null | undefined): void {
   select.empty();
   fonts.forEach(f => select.createEl("option", { text: f.label, value: f.value }));
   setSelectValue(select, currentValue);
@@ -163,7 +170,7 @@ function makeField(
   return input;
 }
 
-function parseColorValue(color: string, fallback = "#000000"): string {
+function parseColorValue(color: string | null | undefined, fallback = "#000000"): string {
   if (!color) return fallback;
   if (color.startsWith("#")) return color;
   const parts = color.match(/[\d.]+/g);
@@ -173,7 +180,8 @@ function parseColorValue(color: string, fallback = "#000000"): string {
     .join("");
 }
 
-function parseAlphaPercent(color: string, fallback = 100): number {
+function parseAlphaPercent(color: string | null | undefined, fallback = 100): number {
+  if (!color) return fallback;
   const parts = color.match(/[\d.]+/g);
   if (!parts || parts.length < 4) return fallback;
   return Math.round(parseFloat(parts[3]) * 100);
@@ -349,7 +357,7 @@ function buildGlowControls(
     host,
     row,
     "光",
-    String(host.plugin.settings.coverGlowSize),
+    String(host.effective.coverGlowSize),
     () => {
       const gs = FIELD_SCHEMAS.coverGlowSize;
       return { min: gs.min, max: gs.max, step: gs.step ?? 1, defaultValue: gs.default };
@@ -358,13 +366,13 @@ function buildGlowControls(
   );
 
   const colorInput = row.createEl("input", { cls: "nr-color-dot", type: "color" });
-  colorInput.value = parseColorValue(host.plugin.settings.coverGlowColor, host.plugin.settings.coverFontColor || "#e07c5a");
+  colorInput.value = parseColorValue(host.effective.coverGlowColor, host.effective.coverFontColor || "#e07c5a");
   colorInput.title = describeSemanticField("glow", "color", "发光颜色（双击跟随文字颜色）");
   bindThemeBoundColorInput({
     host,
     input: colorInput,
     popoverTitle: "发光颜色",
-    resolveDisplayValue: async () => host.plugin.settings.coverGlowColor || host.effective.coverFontColor || await resolveThemeColor(),
+    resolveDisplayValue: async () => host.effective.coverGlowColor || host.effective.coverFontColor || await resolveThemeColor(),
     storeValue: (value) => { void host.updateSetting("coverGlowColor", value); },
     resetValue: () => { void host.updateSetting("coverGlowColor", ""); },
     getThemeName: themeNameProvider,
@@ -385,9 +393,9 @@ function buildBannerControls(
 ): BannerControlsResult {
   const row = createCoverParamRow(parent, "色带", visible);
   const colorInput = row.createEl("input", { cls: "nr-color-dot", type: "color" });
-  colorInput.value = parseColorValue(host.plugin.settings.coverBannerColor, "#000000");
+  colorInput.value = parseColorValue(host.effective.coverBannerColor, "#000000");
 
-  const bannerAlpha = parseAlphaPercent(host.plugin.settings.coverBannerColor, 50);
+  const bannerAlpha = parseAlphaPercent(host.effective.coverBannerColor, 50);
   let currentAlpha = bannerAlpha / 100;
 
   const updateBannerColor = async () => {
@@ -411,11 +419,11 @@ function buildBannerControls(
     { min: 0, max: 100, step: 10, unit: "%" },
     async (val) => { currentAlpha = val / 100; await updateBannerColor(); });
 
-  makeField(host, row, "斜", String(host.plugin.settings.coverBannerSkew),
+  makeField(host, row, "斜", String(host.effective.coverBannerSkew),
     schemaOpts("coverBannerSkew"),
     (val) => host.updateSetting("coverBannerSkew", val));
 
-  makeField(host, row, "宽", String(host.plugin.settings.coverBannerPaddingPercent),
+  makeField(host, row, "宽", String(host.effective.coverBannerPaddingPercent),
     schemaOpts("coverBannerPaddingPercent"),
     (val) => host.updateSetting("coverBannerPaddingPercent", val));
 
@@ -439,12 +447,12 @@ function buildShadowControls(
 ): ShadowControlsResult {
   const row = createCoverParamRow(parent, "投影", visible);
 
-  const blurInput = makeField(host, row, "模糊", String(host.plugin.settings.coverShadowBlur),
+  const blurInput = makeField(host, row, "模糊", String(host.effective.coverShadowBlur),
     schemaOpts("coverShadowBlur"),
     (val) => host.updateSetting("coverShadowBlur", val));
 
   const colorInput = row.createEl("input", { cls: "nr-color-dot", type: "color" });
-  colorInput.value = parseColorValue(host.plugin.settings.coverShadowColor, "#000000");
+  colorInput.value = parseColorValue(host.effective.coverShadowColor, "#000000");
   colorInput.title = describeSemanticField("shadow", "color", "投影颜色（双击恢复默认）");
 
   let alphaInput: HTMLInputElement;
@@ -465,7 +473,7 @@ function buildShadowControls(
     themeNameProvider,
   );
 
-  alphaInput = makeField(host, row, "", String(parseAlphaPercent(host.plugin.settings.coverShadowColor, 60)),
+  alphaInput = makeField(host, row, "", String(parseAlphaPercent(host.effective.coverShadowColor, 60)),
     { min: 0, max: 100, step: 10, unit: "%" },
     async (val) => {
       await host.updateSetting("coverShadowColor", buildRgba(colorInput.value, val));
@@ -480,11 +488,11 @@ function buildShadowControls(
     void host.updateSetting("coverShadowColor", "rgba(0,0,0,0.6)");
   });
 
-  makeField(host, row, "X", String(host.plugin.settings.coverShadowOffsetX),
+  makeField(host, row, "X", String(host.effective.coverShadowOffsetX),
     schemaOpts("coverShadowOffsetX"),
     (val) => host.updateSetting("coverShadowOffsetX", val));
 
-  makeField(host, row, "Y", String(host.plugin.settings.coverShadowOffsetY),
+  makeField(host, row, "Y", String(host.effective.coverShadowOffsetY),
     schemaOpts("coverShadowOffsetY"),
     (val) => host.updateSetting("coverShadowOffsetY", val));
 
@@ -526,7 +534,7 @@ function buildStrokeControls(options: StrokeControlsOptions): StrokeControlsResu
   styleSelect.value = initialStyle;
 
   const currentStrokeStyle = (): import("./constants").CoverStrokeStyle => {
-    const value = styleSelect.value || host.effective.coverStrokeStyle || host.plugin.settings.coverStrokeStyle;
+    const value = styleSelect.value || host.effective.coverStrokeStyle;
     return value as import("./constants").CoverStrokeStyle;
   };
 
@@ -544,7 +552,7 @@ function buildStrokeControls(options: StrokeControlsOptions): StrokeControlsResu
     popoverTitle: "描边颜色",
     resolveDisplayValue: async () => {
       const palette = await resolveStrokePalette();
-      return parseColorValue(host.plugin.settings.coverStrokeColor, palette.inner);
+      return parseColorValue(host.effective.coverStrokeColor, palette.inner);
     },
     storeValue: (value) => { void host.updateSetting("coverStrokeColor", value); },
     resetValue: () => { void host.updateSetting("coverStrokeColor", ""); },
@@ -552,7 +560,7 @@ function buildStrokeControls(options: StrokeControlsOptions): StrokeControlsResu
   });
 
   const doubleStrokeColorInput = row.createEl("input", { cls: "nr-color-dot", type: "color" });
-  doubleStrokeColorInput.value = parseColorValue(host.plugin.settings.coverDoubleStrokeColor, host.plugin.settings.coverFontColor || "#e07c5a");
+  doubleStrokeColorInput.value = parseColorValue(host.effective.coverDoubleStrokeColor, host.effective.coverFontColor || "#e07c5a");
   doubleStrokeColorInput.title = describeSemanticField("stroke", "outerColor", "外描边颜色（双击跟随 theme 默认）");
   bindThemeBoundColorInput({
     host,
@@ -560,8 +568,8 @@ function buildStrokeControls(options: StrokeControlsOptions): StrokeControlsResu
     popoverTitle: "外描边颜色",
     resolveDisplayValue: async () => {
       const palette = await resolveStrokePalette();
-      return host.plugin.settings.coverDoubleStrokeColor
-        ? parseColorValue(host.plugin.settings.coverDoubleStrokeColor, palette.outer)
+      return host.effective.coverDoubleStrokeColor
+        ? parseColorValue(host.effective.coverDoubleStrokeColor, palette.outer)
         : palette.outer;
     },
     storeValue: (value) => { void host.updateSetting("coverDoubleStrokeColor", value); },
@@ -573,7 +581,7 @@ function buildStrokeControls(options: StrokeControlsOptions): StrokeControlsResu
     host,
     row,
     "内粗",
-    String(host.plugin.settings.coverStrokePercent),
+    String(host.effective.coverStrokePercent),
     () => {
       const limits = strokeLimits(currentStrokeStyle());
       return { ...limits, defaultValue: FIELD_SCHEMAS.coverStrokePercent.default };
@@ -581,7 +589,7 @@ function buildStrokeControls(options: StrokeControlsOptions): StrokeControlsResu
     (val) => host.updateSetting("coverStrokePercent", val),
   );
 
-  const opacityInput = makeField(host, row, "透明", String(host.plugin.settings.coverStrokeOpacity),
+  const opacityInput = makeField(host, row, "透明", String(host.effective.coverStrokeOpacity),
     { ...schemaOpts("coverStrokeOpacity"), step: 10 },
     (val) => host.updateSetting("coverStrokeOpacity", val));
 
@@ -589,7 +597,7 @@ function buildStrokeControls(options: StrokeControlsOptions): StrokeControlsResu
     host,
     row,
     "外粗",
-    String(host.plugin.settings.coverDoubleStrokePercent),
+    String(host.effective.coverDoubleStrokePercent),
     () => {
       const ds = FIELD_SCHEMAS.coverDoubleStrokePercent;
       return { min: ds.min, max: ds.max, step: ds.step ?? 0.5, defaultValue: ds.default };
@@ -650,16 +658,16 @@ function buildStrokeControls(options: StrokeControlsOptions): StrokeControlsResu
       }
       await host.refresh();
     } else {
-      (host.plugin.settings as unknown as Record<string, unknown>).coverStrokeStyle = style;
-      (host.plugin.settings as unknown as Record<string, unknown>).coverStrokePercent = newPercent;
+      host.plugin.setFallbackRenderValue("coverStrokeStyle", style);
+      host.plugin.setFallbackRenderValue("coverStrokePercent", newPercent);
       if (style === "double") {
-        (host.plugin.settings as unknown as Record<string, unknown>).coverDoubleStrokePercent = newOuterPercent;
-        (host.plugin.settings as unknown as Record<string, unknown>).coverDoubleStrokeColor = "";
+        host.plugin.setFallbackRenderValue("coverDoubleStrokePercent", newOuterPercent);
+        host.plugin.setFallbackRenderValue("coverDoubleStrokeColor", "");
       }
       if (style === "stroke" || style === "double" || style === "hollow") {
-        (host.plugin.settings as unknown as Record<string, unknown>).coverStrokeColor = "";
+        host.plugin.setFallbackRenderValue("coverStrokeColor", "");
       }
-      host.plugin.settings.activePreset = "";
+      host.plugin.clearActivePreset();
       clearPresetSelection();
       await host.plugin.saveSettings();
       await host.refresh();
@@ -728,14 +736,14 @@ function buildCoverEffectControls(options: CoverEffectControlsOptions): CoverEff
     presetSelect,
   } = options;
 
-  const strokeEnabled = host.plugin.settings.coverStrokeStyle !== "none";
-  const glowEnabled = host.plugin.settings.coverGlow === true;
+  const strokeEnabled = host.effective.coverStrokeStyle !== "none";
+  const glowEnabled = host.effective.coverGlow === true;
 
   const strokeControls = buildStrokeControls({
     host,
     parent,
     visible: strokeEnabled,
-    initialStyle: (strokeEnabled ? host.plugin.settings.coverStrokeStyle : host.lastStrokeStyle) as import("./constants").CoverStrokeStyle,
+    initialStyle: (strokeEnabled ? host.effective.coverStrokeStyle : host.lastStrokeStyle) as import("./constants").CoverStrokeStyle,
     themeNameProvider,
     resolveStrokePalette,
     clearPresetSelection: () => {
@@ -770,13 +778,13 @@ function buildCoverEffectControls(options: CoverEffectControlsOptions): CoverEff
   const bannerControls = buildBannerControls(
     host,
     parent,
-    Boolean(host.plugin.settings.coverBanner),
+    Boolean(host.effective.coverBanner),
     themeNameProvider,
   );
   const shadowControls = buildShadowControls(
     host,
     parent,
-    Boolean(host.plugin.settings.coverShadow),
+    Boolean(host.effective.coverShadow),
     themeNameProvider,
   );
 
@@ -816,7 +824,7 @@ function closeColorPopover(): void {
 }
 
 async function getThemeColorChoices(host: PanelHost, themeName?: string): Promise<ThemeColorChoice[]> {
-  const css = await host.plugin.loadTheme(themeName || host.effective.activeTheme || host.plugin.settings.activeTheme);
+  const css = await host.plugin.loadTheme(themeName || host.effective.activeTheme);
   return extractThemeColorChoices(css, themeName);
 }
 
@@ -945,34 +953,57 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   // Populate preset options directly (refs not yet available, can't call host.rebuildPresetOptions)
   presetSelect.createEl("option", { text: "(无预设)", value: "" });
   for (const name of host.plugin.getPresetNames()) {
-    presetSelect.createEl("option", { text: name, value: name });
+    presetSelect.createEl("option", { text: host.plugin.getPresetDisplayName(name), value: name });
   }
-  presetSelect.value = host.plugin.settings.activePreset;
+  const presetLockBtn = presetBar.createEl("button", { cls: "nr-btn nr-btn-sm nr-btn-text nr-preset-lock-btn", text: "🔓" });
+  const syncPresetLockButton = () => {
+    const name = host.plugin.getActivePresetName();
+    const locked = name ? host.plugin.isPresetLocked(name) : false;
+    presetLockBtn.textContent = locked ? "🔒" : "🔓";
+    presetLockBtn.title = name ? (locked ? `解锁预设「${name}」` : `锁定预设「${name}」`) : "先选择一个预设";
+    presetLockBtn.disabled = !name;
+    presetLockBtn.classList.toggle("is-disabled", !name);
+  };
+  presetSelect.value = host.plugin.getActivePresetName();
   presetSelect.addEventListener("change", () => { void (async () => {
     if (host.syncing) return;
     const name = presetSelect.value;
     if (name) {
-      host.plugin.loadPreset(name);
+      await host.applyPreset(name);
     } else {
-      host.plugin.settings.activePreset = "";
+      host.plugin.clearActivePreset();
+      await host.plugin.saveSettings();
     }
+    syncPresetLockButton();
+    await host.refresh();
+  })(); });
+  presetLockBtn.addEventListener("click", () => { void (async () => {
+    const name = host.plugin.getActivePresetName();
+    if (!name) { new Notice("没有选中预设"); return; }
+    const locked = host.plugin.togglePresetLock(name);
     await host.plugin.saveSettings();
+    host.rebuildPresetOptions();
+    const selectedOpt = presetSelect.querySelector<HTMLOptionElement>(`option[value="${CSS.escape(name)}"]`);
+    if (selectedOpt) {
+      selectedOpt.text = host.plugin.getPresetDisplayName(name);
+    }
+    syncPresetLockButton();
+    new Notice(`预设「${name}」已${locked ? "锁定" : "解锁"}`);
     await host.refresh();
   })(); });
 
   const presetSaveBtn = presetBar.createEl("button", { cls: "nr-btn nr-btn-sm nr-btn-text", text: "保存" });
   presetSaveBtn.title = "保存当前配置为预设";
   presetSaveBtn.addEventListener("click", () => {
-    new InputModal(host.app, "保存预设", host.plugin.settings.activePreset || "", (name) => {
+    new InputModal(host.app, "保存预设", host.plugin.getActivePresetName() || "", (name) => {
       if (!name) return;
-      const preset: Record<string, unknown> = {};
-      for (const key of PRESET_KEYS) {
-        preset[key] = (host.effective as unknown as Record<string, unknown>)[key];
+      if (!host.plugin.savePreset(name, host.effective)) {
+        new Notice(`预设「${name}」已锁定，需先解锁才能覆盖`);
+        return;
       }
-      host.plugin.settings.presets[name] = preset as Partial<import("./main").RendererPreset>;
-      host.plugin.settings.activePreset = name;
       void host.plugin.saveSettings();
       host.rebuildPresetOptions();
+      syncPresetLockButton();
       new Notice(`预设「${name}」已保存`);
     }).open();
   });
@@ -980,7 +1011,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   const presetDelBtn = presetBar.createEl("button", { cls: "nr-btn nr-btn-sm nr-btn-text", text: "删除" });
   presetDelBtn.title = "删除当前预设";
   presetDelBtn.addEventListener("click", () => {
-    const name = host.plugin.settings.activePreset;
+    const name = host.plugin.getActivePresetName();
     if (!name) { new Notice("没有选中预设"); return; }
     new ConfirmModal(host.app, `删除预设「${name}」？`, (confirmed) => {
       if (!confirmed) return;
@@ -988,11 +1019,13 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
       void (async () => {
         await host.plugin.saveSettings();
         host.rebuildPresetOptions();
+        syncPresetLockButton();
         new Notice(`预设「${name}」已删除`);
         await host.refresh();
       })();
     }).open();
   });
+  syncPresetLockButton();
 
   // ── Quick bar: 主题 + 模式 ──
   const quickBar = contentEl.createDiv("nr-quick-bar");
@@ -1001,7 +1034,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   host.plugin.getThemeNames().forEach((name) => {
     themeSelect.createEl("option", { text: name, value: name });
   });
-  themeSelect.value = host.plugin.settings.activeTheme;
+  themeSelect.value = host.effective.activeTheme;
   themeSelect.addEventListener("change", () => { void (async () => {
     if (host.syncing) return;
     closeColorPopover();
@@ -1011,11 +1044,11 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   // Mode toggle buttons (mutually exclusive, pushed right)
   quickBar.createDiv({ cls: "nr-flex-spacer" });
   const modeBtn35 = quickBar.createEl("button", {
-    cls: `nr-btn nr-btn-sm nr-btn-text${host.plugin.settings.pageMode === "long" ? " nr-btn-active" : ""}`,
+    cls: `nr-btn nr-btn-sm nr-btn-text${host.effective.pageMode === "long" ? " nr-btn-active" : ""}`,
     text: "3:5",
   });
   const modeBtn34 = quickBar.createEl("button", {
-    cls: `nr-btn nr-btn-sm nr-btn-text${host.plugin.settings.pageMode === "card" ? " nr-btn-active" : ""}`,
+    cls: `nr-btn nr-btn-sm nr-btn-text${host.effective.pageMode === "card" ? " nr-btn-active" : ""}`,
     text: "3:4",
   });
 
@@ -1033,7 +1066,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   modeSelect.classList.add("nr-hidden");
   modeSelect.createEl("option", { text: "长文 3:5", value: "long" });
   modeSelect.createEl("option", { text: "图文 3:4", value: "card" });
-  modeSelect.value = host.plugin.settings.pageMode;
+  modeSelect.value = host.effective.pageMode;
 
   // ── Cover section (wraps two accordion sections) ──
   const coverSection = contentEl.createDiv("nr-cover-section");
@@ -1048,7 +1081,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   const coverHeadControls = coverTextHead.createDiv("nr-header-controls");
 
   const coverFontSelect = coverHeadControls.createEl("select", { cls: "dropdown" });
-  rebuildFontOptions(coverFontSelect, getCoverFontList(host.plugin.settings.customFonts), host.plugin.settings.coverFontFamily);
+  rebuildFontOptions(coverFontSelect, getCoverFontList(host.plugin.getCustomFonts()), host.effective.coverFontFamily);
   coverFontSelect.addEventListener("click", (e) => e.stopPropagation());
   coverFontSelect.addEventListener("change", () => { void (async () => {
     if (host.syncing) return;
@@ -1061,7 +1094,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   coverFontGearBtn.addEventListener("click", (e) => e.stopPropagation());
 
   const scaleInput = coverHeadControls.createEl("input", { cls: "nr-size-input", type: "text" });
-  scaleInput.value = String(host.plugin.settings.coverFontScale);
+  scaleInput.value = String(host.effective.coverFontScale);
   scaleInput.addEventListener("click", (e) => e.stopPropagation());
   const cfs = FIELD_SCHEMAS.coverFontScale;
   const applyScale = async () => {
@@ -1091,7 +1124,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   const alignBtns: Record<string, HTMLElement> = {};
   alignDefs.forEach((def) => {
     const btn = coverHeadControls.createEl("button", {
-      cls: `nr-btn nr-btn-sm${(host.plugin.settings.coverTextAlign ?? "left") === def.key ? " nr-btn-active" : ""}`,
+      cls: `nr-btn nr-btn-sm${(host.effective.coverTextAlign ?? "left") === def.key ? " nr-btn-active" : ""}`,
     });
     btn.title = def.title;
     setIcon(btn, def.icon);
@@ -1111,16 +1144,16 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   const coverTextBody = coverTextSection.createDiv("nr-section-body");
 
   // Text effect chips: 描边 / 发光 / 色带 / 投影
-  host.lastStrokeStyle = host.plugin.settings.coverStrokeStyle !== "none" ? host.plugin.settings.coverStrokeStyle : "stroke";
-  const strokeEnabled = host.plugin.settings.coverStrokeStyle !== "none";
-  const glowEnabled = host.plugin.settings.coverGlow === true;
+  host.lastStrokeStyle = host.effective.coverStrokeStyle !== "none" ? host.effective.coverStrokeStyle : "stroke";
+  const strokeEnabled = host.effective.coverStrokeStyle !== "none";
+  const glowEnabled = host.effective.coverGlow === true;
 
   const textEffectRow = coverTextBody.createDiv("nr-row");
   textEffectRow.createEl("span", { cls: "nr-row-label", text: "效果" });
   const strokeToggle = textEffectRow.createEl("span", { cls: `nr-chip${strokeEnabled ? " active" : ""}`, text: "描边" });
   const glowToggle = textEffectRow.createEl("span", { cls: `nr-chip${glowEnabled ? " active" : ""}`, text: "发光" });
-  const bannerToggle = textEffectRow.createEl("span", { cls: `nr-chip${host.plugin.settings.coverBanner ? " active" : ""}`, text: "色带" });
-  const shadowToggle = textEffectRow.createEl("span", { cls: `nr-chip${host.plugin.settings.coverShadow ? " active" : ""}`, text: "投影" });
+  const bannerToggle = textEffectRow.createEl("span", { cls: `nr-chip${host.effective.coverBanner ? " active" : ""}`, text: "色带" });
+  const shadowToggle = textEffectRow.createEl("span", { cls: `nr-chip${host.effective.coverShadow ? " active" : ""}`, text: "投影" });
 
   // Combined row: color + weight + spacing + line height
   const styleRow = coverTextBody.createDiv("nr-row");
@@ -1129,30 +1162,30 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   const colorInput = styleRow.createEl("input", { cls: "nr-color-dot", type: "color" });
   // Resolve display color: saved value → theme default → fallback
   const resolveThemeColor = async (): Promise<string> => {
-    const themeName = themeSelect.value || host.effective.activeTheme || host.plugin.settings.activeTheme;
+    const themeName = themeSelect.value || host.effective.activeTheme;
     const css = await host.plugin.loadTheme(themeName);
     return extractCoverTitleColor(css, themeName) || "#e07c5a";
   };
   const resolveStrokePalette = async (): Promise<import("./effects").CoverStrokePalette> => {
-    const themeName = themeSelect.value || host.effective.activeTheme || host.plugin.settings.activeTheme;
+    const themeName = themeSelect.value || host.effective.activeTheme;
     const css = await host.plugin.loadTheme(themeName);
     return deriveCoverStrokePalette(css, themeName);
   };
   void resolveThemeColor().then(c => {
-    colorInput.value = host.plugin.settings.coverFontColor || c;
+    colorInput.value = host.effective.coverFontColor || c;
   });
   colorInput.title = describeSemanticField("typography", "color", "封面文字颜色（双击重置为主题默认）");
   bindThemeBoundColorInput({
     host,
     input: colorInput,
     popoverTitle: "封面文字颜色",
-    resolveDisplayValue: async () => host.plugin.settings.coverFontColor || await resolveThemeColor(),
+    resolveDisplayValue: async () => host.effective.coverFontColor || await resolveThemeColor(),
     storeValue: (value) => { void host.updateSetting("coverFontColor", value); },
     resetValue: () => { void host.updateSetting("coverFontColor", ""); },
     getThemeName: () => themeSelect.value,
   });
 
-  const coverOpacityInput = makeField(host, styleRow, "透明", String(host.plugin.settings.coverFontOpacity ?? 100),
+  const coverOpacityInput = makeField(host, styleRow, "透明", String(host.effective.coverFontOpacity ?? 100),
     schemaOpts("coverFontOpacity"),
     (val) => host.updateSetting("coverFontOpacity", val));
 
@@ -1168,18 +1201,18 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     { label: "特粗 800", value: "800" },
     { label: "极粗 900", value: "900" },
   ].forEach((w) => weightSelect.createEl("option", { text: w.label, value: w.value }));
-  weightSelect.value = String(host.plugin.settings.coverFontWeight ?? 800);
+  weightSelect.value = String(host.effective.coverFontWeight ?? 800);
   weightSelect.addEventListener("change", () => {
     if (host.syncing) return;
     void host.updateSetting("coverFontWeight", parseInt(weightSelect.value));
   });
 
-  const lsInput = makeField(host, styleRow, "间距", String(host.plugin.settings.coverLetterSpacing),
+  const lsInput = makeField(host, styleRow, "间距", String(host.effective.coverLetterSpacing),
     schemaOpts("coverLetterSpacing"),
     (val) => host.updateSetting("coverLetterSpacing", val));
 
   const lhSchema = schemaOpts("coverLineHeight");
-  const lhInput = makeField(host, styleRow, "行高", String(host.plugin.settings.coverLineHeight),
+  const lhInput = makeField(host, styleRow, "行高", String(host.effective.coverLineHeight),
     lhSchema,
     (val) => host.updateSetting("coverLineHeight", val));
 
@@ -1187,13 +1220,17 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   const posRow = coverTextBody.createDiv("nr-row");
   posRow.createEl("span", { cls: "nr-row-label", text: "位置" });
 
-  const oxInput = makeField(host, posRow, "X", String(host.plugin.settings.coverOffsetX),
+  const oxInput = makeField(host, posRow, "X", String(host.effective.coverOffsetX),
     schemaOpts("coverOffsetX"),
     (val) => host.updateSetting("coverOffsetX", val));
 
-  const oyInput = makeField(host, posRow, "Y", String(host.plugin.settings.coverOffsetY),
+  const oyInput = makeField(host, posRow, "Y", String(host.effective.coverOffsetY),
     schemaOpts("coverOffsetY"),
     (val) => host.updateSetting("coverOffsetY", val));
+
+  const coverPaddingInput = makeField(host, posRow, "边距", String(host.effective.coverPagePaddingX ?? 90),
+    schemaOpts("coverPagePaddingX"),
+    (val) => host.updateSetting("coverPagePaddingX", val));
 
   const coverEffectControls = buildCoverEffectControls({
     host,
@@ -1233,7 +1270,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
 
   const effectChips = effectHead.createDiv("nr-header-chips");
 
-  const effects = host.plugin.settings.coverEffects ?? RENDER_DEFAULTS.coverEffects;
+  const effects = host.effective.coverEffects ?? RENDER_DEFAULTS.coverEffects;
   const chipToggle = (parent: HTMLElement, label: string, effectName: string, active: boolean) => {
     const chip = parent.createEl("span", { cls: `nr-chip${active ? " active" : ""}`, text: label });
     chip.addEventListener("click", (e) => {
@@ -1357,7 +1394,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
 
   const bodyControls = bodySection.createDiv("nr-header-controls");
   const fontSelect = bodyControls.createEl("select", { cls: "dropdown" });
-  rebuildFontOptions(fontSelect, getBodyFontList(host.plugin.settings.customFonts), host.plugin.settings.fontFamily);
+  rebuildFontOptions(fontSelect, getBodyFontList(host.plugin.getCustomFonts()), host.effective.fontFamily);
   fontSelect.addEventListener("change", () => {
     if (host.syncing) return;
     void host.updateSetting("fontFamily", fontSelect.value);
@@ -1365,11 +1402,11 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
 
   // Shared font manager opener (used by both cover and body gear buttons)
   const openFontManager = () => {
-    new FontManagerModal(host.app, host.plugin.settings.customFonts, async (updated) => {
-      host.plugin.settings.customFonts = updated;
+    new FontManagerModal(host.app, host.plugin.getCustomFonts(), async (updated) => {
+      host.plugin.setCustomFonts(updated);
       await host.plugin.saveSettings();
-      rebuildFontOptions(coverFontSelect, getCoverFontList(updated), host.plugin.settings.coverFontFamily);
-      rebuildFontOptions(fontSelect, getBodyFontList(updated), host.plugin.settings.fontFamily);
+      rebuildFontOptions(coverFontSelect, getCoverFontList(updated), host.effective.coverFontFamily);
+      rebuildFontOptions(fontSelect, getBodyFontList(updated), host.effective.fontFamily);
     }).open();
   };
 
@@ -1382,7 +1419,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   coverFontGearBtn.addEventListener("click", openFontManager);
 
   const sizeInput = bodyControls.createEl("input", { cls: "nr-size-input", type: "text" });
-  sizeInput.value = String(host.plugin.settings.fontSize);
+  sizeInput.value = String(host.effective.fontSize);
   const fs = FIELD_SCHEMAS.fontSize;
   const applySize = async () => {
     if (host.syncing) return;
@@ -1402,6 +1439,24 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   }, { passive: false });
   // eslint-disable-next-line obsidianmd/ui/sentence-case -- Unit label, not sentence UI copy.
   bodyControls.createEl("span", { cls: "nr-size-unit", text: "px" });
+
+  // List style toggle buttons
+  const listBtnDefault = bodyControls.createEl("button", {
+    cls: `nr-btn nr-btn-sm nr-btn-text${host.effective.listStyle !== "capsule" ? " nr-btn-active" : ""}`,
+    text: "列表",
+  });
+  const listBtnCapsule = bodyControls.createEl("button", {
+    cls: `nr-btn nr-btn-sm nr-btn-text${host.effective.listStyle === "capsule" ? " nr-btn-active" : ""}`,
+    text: "胶囊",
+  });
+  const setListStyle = async (style: "default" | "capsule") => {
+    if (host.syncing) return;
+    listBtnDefault.classList.toggle("nr-btn-active", style === "default");
+    listBtnCapsule.classList.toggle("nr-btn-active", style === "capsule");
+    await host.updateSetting("listStyle", style);
+  };
+  listBtnDefault.addEventListener("click", () => { void setListStyle("default"); });
+  listBtnCapsule.addEventListener("click", () => { void setListStyle("capsule"); });
 
   // Preview area
   const previewContainer = contentEl.createDiv("nr-preview-area");
@@ -1427,9 +1482,8 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   // Navigation — 3-column layout
   const nav = contentEl.createDiv("nr-nav");
 
-  // Left: mode indicator only
-  const navLeft = nav.createDiv("nr-nav-left");
-  const modeIndicator = navLeft.createEl("span", { cls: "nr-mode-indicator nr-clickable" });
+  // Left spacer
+  nav.createDiv("nr-nav-left");
 
   // Center: pagination with single-page export
   const navCenter = nav.createDiv("nr-nav-center");
@@ -1462,6 +1516,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
 
   return {
     presetSelect,
+    presetLockBtn,
     themeSelect,
     modeSelect,
     modeBtns: { long: modeBtn35, card: modeBtn34 },
@@ -1485,6 +1540,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     overlayToggle,
     oxInput,
     oyInput,
+    coverPaddingInput,
     shadowToggle,
     blurInput,
     shadowColorInput,
@@ -1505,9 +1561,9 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     removeFromNoteBtn,
     coverSection,
     bodySection,
+    listStyleBtns: { default: listBtnDefault, capsule: listBtnCapsule },
     previewContainer,
     pageDisplay,
     pageIndicator,
-    modeIndicator,
   };
 }

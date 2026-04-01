@@ -70,9 +70,9 @@ export function renderMarkdownToHtml(
  * Create an image resolver for an Obsidian vault.
  * Resolves image names to app:// URIs that work in Obsidian's webview.
  */
-export function createVaultImageResolver(app: App): (name: string) => string {
-  return (name: string) => {
-    const file = app.metadataCache.getFirstLinkpathDest(name, "");
+export function createVaultImageResolver(app: App): (name: string, sourcePath?: string) => string {
+  return (name: string, sourcePath = "") => {
+    const file = app.metadataCache.getFirstLinkpathDest(name, sourcePath);
     if (file) {
       return app.vault.getResourcePath(file);
     }

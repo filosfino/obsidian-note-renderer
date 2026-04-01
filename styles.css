@@ -331,6 +331,23 @@
   color: var(--text-normal);
 }
 
+.nr-icon-btn.is-disabled,
+.nr-icon-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.nr-view .nr-btn.is-disabled,
+.nr-view .nr-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.nr-view .nr-preset-lock-btn {
+  min-width: 28px;
+  padding: 0 6px;
+}
+
 .nr-icon-btn .svg-icon {
   width: 14px;
   height: 14px;

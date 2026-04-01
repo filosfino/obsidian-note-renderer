@@ -35,6 +35,9 @@ export interface NoteStructure {
  * Returns null if no renderer_config section or config is invalid.
  */
 export function parseRendererConfig(markdown: string): Record<string, unknown> | null {
+  const frontmatterConfig = parseFrontmatterRendererConfig(markdown);
+  if (frontmatterConfig) return frontmatterConfig;
+
   const stripped = stripFrontmatter(markdown);
   const sections = splitH2Sections(stripped);
   const configSection = sections.find((s) => s.heading === "renderer_config");
@@ -53,6 +56,15 @@ export function parseRendererConfig(markdown: string): Record<string, unknown> |
     return validateNoteConfig(migrated);
   }
   return null;
+}
+
+function parseFrontmatterRendererConfig(markdown: string): Record<string, unknown> | null {
+  const frontmatter = parseFrontmatter(markdown);
+  const config = frontmatter?.renderer_config;
+  if (!config || typeof config !== "object" || Array.isArray(config)) return null;
+
+  const migrated = migrateRendererConfig({ ...(config as Record<string, unknown>) });
+  return validateNoteConfig(migrated);
 }
 
 /**
@@ -83,6 +95,19 @@ function tryParseJson(text: string): unknown {
 function tryParseYaml(text: string): unknown {
   try {
     return yaml.load(text);
+  } catch {
+    return null;
+  }
+}
+
+function parseFrontmatter(markdown: string): Record<string, unknown> | null {
+  const match = markdown.match(/^---\n([\s\S]*?)\n---\n?/);
+  if (!match) return null;
+  try {
+    const parsed = yaml.load(match[1]);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : null;
   } catch {
     return null;
   }
@@ -130,12 +155,23 @@ function stripFrontmatter(md: string): string {
 
 function splitH2Sections(md: string): Section[] {
   const sections: Section[] = [];
-  const h2Regex = /^## (.+)$/gm;
   const matches: { heading: string; index: number; fullMatch: string }[] = [];
+  let inFence = false;
+  let offset = 0;
 
-  let m;
-  while ((m = h2Regex.exec(md)) !== null) {
-    matches.push({ heading: m[1].trim(), index: m.index, fullMatch: m[0] });
+  for (const line of md.split("\n")) {
+    const trimmed = line.trim();
+
+    if (trimmed.startsWith("```")) {
+      inFence = !inFence;
+    } else if (!inFence) {
+      const headingMatch = line.match(/^## (.+)$/);
+      if (headingMatch) {
+        matches.push({ heading: headingMatch[1].trim(), index: offset, fullMatch: headingMatch[0] });
+      }
+    }
+
+    offset += line.length + 1;
   }
 
   for (let i = 0; i < matches.length; i++) {

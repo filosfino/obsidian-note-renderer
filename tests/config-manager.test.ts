@@ -62,4 +62,87 @@ hello
     expect(updated).not.toContain("coverFontScale:");
     expect(updated).not.toContain("coverBokehOpacity:");
   });
+
+  it("prefers frontmatter renderer_config over H2 renderer_config when reading", () => {
+    const markdown = `---
+renderer_config:
+  theme: mist
+  cover:
+    typography:
+      scale: 160
+---
+
+# Test Note
+
+## renderer_config
+
+\`\`\`yaml
+theme: cream
+coverFontScale: 120
+\`\`\`
+`;
+
+    const grouped = readGroupedNoteConfig(markdown);
+
+    expect(grouped).toMatchObject({
+      theme: "mist",
+      cover: {
+        typography: {
+          scale: 160,
+        },
+      },
+    });
+  });
+
+  it("writes renderer_config to frontmatter and removes legacy H2 config", () => {
+    const markdown = `---
+title: Test
+---
+
+# Test Note
+
+## renderer_config
+
+\`\`\`yaml
+theme: cream
+fontSize: 42
+\`\`\`
+
+## 正文
+
+hello
+`;
+
+    const updated = writeGroupedNoteConfig(markdown, {
+      theme: "mist",
+      fontSize: 48,
+    });
+
+    expect(updated).toContain("renderer_config:");
+    expect(updated).toContain("theme: mist");
+    expect(updated).toContain("fontSize: 48");
+    expect((updated.match(/\n## renderer_config\n/g) ?? []).length).toBe(0);
+  });
+
+  it("does not rewrite malformed frontmatter when saving renderer_config", () => {
+    const markdown = `---
+title: Test
+broken: [oops
+---
+
+# Test Note
+
+## 正文
+
+hello
+`;
+
+    const updated = writeGroupedNoteConfig(markdown, {
+      theme: "mist",
+      fontSize: 48,
+    });
+
+    expect(updated).toBe(markdown);
+    expect(updated).not.toContain("renderer_config:");
+  });
 });

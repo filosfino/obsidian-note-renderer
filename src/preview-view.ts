@@ -9,7 +9,7 @@ import { VIEW_TYPE, PAGE_WIDTH, PAGE_HEIGHTS } from "./constants";
 import { renderNote, RenderedPages } from "./renderer";
 import { exportPages, exportSinglePage } from "./exporter";
 import { deriveCoverStrokePalette, extractCoverTitleColor } from "./effects";
-import { EFFECT_SCHEMAS, isCoverSemanticFieldActive } from "./schema";
+import { EFFECT_SCHEMAS, RENDER_DEFAULTS, isCoverSemanticFieldActive } from "./schema";
 import {
   readNoteConfig,
   resolveMergedRenderConfig,
@@ -20,8 +20,19 @@ import {
 } from "./config-manager";
 import type NoteRendererPlugin from "./main";
 import { PRESET_KEYS } from "./main";
-import type { NoteRendererSettings } from "./main";
+import type { RendererConfig } from "./main";
 import { buildSettingsPanel, setSelectValue as setFontSelectValue, type PanelHost, type PanelRefs } from "./settings-panel";
+
+interface NoteSession {
+  filePath: string;
+  markdown: string;
+  hasNoteConfig: boolean;
+  shouldResetWorkingConfig: boolean;
+  effectiveSettings: RendererConfig;
+  renderOptions: ReturnType<typeof extractRenderOptions>;
+}
+
+type PresetValues = Partial<RendererConfig>;
 
 function parseColorValue(color: string, fallback = "#000000"): string {
   if (!color) return fallback;
@@ -53,18 +64,20 @@ export class PreviewView extends ItemView implements PanelHost {
   private currentWrapper: HTMLElement | null = null;
   private coverCropOverlay: { topStrip: HTMLElement; bottomStrip: HTMLElement } | null = null;
   private effectivePageMode: "long" | "card" = "long";
+  private currentFilePath: string | null = null;
 
-  // Guard: true while syncing UI from renderer_config, prevents change handlers from writing back to global settings
+  // Guard: true while syncing UI from renderer_config, prevents change handlers from writing back during refresh
   syncing = false;
 
-  // Note-config editing mode: when true, UI parameter changes write to note's renderer_config instead of global settings
+  // Note-first mode: UI parameter changes write to the active note's renderer_config when a markdown note is open
   editingNoteConfig = false;
-  // The effective settings (global merged with note config) — UI handlers read from this
-  effective: NoteRendererSettings = {} as NoteRendererSettings;
+  // The effective settings (note config or fallback plugin defaults) — UI handlers read from this
+  effective: RendererConfig = {
+    ...RENDER_DEFAULTS,
+    coverEffects: { ...RENDER_DEFAULTS.coverEffects },
+  } as RendererConfig;
   // Guard: true while writing note config, prevents file-change watcher from triggering refresh
   private writingNoteConfig = false;
-  // When true, force using global config even when note has renderer_config (for comparison)
-  private forceGlobalConfig = false;
   // Track whether current note actually has a renderer_config
   private hasNoteConfig = false;
   // Last stroke style before disabling
@@ -94,13 +107,6 @@ export class PreviewView extends ItemView implements PanelHost {
     const { contentEl } = this;
     this.refs = buildSettingsPanel(this, contentEl);
 
-    // Mode indicator click handler (needs view-level state)
-    this.refs.modeIndicator.addEventListener("click", () => {
-      if (!this.hasNoteConfig) return;
-      this.forceGlobalConfig = !this.forceGlobalConfig;
-      void this.refresh();
-    });
-
     // ResizeObserver — rescale on sidebar width change
     this.resizeObserver = new ResizeObserver(() => {
       this.rescale();
@@ -120,10 +126,7 @@ export class PreviewView extends ItemView implements PanelHost {
     this.app.vault.on("modify", this.fileChangeHandler);
 
     // Watch for active file change — refresh when switching notes
-    this.activeFileHandler = () => {
-      this.forceGlobalConfig = false;
-      debouncedRefresh();
-    };
+    this.activeFileHandler = () => { debouncedRefresh(); };
     this.app.workspace.on("active-leaf-change", this.activeFileHandler );
 
     // Initial render
@@ -148,62 +151,29 @@ export class PreviewView extends ItemView implements PanelHost {
       return;
     }
 
-    const markdown = await this.app.vault.read(file);
-
-    // Parse per-note renderer_config and merge with global settings
-    const noteConfig = readNoteConfig(markdown);
-    this.hasNoteConfig = !!noteConfig;
-
-    // When forceGlobalConfig is on, skip merging note config (for comparison)
-    const useNoteConfig = noteConfig && !this.forceGlobalConfig;
-    const resolved = resolveMergedRenderConfig(this.plugin.settings, useNoteConfig ? noteConfig : null);
-    const merged = resolved.settings;
-
-    // Store effective settings for UI handlers to read from
-    this.effective = merged;
-
-    // Update editing mode state — only edit note config when actually using it
-    this.editingNoteConfig = !!useNoteConfig;
-
-    // Update save/remove button visibility (based on actual note config existence, not force toggle)
-    if (this.refs) {
-      this.refs.saveToNoteBtn.classList.toggle("nr-hidden", !!noteConfig);
-      this.refs.removeFromNoteBtn.classList.toggle("nr-hidden", !noteConfig);
+    const session = await this.buildNoteSession(file.path, file.extension);
+    if (session.shouldResetWorkingConfig) {
+      this.resetWorkingConfigToDefault();
+      this.plugin.clearActivePreset();
+      await this.plugin.saveSettings();
     }
-
-    // Update mode indicator — show which config is being used for rendering
-    if (this.refs) {
-      const mi = this.refs.modeIndicator;
-      if (!noteConfig) {
-        mi.textContent = "⚙️ 全局配置";
-        mi.title = "";
-        mi.classList.toggle("nr-clickable", false);
-      } else if (this.forceGlobalConfig) {
-        mi.textContent = "⚙️ 全局配置";
-        mi.title = "点击切回笔记配置";
-        mi.classList.toggle("nr-clickable", true);
-      } else {
-        mi.textContent = "📌 笔记配置";
-        mi.title = "点击查看全局配置效果";
-        mi.classList.toggle("nr-clickable", true);
-      }
-    }
+    this.applyNoteSession(session);
 
     // Sync UI controls to reflect the effective (possibly overridden) settings
-    this.syncUiToSettings(merged);
+    this.syncUiToSettings(session.effectiveSettings);
 
-    this.effectivePageMode = merged.pageMode as "long" | "card";
-    const themeCss = await this.plugin.loadTheme(merged.activeTheme);
+    this.effectivePageMode = session.effectiveSettings.pageMode as "long" | "card";
+    const themeCss = await this.plugin.loadTheme(session.effectiveSettings.activeTheme);
 
     this.rendered?.cleanup();
     this.rendered = await renderNote(
       this.app,
-      markdown,
+      session.markdown,
       file.path,
       themeCss,
-      merged.activeTheme,
+      session.effectiveSettings.activeTheme,
       this.plugin,
-      resolved.options,
+      session.renderOptions,
     );
 
     this.pages = this.rendered.pages;
@@ -222,20 +192,58 @@ export class PreviewView extends ItemView implements PanelHost {
     this.showPage();
   }
 
+  private async buildNoteSession(filePath: string, extension: string): Promise<NoteSession> {
+    const file = this.app.workspace.getActiveFile();
+    if (!file || file.path !== filePath || file.extension !== extension) {
+      throw new Error("Active file changed during refresh");
+    }
+
+    const markdown = await this.app.vault.read(file);
+    const noteConfig = readNoteConfig(markdown);
+    const resolved = resolveMergedRenderConfig(this.plugin.getFallbackRenderConfig(), noteConfig);
+
+    return {
+      filePath,
+      markdown,
+      hasNoteConfig: !!noteConfig,
+      shouldResetWorkingConfig: filePath !== this.currentFilePath && !noteConfig,
+      effectiveSettings: resolved.settings,
+      renderOptions: resolved.options,
+    };
+  }
+
+  private applyNoteSession(session: NoteSession): void {
+    this.currentFilePath = session.filePath;
+    this.hasNoteConfig = session.hasNoteConfig;
+    this.effective = session.effectiveSettings;
+    this.editingNoteConfig = session.hasNoteConfig;
+    this.updateNoteActionButtons(session.hasNoteConfig);
+  }
+
+  private updateNoteActionButtons(hasNoteConfig: boolean): void {
+    if (!this.refs) return;
+    this.refs.saveToNoteBtn.classList.toggle("nr-hidden", hasNoteConfig);
+    this.refs.removeFromNoteBtn.classList.toggle("nr-hidden", !hasNoteConfig);
+  }
+
+  private resetWorkingConfigToDefault(): void {
+    const defaultPreset = this.plugin.getPresetValues("default");
+    for (const key of PRESET_KEYS) {
+      this.plugin.setFallbackRenderValue(key, this.getPresetValueOrDefault(defaultPreset, key));
+    }
+  }
+
   /**
    * Route a setting change to global or note config depending on editing mode.
-   * All UI handlers should call this instead of directly modifying plugin.settings.
+   * All UI handlers should call this instead of directly mutating fallback/plugin state.
    */
-  async updateSetting<K extends keyof NoteRendererSettings>(
-    key: K, value: NoteRendererSettings[K]
+  async updateSetting<K extends keyof RendererConfig>(
+    key: K, value: RendererConfig[K]
   ): Promise<void> {
     if (this.editingNoteConfig) {
       await this.updateNoteConfig(key as string, value);
     } else {
-      this.plugin.settings[key] = value;
-      // Clear active preset since user manually changed a setting
-      if (key !== "activePreset") this.plugin.settings.activePreset = "";
-      if (this.refs) this.refs.presetSelect.value = "";
+      this.plugin.setFallbackRenderValue(key, value);
       await this.plugin.saveSettings();
     }
     await this.refresh();
@@ -250,12 +258,34 @@ export class PreviewView extends ItemView implements PanelHost {
     if (!file || file.extension !== "md") return;
 
     const markdown = await this.app.vault.read(file);
-    const updated = updateNoteConfigKey(markdown, key, value);
+    const hasNoteConfig = !!readNoteConfig(markdown);
+    const updated = hasNoteConfig
+      ? updateNoteConfigKey(markdown, key, value)
+      : (() => {
+          const nextSettings: RendererConfig = {
+            ...this.effective,
+            [key]: value,
+          };
+          const nextOptions = extractRenderOptions(nextSettings);
+          return saveFullNoteConfig(markdown, nextOptions);
+        })();
     if (updated === markdown) return;
 
     this.writingNoteConfig = true;
     await this.app.vault.modify(file, updated);
     setTimeout(() => { this.writingNoteConfig = false; }, 100);
+  }
+
+  async applyPreset(name: string): Promise<void> {
+    const preset = this.plugin.getPresetValues(name);
+    if (!preset) return;
+
+    for (const key of PRESET_KEYS) {
+      this.plugin.setFallbackRenderValue(key, this.getPresetValueOrDefault(preset, key));
+    }
+
+    this.plugin.setActivePresetName(name);
+    await this.plugin.saveSettings();
   }
 
   /** Rebuild preset dropdown options from current settings. */
@@ -265,24 +295,46 @@ export class PreviewView extends ItemView implements PanelHost {
     sel.empty();
     sel.createEl("option", { text: "(无预设)", value: "" });
     for (const name of this.plugin.getPresetNames()) {
-      sel.createEl("option", { text: name, value: name });
+      sel.createEl("option", { text: this.plugin.getPresetDisplayName(name), value: name });
     }
-    sel.value = this.plugin.settings.activePreset;
+    sel.value = this.getActivePresetName();
+  }
+
+  private getActivePresetName(): string {
+    return this.plugin.getActivePresetName();
+  }
+
+  private getPresetValues(name: string): PresetValues | undefined {
+    return this.plugin.getPresetValues(name);
+  }
+
+  private getDefaultRenderValue<K extends keyof RendererConfig>(key: K): RendererConfig[K] {
+    return RENDER_DEFAULTS[key];
+  }
+
+  private getPresetValueOrDefault<K extends keyof RendererConfig>(
+    preset: PresetValues | undefined,
+    key: K,
+  ): RendererConfig[K] {
+    return preset?.[key] ?? this.getDefaultRenderValue(key);
   }
 
   /**
-   * Check if the effective settings differ from the currently active preset.
-   * Returns true if any PRESET_KEYS value in `s` differs from the saved preset.
+   * Check if the current working settings differ from the active preset.
+   * In note-first mode, compare against note/effective settings when a note config exists;
+   * otherwise compare against global fallback settings.
    */
-  private isPresetModified(s: NoteRendererSettings): boolean {
-    const presetName = this.plugin.settings.activePreset;
+  private isPresetModified(s: RendererConfig): boolean {
+    const presetName = this.getActivePresetName();
     if (!presetName) return false;
-    const preset = this.plugin.settings.presets[presetName];
+    const preset = this.getPresetValues(presetName);
     if (!preset) return false;
+    const fallbackSettings = this.plugin.getFallbackRenderConfig();
+    const currentSettings = this.hasNoteConfig ? s : fallbackSettings;
     for (const key of PRESET_KEYS) {
-      const presetVal = (preset as unknown as Record<string, unknown>)[key];
-      const currentVal = (s as unknown as Record<string, unknown>)[key];
-      if (JSON.stringify(presetVal) !== JSON.stringify(currentVal)) {
+      const expectedVal = this.getPresetValueOrDefault(preset, key);
+      const currentVal = currentSettings[key];
+      if (JSON.stringify(expectedVal) !== JSON.stringify(currentVal)) {
         return true;
       }
     }
@@ -290,43 +342,58 @@ export class PreviewView extends ItemView implements PanelHost {
   }
 
   /** Sync UI control display values to reflect effective settings (e.g. after renderer_config override). */
-  private syncUiToSettings(s: NoteRendererSettings): void {
+  private syncUiToSettings(s: RendererConfig): void {
     if (!this.refs) return;
     this.syncing = true;
-    const r = this.refs;
+    this.syncPresetUi(s);
+    this.syncBaseControls(s);
+    this.syncCoverStylingControls(s);
+    this.syncThemeDerivedColors(s);
+    this.syncing = false;
+  }
 
-    // Preset selector: show "(modified)" if current settings differ from saved preset
-    const presetName = this.plugin.settings.activePreset;
-    r.presetSelect.value = presetName;
-    if (presetName && this.isPresetModified(s)) {
-      const selectedOpt = r.presetSelect.querySelector<HTMLOptionElement>(`option[value="${CSS.escape(presetName)}"]`);
-      if (selectedOpt && !selectedOpt.text.endsWith(" (modified)")) {
-        selectedOpt.text = `${presetName} (modified)`;
-      }
-    } else if (presetName) {
-      const selectedOpt = r.presetSelect.querySelector<HTMLOptionElement>(`option[value="${CSS.escape(presetName)}"]`);
-      if (selectedOpt && selectedOpt.text.endsWith(" (modified)")) {
-        selectedOpt.text = presetName;
-      }
+  private syncPresetUi(s: RendererConfig): void {
+    if (!this.refs) return;
+    const presetName = this.getActivePresetName();
+    const baseLabel = presetName ? this.plugin.getPresetDisplayName(presetName) : "";
+    const isModified = presetName ? this.isPresetModified(s) : false;
+    const presetLocked = presetName ? this.plugin.isPresetLocked(presetName) : false;
+    const selectedOpt = presetName
+      ? this.refs.presetSelect.querySelector<HTMLOptionElement>(`option[value="${CSS.escape(presetName)}"]`)
+      : null;
+
+    this.refs.presetSelect.value = presetName;
+    this.refs.presetLockBtn.textContent = presetLocked ? "🔒" : "🔓";
+    this.refs.presetLockBtn.title = presetName ? (presetLocked ? `解锁预设「${presetName}」` : `锁定预设「${presetName}」`) : "先选择一个预设";
+    this.refs.presetLockBtn.disabled = !presetName;
+    this.refs.presetLockBtn.classList.toggle("is-disabled", !presetName);
+
+    if (selectedOpt) {
+      selectedOpt.text = isModified ? `${baseLabel} (modified)` : baseLabel;
     }
+  }
+
+  private syncBaseControls(s: RendererConfig): void {
+    if (!this.refs) return;
+    const r = this.refs;
 
     r.themeSelect.value = s.activeTheme;
     r.modeSelect.value = s.pageMode;
     r.modeBtns.long.classList.toggle("nr-btn-active", s.pageMode === "long");
     r.modeBtns.card.classList.toggle("nr-btn-active", s.pageMode === "card");
     r.sizeInput.value = String(s.fontSize);
-    // Use helper to handle fonts not in the dropdown (e.g. from old presets)
+    r.listStyleBtns.default.classList.toggle("nr-btn-active", s.listStyle !== "capsule");
+    r.listStyleBtns.capsule.classList.toggle("nr-btn-active", s.listStyle === "capsule");
     setFontSelectValue(r.fontSelect, s.fontFamily);
     setFontSelectValue(r.coverFontSelect, s.coverFontFamily);
-    // Sync cover color: saved value → theme default
-    void this.plugin.loadTheme(s.activeTheme).then(css => {
-      const themeColor = extractCoverTitleColor(css, s.activeTheme) || "#e07c5a";
-      const strokePalette = deriveCoverStrokePalette(css, s.activeTheme);
-      r.coverColorInput.value = s.coverFontColor || themeColor;
-      r.strokeColorInput.value = parseColorValue(s.coverStrokeColor, strokePalette.inner);
-      r.doubleStrokeColorInput.value = parseColorValue(s.coverDoubleStrokeColor, strokePalette.outer);
-      r.glowColorInput.value = parseColorValue(s.coverGlowColor, s.coverFontColor || themeColor);
-    });
+  }
+
+  private syncCoverStylingControls(s: RendererConfig): void {
+    if (!this.refs) return;
+    const r = this.refs;
+    const strokeOn = s.coverStrokeStyle !== "none";
+    const align = s.coverTextAlign ?? "left";
+
     r.scaleInput.value = String(s.coverFontScale);
     r.coverOpacityInput.value = String(s.coverFontOpacity ?? 100);
     r.lsInput.value = String(s.coverLetterSpacing);
@@ -342,47 +409,14 @@ export class PreviewView extends ItemView implements PanelHost {
     r.strokeAlphaInput.value = String(s.coverStrokeOpacity);
     r.glowColorInput.value = parseColorValue(s.coverGlowColor, s.coverFontColor || "#e07c5a");
     r.overlayToggle.classList.toggle("active", s.coverEffects?.overlay?.enabled ?? false);
-    // Sync all effect chips, param rows, and input values
-    for (const [name, chip] of Object.entries(r.effectChips)) {
-      const params = s.coverEffects?.[name];
-      const enabled = params?.enabled ?? false;
-      chip.classList.toggle("active", enabled);
-      const row = r.effectParamRows[name];
-      if (row) {
-        row.classList.toggle("nr-hidden", !enabled);
-        const inputs = row.querySelectorAll<HTMLInputElement>(".nr-field-input");
-        if (inputs[0] && params?.opacity != null) inputs[0].value = String(params.opacity);
-        let inputIndex = 1;
-        const meta = EFFECT_SCHEMAS[name];
-        if (meta?.defaultCount != null && inputs[inputIndex]) {
-          inputs[inputIndex].value = String(params?.count ?? meta.defaultCount);
-          inputIndex += 1;
-        }
-        if (meta?.defaultWidth != null && inputs[inputIndex]) {
-          inputs[inputIndex].value = String(params?.width ?? meta.defaultWidth);
-          inputIndex += 1;
-        }
-        if (meta?.defaultSpacing != null && inputs[inputIndex]) {
-          inputs[inputIndex].value = String(params?.spacing ?? meta.defaultSpacing);
-          inputIndex += 1;
-        }
-        if (meta?.defaultSize != null && inputs[inputIndex]) {
-          inputs[inputIndex].value = String(params?.size ?? meta.defaultSize);
-        }
-        const colorInput = row.querySelector<HTMLInputElement>(".nr-color-dot");
-        if (colorInput && meta?.defaultColor != null && params?.color) {
-          colorInput.value = parseColorValue(params.color, colorInput.value || "#000000");
-        }
-      }
-    }
     r.oxInput.value = String(s.coverOffsetX);
     r.oyInput.value = String(s.coverOffsetY);
+    r.coverPaddingInput.value = String(s.coverPagePaddingX ?? 90);
     r.shadowToggle.classList.toggle("active", s.coverShadow);
     r.blurInput.value = String(s.coverShadowBlur);
     r.shadowColorInput.value = parseColorValue(s.coverShadowColor, "#000000");
     r.shadowAlphaInput.value = parseAlphaPercent(s.coverShadowColor, 60);
     r.bannerToggle.classList.toggle("active", s.coverBanner);
-    const strokeOn = s.coverStrokeStyle !== "none";
     r.strokeToggle.classList.toggle("active", strokeOn);
     r.strokeParamsRow.classList.toggle("nr-hidden", !strokeOn);
     r.doubleStrokeField.classList.toggle("nr-hidden", !isCoverSemanticFieldActive("stroke", "outerWidth", s));
@@ -390,12 +424,64 @@ export class PreviewView extends ItemView implements PanelHost {
     r.glowParamsRow.classList.toggle("nr-hidden", !s.coverGlow);
     r.bannerParamsRow.classList.toggle("nr-hidden", !s.coverBanner);
     r.shadowParamsRow.classList.toggle("nr-hidden", !s.coverShadow);
-    const align = s.coverTextAlign ?? "left";
     r.alignBtns.left.classList.toggle("nr-btn-active", align === "left");
     r.alignBtns.center.classList.toggle("nr-btn-active", align === "center");
     r.alignBtns.right.classList.toggle("nr-btn-active", align === "right");
 
-    this.syncing = false;
+    this.syncEffectControls(s);
+  }
+
+  private syncEffectControls(s: RendererConfig): void {
+    if (!this.refs) return;
+
+    for (const [name, chip] of Object.entries(this.refs.effectChips)) {
+      const params = s.coverEffects?.[name];
+      const enabled = params?.enabled ?? false;
+      chip.classList.toggle("active", enabled);
+      const row = this.refs.effectParamRows[name];
+      if (!row) continue;
+
+      row.classList.toggle("nr-hidden", !enabled);
+      const inputs = row.querySelectorAll<HTMLInputElement>(".nr-field-input");
+      if (inputs[0] && params?.opacity != null) inputs[0].value = String(params.opacity);
+
+      let inputIndex = 1;
+      const meta = EFFECT_SCHEMAS[name];
+      if (meta?.defaultCount != null && inputs[inputIndex]) {
+        inputs[inputIndex].value = String(params?.count ?? meta.defaultCount);
+        inputIndex += 1;
+      }
+      if (meta?.defaultWidth != null && inputs[inputIndex]) {
+        inputs[inputIndex].value = String(params?.width ?? meta.defaultWidth);
+        inputIndex += 1;
+      }
+      if (meta?.defaultSpacing != null && inputs[inputIndex]) {
+        inputs[inputIndex].value = String(params?.spacing ?? meta.defaultSpacing);
+        inputIndex += 1;
+      }
+      if (meta?.defaultSize != null && inputs[inputIndex]) {
+        inputs[inputIndex].value = String(params?.size ?? meta.defaultSize);
+      }
+
+      const colorInput = row.querySelector<HTMLInputElement>(".nr-color-dot");
+      if (colorInput && meta?.defaultColor != null && params?.color) {
+        colorInput.value = parseColorValue(params.color, colorInput.value || "#000000");
+      }
+    }
+  }
+
+  private syncThemeDerivedColors(s: RendererConfig): void {
+    if (!this.refs) return;
+
+    void this.plugin.loadTheme(s.activeTheme).then((css) => {
+      if (!this.refs) return;
+      const themeColor = extractCoverTitleColor(css, s.activeTheme) || "#e07c5a";
+      const strokePalette = deriveCoverStrokePalette(css, s.activeTheme);
+      this.refs.coverColorInput.value = s.coverFontColor || themeColor;
+      this.refs.strokeColorInput.value = parseColorValue(s.coverStrokeColor, strokePalette.inner);
+      this.refs.doubleStrokeColorInput.value = parseColorValue(s.coverDoubleStrokeColor, strokePalette.outer);
+      this.refs.glowColorInput.value = parseColorValue(s.coverGlowColor, s.coverFontColor || themeColor);
+    });
   }
 
   /** Save current UI settings as renderer_config into the active note. */
@@ -406,7 +492,7 @@ export class PreviewView extends ItemView implements PanelHost {
       return;
     }
     const markdown = await this.app.vault.read(file);
-    const options = extractRenderOptions(this.plugin.settings as unknown as Record<string, unknown>);
+    const options = extractRenderOptions(this.effective);
 
     const updated = saveFullNoteConfig(markdown, options);
     await this.app.vault.modify(file, updated);
@@ -517,20 +603,12 @@ export class PreviewView extends ItemView implements PanelHost {
     const pageNum = String(this.currentPage + 1).padStart(2, "0");
     const pngName = `${baseName}_${pageNum}`;
 
-    new Notice("Exporting page...");
-    try {
-      const blob = await exportSinglePage(this.pages[this.currentPage], pngName);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${pngName}.png`;
-      a.click();
-      URL.revokeObjectURL(url);
-      new Notice(`Exported page ${this.currentPage + 1}`);
-    } catch (e) {
-      console.error("Export failed:", e);
-      new Notice("Export failed — check console");
-    }
+    await this.runExport(
+      "Exporting page...",
+      () => exportSinglePage(this.pages[this.currentPage], pngName),
+      `${pngName}.png`,
+      `Exported page ${this.currentPage + 1}`,
+    );
   }
 
   async handleExport(): Promise<void> {
@@ -541,23 +619,44 @@ export class PreviewView extends ItemView implements PanelHost {
 
     const file = this.app.workspace.getActiveFile();
     const baseName = file ? file.basename : "note";
-    const theme = this.plugin.settings.activeTheme;
+    const theme = this.effective.activeTheme;
     const mode = this.effectivePageMode === "card" ? "3-4" : "3-5";
     const zipName = `${baseName}_${theme}_${mode}`;
 
-    new Notice("Exporting...");
+    await this.runExport(
+      "Exporting...",
+      () => exportPages(this.pages, baseName),
+      `${zipName}.zip`,
+      `Exported ${this.pages.length} pages`,
+    );
+  }
+
+  private async runExport(
+    loadingNotice: string,
+    exportFn: () => Promise<Blob>,
+    downloadName: string,
+    successNotice: string,
+  ): Promise<void> {
+    new Notice(loadingNotice);
     try {
-      const zipBlob = await exportPages(this.pages, baseName);
-      const url = URL.createObjectURL(zipBlob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${zipName}.zip`;
-      a.click();
-      URL.revokeObjectURL(url);
-      new Notice(`Exported ${this.pages.length} pages`);
+      const blob = await exportFn();
+      this.downloadBlob(blob, downloadName);
+      new Notice(successNotice);
     } catch (e) {
       console.error("Export failed:", e);
       new Notice("Export failed — check console");
+    }
+  }
+
+  private downloadBlob(blob: Blob, filename: string): void {
+    const url = URL.createObjectURL(blob);
+    try {
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+    } finally {
+      URL.revokeObjectURL(url);
     }
   }
 }

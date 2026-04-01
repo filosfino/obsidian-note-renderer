@@ -21,9 +21,11 @@ function extractUnderlinePaddingBottom(paddingBottom: string): number {
 function createMockApp(validImages: Record<string, string> = {}) {
   return {
     metadataCache: {
-      getFirstLinkpathDest(name: string) {
-        if (!validImages[name]) return null;
-        return { path: name };
+      getFirstLinkpathDest(name: string, sourcePath: string) {
+        const scoped = sourcePath ? `${sourcePath}::${name}` : name;
+        const path = validImages[scoped] ? scoped : (validImages[name] ? name : null);
+        if (!path) return null;
+        return { path };
       },
     },
     vault: {
@@ -256,6 +258,63 @@ describe("renderNote", () => {
     rendered.cleanup();
   });
 
+  it("keeps page padding on cover text by default", async () => {
+    const rendered = await renderNote(
+      createMockApp() as never,
+      "# 封面标题",
+      "test.md",
+      ".theme {}",
+      "cream",
+      new Component(),
+      RENDER_DEFAULTS,
+    );
+
+    const inlineStyle = rendered.pages[0].querySelector("style")?.textContent || "";
+    expect(inlineStyle).toContain(".nr-page-cover {\n  padding-left: 90px;\n  padding-right: 90px;\n}");
+
+    rendered.cleanup();
+  });
+
+  it("can set cover page padding to zero and use the full cover width", async () => {
+    const rendered = await renderNote(
+      createMockApp() as never,
+      "# 封面标题",
+      "test.md",
+      ".theme {}",
+      "cream",
+      new Component(),
+      {
+        ...RENDER_DEFAULTS,
+        coverPagePaddingX: 0,
+      },
+    );
+
+    const inlineStyle = rendered.pages[0].querySelector("style")?.textContent || "";
+    expect(inlineStyle).toContain(".nr-page-cover {\n  padding-left: 0px;\n  padding-right: 0px;\n}");
+
+    rendered.cleanup();
+  });
+
+  it("uses custom cover page padding in px", async () => {
+    const rendered = await renderNote(
+      createMockApp() as never,
+      "# 封面标题",
+      "test.md",
+      ".theme {}",
+      "cream",
+      new Component(),
+      {
+        ...RENDER_DEFAULTS,
+        coverPagePaddingX: 40,
+      },
+    );
+
+    const inlineStyle = rendered.pages[0].querySelector("style")?.textContent || "";
+    expect(inlineStyle).toContain(".nr-page-cover {\n  padding-left: 40px;\n  padding-right: 40px;\n}");
+
+    rendered.cleanup();
+  });
+
   it("wraps title text with a double-stroke backdrop in double mode", async () => {
     const markdown = `
 ## 标题
@@ -278,6 +337,60 @@ describe("renderNote", () => {
 
     expect(rendered.pages[0].querySelector(".nr-double-stroke-wrap")).not.toBeNull();
     rendered.cleanup();
+  });
+
+  it("treats outer double-stroke width as extra thickness beyond the inner stroke", async () => {
+    const markdown = `
+## 标题
+
+双描边
+`;
+
+    const baseRendered = await renderNote(
+      createMockApp() as never,
+      markdown,
+      "test.md",
+      ".theme {}",
+      "cream",
+      new Component(),
+      {
+        ...RENDER_DEFAULTS,
+        coverStrokeStyle: "double",
+        coverStrokePercent: 4,
+        coverDoubleStrokePercent: 0,
+      },
+    );
+
+    const extraRendered = await renderNote(
+      createMockApp() as never,
+      markdown,
+      "test.md",
+      ".theme {}",
+      "cream",
+      new Component(),
+      {
+        ...RENDER_DEFAULTS,
+        coverStrokeStyle: "double",
+        coverStrokePercent: 4,
+        coverDoubleStrokePercent: 6,
+      },
+    );
+
+    const baseWrap = baseRendered.pages[0].querySelector(".nr-double-stroke-wrap") as HTMLElement | null;
+    const extraWrap = extraRendered.pages[0].querySelector(".nr-double-stroke-wrap") as HTMLElement | null;
+    const baseClone = baseWrap?.firstElementChild as HTMLElement | null;
+    const extraClone = extraWrap?.firstElementChild as HTMLElement | null;
+
+    expect(baseClone).not.toBeNull();
+    expect(extraClone).not.toBeNull();
+    const baseRadius = Number(baseClone?.dataset.doubleStrokeRadius || "0");
+    const extraRadius = Number(extraClone?.dataset.doubleStrokeRadius || "0");
+
+    expect(baseRadius).toBeGreaterThan(0);
+    expect(extraRadius).toBeGreaterThan(baseRadius);
+
+    baseRendered.cleanup();
+    extraRendered.cleanup();
   });
 
   it("splits body pages at manual separators", async () => {
@@ -335,6 +448,41 @@ describe("renderNote", () => {
     expect(rendered.pages).toHaveLength(2);
     expect(rendered.pages[1].classList.contains("nr-page-full")).toBe(true);
     expect(rendered.pages[1].querySelector("img.nr-full-page-img")?.getAttribute("src")).toBe("app://hero.png");
+    rendered.cleanup();
+  });
+
+  it("resolves vault images relative to the current source note path", async () => {
+    const markdown = `
+## 标题
+
+相对图片
+
+## 封面图
+
+![[hero.png]]
+
+## 正文
+
+![[body.png]]
+`;
+
+    const rendered = await renderNote(
+      createMockApp({
+        "folder/note.md::hero.png": "app://scoped-cover.png",
+        "folder/note.md::body.png": "app://scoped-body.png",
+        "hero.png": "app://fallback-cover.png",
+        "body.png": "app://fallback-body.png",
+      }) as never,
+      markdown,
+      "folder/note.md",
+      ".theme {}",
+      "cream",
+      new Component(),
+      RENDER_DEFAULTS,
+    );
+
+    expect(rendered.pages[0].querySelector(".nr-cover-bg-image")?.getAttribute("src")).toBe("app://scoped-cover.png");
+    expect(rendered.pages[1].querySelector("img")?.getAttribute("src")).toBe("app://scoped-body.png");
     rendered.cleanup();
   });
 

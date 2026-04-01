@@ -21,7 +21,7 @@ describe("schema.json export contract", () => {
     expect(schemaJson.fieldSchemas.cover.effects.grid.spacing.type).toBe("number");
     expect(schemaJson.fieldSchemas.cover.effects.network.width.type).toBe("number");
     expect(schemaJson.defaults.cover.typography.opacity).toBe(100);
-    expect(schemaJson.defaults.cover.typography.scale).toBe(100);
+    expect(schemaJson.defaults.cover.typography.scale).toBe(150);
     expect(schemaJson.defaults.cover.banner.paddingPercent).toBe(40);
     expect(schemaJson.defaults.cover.effects.overlay.opacity).toBe(55);
     expect(schemaJson.defaults.cover.effects.bokeh.color).toBe("");

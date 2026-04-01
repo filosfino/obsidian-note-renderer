@@ -1,6 +1,6 @@
 import { App, Component, sanitizeHTMLToDom } from "obsidian";
-import { PAGE_WIDTH, CONTENT_WIDTH, PAGE_PADDING_H, PAGE_PADDING_TOP, PAGE_PADDING_BOTTOM, PAGE_HEIGHTS, getContentHeight, type PageMode } from "./constants";
-import { applyCoverEffects, deriveCoverStrokePalette } from "./effects";
+import { PAGE_WIDTH, PAGE_PADDING_H, PAGE_PADDING_TOP, PAGE_PADDING_BOTTOM, PAGE_HEIGHTS, getContentHeight, type PageMode } from "./constants";
+import { applyCoverEffects, deriveCoverStrokePalette, detectThemeBrightness } from "./effects";
 import { paginateBody } from "./paginator";
 import { parseNoteStructure } from "./parser";
 import { renderMarkdownToHtml, createVaultImageResolver } from "./md-to-html";
@@ -16,10 +16,11 @@ export interface RenderedPages {
 
 function extractCoverImageSrc(
   coverImageMarkdown: string | null,
-  resolveImage: (name: string) => string,
+  resolveImage: (name: string, sourcePath?: string) => string,
+  sourcePath: string,
 ): string | null {
   if (!coverImageMarkdown) return null;
-  const imgHtml = renderMarkdownToHtml(coverImageMarkdown, resolveImage);
+  const imgHtml = renderMarkdownToHtml(coverImageMarkdown, (name) => resolveImage(name, sourcePath));
   const imgMatch = imgHtml.match(/src="([^"]+)"/);
   return imgMatch?.[1] ?? null;
 }
@@ -40,6 +41,7 @@ export async function renderNote(
   const pageHeight = PAGE_HEIGHTS[pageMode];
   const contentHeight = getContentHeight(pageMode);
   const cover = buildCoverConfig(options);
+  const coverHorizontalPadding = Math.max(0, Math.min(PAGE_WIDTH / 2, cover.position.paddingX));
 
   const coverFont = cover.typography.fontFamily;
   const coverColor = cover.typography.color;
@@ -86,6 +88,10 @@ ${coverColorCss}
   height: ${pageHeight}px;
   padding: ${PAGE_PADDING_TOP}px ${PAGE_PADDING_H}px ${PAGE_PADDING_BOTTOM}px;
 }
+.nr-page-cover {
+  padding-left: ${coverHorizontalPadding}px;
+  padding-right: ${coverHorizontalPadding}px;
+}
 .nr-page-body .nr-page-content {
   height: ${contentHeight}px;
   overflow: hidden;
@@ -107,7 +113,7 @@ ${coverColorCss}
   z-index: 3;
 }
 .nr-cover-has-image .nr-cover-content {
-  padding: ${PAGE_PADDING_TOP}px ${PAGE_PADDING_H}px ${PAGE_PADDING_BOTTOM}px;
+  padding: ${PAGE_PADDING_TOP}px ${coverHorizontalPadding}px ${PAGE_PADDING_BOTTOM}px;
 }
 .nr-cover-has-image { padding: 0; }
 .nr-full-page-img {
@@ -125,23 +131,44 @@ ${coverColorCss}
   z-index: 1;
 }
 `;
-  const fullCss = themeCss + fontOverrideCss + pageCss;
+  // Capsule list style: each li becomes a rounded card
+  const capsuleCss = options.listStyle === "capsule" ? (() => {
+    const isDark = detectThemeBrightness(themeCss, themeName);
+    const bg = isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)";
+    const border = isDark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.08)";
+    return `
+.nr-page-content ul,
+.nr-page-content ol {
+  padding-left: 0;
+  list-style: none;
+}
+.nr-page-content li {
+  background: ${bg};
+  border: 1px solid ${border};
+  border-radius: 16px;
+  padding: 20px 28px;
+  margin-bottom: 16px;
+}
+`;
+  })() : "";
+  const fullCss = themeCss + fontOverrideCss + capsuleCss + pageCss;
 
   const pages: HTMLElement[] = [];
 
   // --- Cover page ---
   const strokePercent = cover.stroke.inner.widthPercent / 100;
-  const coverImageSrc = extractCoverImageSrc(structure.coverImageMarkdown, resolveImage);
+  const coverImageSrc = extractCoverImageSrc(structure.coverImageMarkdown, resolveImage, sourcePath);
   const hasCoverImage = coverImageSrc !== null;
   const coverTextOpts: CoverTextOptions = {
     strokePercent,
     fontScale: cover.typography.scale,
     letterSpacing: cover.typography.letterSpacing,
     lineHeight: cover.typography.lineHeight,
+    availableWidth: Math.max(240, PAGE_WIDTH - coverHorizontalPadding * 2),
   };
   let coverPage: HTMLElement;
   if (structure.coverMarkdown) {
-    coverPage = buildRichCoverPage(structure.coverMarkdown, fullCss, resolveImage, pageHeight, coverTextOpts);
+    coverPage = buildRichCoverPage(structure.coverMarkdown, fullCss, resolveImage, sourcePath, pageHeight, coverTextOpts);
   } else {
     coverPage = buildTitleCoverPage(structure.title, fullCss, pageHeight, coverTextOpts);
   }
@@ -162,7 +189,8 @@ ${coverColorCss}
       const accentColor = htmlEl.style.color || coverColor || themeTitleColor;
       const textOpacity = Math.max(0, Math.min(1, cover.typography.opacity / 100));
       const strokeColor = withAlpha(cover.stroke.inner.color || strokePalette.inner, cover.stroke.opacity);
-      const doubleStrokeWidth = Math.max(sw + 1, Math.round(fs * (cover.stroke.outer.widthPercent / 100)));
+      const doubleStrokeExtra = Math.max(0, Math.round(fs * (cover.stroke.outer.widthPercent / 100)));
+      const doubleStrokeWidth = sw + doubleStrokeExtra;
       const doubleStrokeColor = cover.stroke.outer.color || strokePalette.outer;
       const glowColor = cover.glow.color || accentColor;
       const shadowColor = cover.shadow.color;
@@ -284,6 +312,7 @@ ${coverColorCss}
       structure.bodyMarkdown,
       fullCss,
       resolveImage,
+      sourcePath,
       cleanups,
       pageHeight,
       contentHeight
@@ -316,7 +345,8 @@ function buildTitleCoverPage(title: string, css: string, pageHeight: number, cov
 function buildRichCoverPage(
   coverMarkdown: string,
   css: string,
-  resolveImage: (name: string) => string,
+  resolveImage: (name: string, sourcePath?: string) => string,
+  sourcePath: string,
   pageHeight: number,
   coverTextOpts: CoverTextOptions
 ): HTMLElement {
@@ -324,7 +354,7 @@ function buildRichCoverPage(
 
   const content = document.createElement("div");
   content.classList.add("nr-cover-content");
-  content.append(sanitizeHTMLToDom(renderMarkdownToHtml(coverMarkdown, resolveImage)));
+  content.append(sanitizeHTMLToDom(renderMarkdownToHtml(coverMarkdown, (name) => resolveImage(name, sourcePath))));
 
   autosizeCoverText(content, coverTextOpts);
   pageDiv.appendChild(content);
@@ -344,10 +374,11 @@ interface CoverTextOptions {
   fontScale: number;       // 100 = 1x
   letterSpacing: number;   // in 0.01em (5 = 0.05em)
   lineHeight: number;      // in 0.1 (13 = 1.3)
+  availableWidth: number;
 }
 
 function autosizeCoverText(container: HTMLElement, opts: CoverTextOptions): void {
-  const { strokePercent, fontScale, letterSpacing, lineHeight } = opts;
+  const { strokePercent, fontScale, letterSpacing, lineHeight, availableWidth } = opts;
   const elements = Array.from(container.querySelectorAll("p, h1, h2, h3, li, div"));
 
   // Find the longest text to calculate fill size
@@ -358,9 +389,9 @@ function autosizeCoverText(container: HTMLElement, opts: CoverTextOptions): void
     if (len > maxLen) maxLen = len;
   }
 
-  // Fill mode: calculate a uniform size so the longest line nearly fills CONTENT_WIDTH
+  // Fill mode: calculate a uniform size so the longest line nearly fills the full cover width.
   // Approximate: Chinese chars at font-size Npx are roughly 1.05*N px wide each
-  const fillSize = Math.min(160, Math.max(72, Math.floor(CONTENT_WIDTH / (maxLen * 1.05))));
+  const fillSize = Math.min(160, Math.max(72, Math.floor(availableWidth / (maxLen * 1.05))));
 
   for (let i = 0; i < elements.length; i++) {
     const htmlEl = elements[i] as HTMLElement;
@@ -428,11 +459,13 @@ function autosizeCoverText(container: HTMLElement, opts: CoverTextOptions): void
 function createPageDiv(extraClass: string, css: string, pageHeight: number): HTMLElement {
   const pageDiv = document.createElement("div");
   pageDiv.classList.add("nr-page", extraClass);
-  pageDiv.style.width = `${PAGE_WIDTH}px`;
-  pageDiv.style.height = `${pageHeight}px`;
-  pageDiv.style.position = "relative";
-  pageDiv.style.overflow = "hidden";
-  pageDiv.style.boxSizing = "border-box";
+  pageDiv.setCssStyles({
+    width: `${PAGE_WIDTH}px`,
+    height: `${pageHeight}px`,
+    position: "relative",
+    overflow: "hidden",
+    boxSizing: "border-box",
+  });
 
   // eslint-disable-next-line obsidianmd/no-forbidden-elements -- Offscreen export pages must inline theme CSS; styles.css does not reach html-to-image clones.
   pageDiv.createEl("style", { text: css });
@@ -443,13 +476,14 @@ function createPageDiv(extraClass: string, css: string, pageHeight: number): HTM
 async function renderBodyPages(
   bodyMarkdown: string,
   css: string,
-  resolveImage: (name: string) => string,
+  resolveImage: (name: string, sourcePath?: string) => string,
+  sourcePath: string,
   cleanups: (() => void)[],
   pageHeight: number,
   contentHeight: number
 ): Promise<HTMLElement[]> {
   // Render markdown to HTML using shared engine
-  const bodyHtml = renderMarkdownToHtml(bodyMarkdown, resolveImage);
+  const bodyHtml = renderMarkdownToHtml(bodyMarkdown, (name) => resolveImage(name, sourcePath));
 
   // Create hidden measurer at full resolution
   const measurer = document.createElement("div");
@@ -608,6 +642,7 @@ function ensureDoubleStrokeBackdrop(el: HTMLElement, radius: number, color: stri
   });
   clone.style.opacity = String(opacity);
   clone.style.color = color;
+  clone.dataset.doubleStrokeRadius = String(radius);
   clone.setCssStyles({ webkitTextStroke: "0 transparent" });
   clone.style.textShadow = buildOutlineRingShadows(radius, color).join(", ");
 
@@ -629,7 +664,7 @@ interface UnderlineRenderOptions {
 }
 
 function applyUnderlineScale(container: HTMLElement, fallbackFontSize: number, options: UnderlineRenderOptions = {}): void {
-  const underlines = Array.from(container.querySelectorAll("u")) as HTMLElement[];
+  const underlines = Array.from(container.querySelectorAll<HTMLElement>("u"));
   if (underlines.length === 0) return;
 
   for (const underline of underlines) {
