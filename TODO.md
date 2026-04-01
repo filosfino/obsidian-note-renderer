@@ -10,6 +10,7 @@
 - `preview-view.ts` 已拆出 note session / UI sync / export helper 这几层，主要流程不再全部挤在单个大函数里
 - preset / fallback / default 的读取已在 `main.ts` 和 `preview-view.ts` 里做了一轮类型化收口
 - browser cover playground 已落地：左侧 markdown，右侧复用真实 toolbar + preview，可直接在浏览器里调封面
+- `==高亮==` 语法已支持，渲染为 `<mark>` 并带正文荧光标注样式
 
 ## P0
 

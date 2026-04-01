@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.3
+
+### Improvements
+
+- Support Obsidian-style `==highlight==` syntax by rendering it as `<mark>`
+- Add default body-page highlight styling for `<mark>` so fluorescence annotations show consistently outside cover content
+- Add parser tests to ensure highlight syntax works without affecting inline code
+
 ## 0.1.0
 
 Initial release.

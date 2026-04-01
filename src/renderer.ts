@@ -96,6 +96,12 @@ ${coverColorCss}
   height: ${contentHeight}px;
   overflow: hidden;
 }
+.nr-page-content mark {
+  background: linear-gradient(to top, rgba(255, 232, 102, 0.75) 55%, transparent 55%);
+  color: inherit;
+  padding: 0 4px;
+  border-radius: 4px;
+}
 .nr-page-full {
   height: ${pageHeight}px;
   padding: 0;

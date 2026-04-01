@@ -1,6 +1,31 @@
 import { marked } from "marked";
 import { App } from "obsidian";
 
+const markExtension = {
+  name: "mark",
+  level: "inline",
+  start(src: string) {
+    return src.indexOf("==");
+  },
+  tokenizer(this: { lexer: { inlineTokens(src: string): unknown[] } }, src: string) {
+    const match = /^==(?=\S)([\s\S]*?\S)==/.exec(src);
+    if (!match) return undefined;
+    return {
+      type: "mark",
+      raw: match[0],
+      text: match[1],
+      tokens: this.lexer.inlineTokens(match[1]),
+    };
+  },
+  renderer(this: { parser: { parseInline(tokens: unknown[]): string } }, token: { tokens?: unknown[] }) {
+    return `<mark>${this.parser.parseInline(token.tokens ?? [])}</mark>`;
+  },
+};
+
+marked.use({
+  extensions: [markExtension as never],
+});
+
 /**
  * Shared markdown→HTML conversion, used by both the Obsidian plugin and the CLI preview tool.
  * Uses `marked` as the single rendering engine to ensure identical output.

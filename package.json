@@ -1,6 +1,6 @@
 {
   "name": "obsidian-note-renderer",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "Render markdown notes into paginated images optimized for Xiaohongshu.",
   "author": "filosfino",
   "license": "MIT",
