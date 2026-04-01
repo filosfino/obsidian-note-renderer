@@ -26,10 +26,10 @@ export const DEFAULT_FONTS: FontEntry[] = [
   // ── 黑体 ──
   { label: "苹方/雅黑", value: '"PingFang SC", "Microsoft YaHei", sans-serif' },
   { label: "冬青黑", value: '"Hiragino Sans GB", "PingFang SC", sans-serif' },
-  { label: "思源黑体", value: '"Source Han Sans SC", "Noto Sans SC", sans-serif' },
+  { label: "思源黑体", value: '"Source Han Sans SC", "Source Han Sans SC VF", "Noto Sans SC", "Noto Sans CJK SC", sans-serif' },
   // ── 宋体 ──
   { label: "宋体", value: '"Songti SC", "SimSun", serif' },
-  { label: "思源宋体", value: '"Noto Serif SC", "Songti SC", serif' },
+  { label: "思源宋体", value: '"Source Han Serif SC", "Source Han Serif SC VF", "Noto Serif SC", "Noto Serif CJK SC", "Songti SC", serif' },
   // ── 楷体/仿宋 ──
   { label: "楷体", value: '"Kaiti SC", "STKaiti", serif' },
   { label: "仿宋", value: '"STFangsong", "FangSong", serif' },

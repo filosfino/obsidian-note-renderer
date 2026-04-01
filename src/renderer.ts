@@ -165,6 +165,8 @@ ${coverColorCss}
     letterSpacing: cover.typography.letterSpacing,
     lineHeight: cover.typography.lineHeight,
     availableWidth: Math.max(240, PAGE_WIDTH - coverHorizontalPadding * 2),
+    fontFamily: coverFont,
+    fontWeight: cover.typography.weight,
   };
   let coverPage: HTMLElement;
   if (structure.coverMarkdown) {
@@ -375,23 +377,18 @@ interface CoverTextOptions {
   letterSpacing: number;   // in 0.01em (5 = 0.05em)
   lineHeight: number;      // in 0.1 (13 = 1.3)
   availableWidth: number;
+  fontFamily: string;
+  fontWeight: number;
 }
 
+const DEFAULT_COVER_TEXT_BASE_SIZE = 72;
+
 function autosizeCoverText(container: HTMLElement, opts: CoverTextOptions): void {
-  const { strokePercent, fontScale, letterSpacing, lineHeight, availableWidth } = opts;
+  const { strokePercent, fontScale, letterSpacing, lineHeight, availableWidth, fontFamily, fontWeight } = opts;
   const elements = Array.from(container.querySelectorAll("p, h1, h2, h3, li, div"));
-
-  // Find the longest text to calculate fill size
-  let maxLen = 0;
-  for (const el of elements) {
-    if ((el as HTMLElement).querySelector("[style]") || (el as HTMLElement).getAttribute("style")) continue;
-    const len = (el.textContent?.trim() ?? "").length;
-    if (len > maxLen) maxLen = len;
-  }
-
-  // Fill mode: calculate a uniform size so the longest line nearly fills the full cover width.
-  // Approximate: Chinese chars at font-size Npx are roughly 1.05*N px wide each
-  const fillSize = Math.min(160, Math.max(72, Math.floor(availableWidth / (maxLen * 1.05))));
+  const measurer = createCoverTextMeasurer(fontFamily, fontWeight, letterSpacing, availableWidth);
+  let widestText = "";
+  let widestWidth = 0;
 
   for (let i = 0; i < elements.length; i++) {
     const htmlEl = elements[i] as HTMLElement;
@@ -438,22 +435,130 @@ function autosizeCoverText(container: HTMLElement, opts: CoverTextOptions): void
       continue;
     }
 
-    const fontSize = fillSize;
+    const text = htmlEl.textContent?.trim() ?? "";
+    if (!text) continue;
+    const measuredWidth = measurer.measure(text, 100);
+    if (measuredWidth > widestWidth) {
+      widestWidth = measuredWidth;
+      widestText = text;
+    }
+  }
 
-    const scaledSize = Math.round(fontSize * (fontScale / 100));
+  const exactBaseSize = widestText ? fitCoverTextBaseSize(widestText, measurer) : DEFAULT_COVER_TEXT_BASE_SIZE;
+  const scaledSize = Math.round(exactBaseSize * (fontScale / 100));
+
+  for (let i = 0; i < elements.length; i++) {
+    const htmlEl = elements[i] as HTMLElement;
+    const embeddedImages = Array.from(htmlEl.querySelectorAll("img")) as HTMLElement[];
+    if (embeddedImages.length > 0) continue;
+    if (htmlEl.querySelector("[style]") || htmlEl.getAttribute("style")) continue;
+    const text = htmlEl.textContent?.trim() ?? "";
+    if (!text) continue;
+
     htmlEl.setCssStyles({
       fontSize: `${scaledSize}px`,
-      fontWeight: "800",
+      fontWeight: String(fontWeight),
       lineHeight: String(lineHeight),
       letterSpacing: `${letterSpacing / 100}em`,
     });
 
-    // Pre-compute stroke width for cover-on-image
     if (strokePercent > 0) {
       const sw = Math.max(1, Math.round(scaledSize * strokePercent));
       htmlEl.dataset.coverStrokeWidth = String(sw);
     }
   }
+
+  measurer.cleanup();
+}
+
+interface CoverTextWidthMeasurer {
+  fit: (text: string) => number;
+  measure: (text: string, fontSize: number) => number;
+  cleanup: () => void;
+  usedDomProbe: boolean;
+}
+
+function createCoverTextMeasurer(
+  fontFamily: string,
+  fontWeight: number,
+  letterSpacing: number,
+  availableWidth: number,
+): CoverTextWidthMeasurer {
+  const probe = document.createElement("span");
+  probe.setCssStyles({
+    position: "absolute",
+    left: "-100000px",
+    top: "0",
+    visibility: "hidden",
+    whiteSpace: "pre",
+    pointerEvents: "none",
+    fontFamily,
+    fontWeight: String(fontWeight),
+    letterSpacing: `${letterSpacing / 100}em`,
+  });
+  document.body.appendChild(probe);
+
+  return {
+    usedDomProbe: false,
+    fit(text: string): number {
+      return fitCoverTextBaseSizeFromWidth(text, availableWidth, this);
+    },
+    measure(text: string, fontSize: number): number {
+      probe.style.fontSize = `${fontSize}px`;
+      probe.textContent = text;
+      const rect = probe.getBoundingClientRect();
+      if (rect.width > 0) {
+        this.usedDomProbe = true;
+        return rect.width;
+      }
+      this.usedDomProbe = false;
+      return approximateCoverTextWidth(text, fontSize);
+    },
+    cleanup(): void {
+      probe.remove();
+    },
+  };
+}
+
+function fitCoverTextBaseSize(
+  text: string,
+  measurer: CoverTextWidthMeasurer,
+): number {
+  return measurer.fit(text);
+}
+
+function fitCoverTextBaseSizeFromWidth(
+  text: string,
+  availableWidth: number,
+  measurer: CoverTextWidthMeasurer,
+): number {
+  const referenceFontSize = 100;
+  const measuredWidth = measurer.measure(text, referenceFontSize);
+  if (measuredWidth <= 0) {
+    return DEFAULT_COVER_TEXT_BASE_SIZE;
+  }
+  const fitted = Math.floor((availableWidth / measuredWidth) * referenceFontSize);
+  return Math.min(160, Math.max(DEFAULT_COVER_TEXT_BASE_SIZE, fitted));
+}
+
+function approximateCoverTextWidth(text: string, fontSize: number): number {
+  let width = 0;
+  for (const char of text) {
+    if (/\s/.test(char)) {
+      width += fontSize * 0.33;
+    } else if (/[\u4E00-\u9FFF\u3400-\u4DBF]/.test(char)) {
+      width += fontSize;
+    } else if (/[\u{1F300}-\u{1FAFF}]/u.test(char)) {
+      width += fontSize * 1.1;
+    } else if (/[A-Z0-9]/.test(char)) {
+      width += fontSize * 0.72;
+    } else if (/[a-z]/.test(char)) {
+      width += fontSize * 0.58;
+    } else {
+      width += fontSize * 0.52;
+    }
+  }
+  return width;
 }
 
 function createPageDiv(extraClass: string, css: string, pageHeight: number): HTMLElement {

@@ -19,8 +19,7 @@ import {
   extractRenderOptions,
 } from "./config-manager";
 import type NoteRendererPlugin from "./main";
-import { PRESET_KEYS } from "./main";
-import type { RendererConfig } from "./main";
+import { PRESET_KEYS, type RendererConfig } from "./plugin-types";
 import { buildSettingsPanel, setSelectValue as setFontSelectValue, type PanelHost, type PanelRefs } from "./settings-panel";
 
 interface NoteSession {
@@ -555,13 +554,19 @@ export class PreviewView extends ItemView implements PanelHost {
     this.refs.bodySection.classList.toggle("nr-hidden", this.currentPage === 0);
   }
 
-  /** Rescale the current page clone to fit the container width */
+  /** Rescale the current page clone to fit the preview area's width and height */
   private rescale(): void {
     if (!this.currentClone || !this.currentWrapper || !this.refs) return;
 
     const pageHeight = PAGE_HEIGHTS[this.effectivePageMode];
-    const areaWidth = Math.min(this.refs.previewContainer.clientWidth, 460);
-    const scale = (areaWidth - 24) / PAGE_WIDTH;
+    const horizontalPadding = 24;
+    const verticalPadding = 24;
+    const maxPreviewWidth = 460;
+    const areaWidth = Math.max(1, Math.min(this.refs.previewContainer.clientWidth, maxPreviewWidth) - horizontalPadding);
+    const areaHeight = Math.max(1, this.refs.previewContainer.clientHeight - verticalPadding);
+    const widthScale = areaWidth / PAGE_WIDTH;
+    const heightScale = areaHeight / pageHeight;
+    const scale = Math.max(0.1, Math.min(widthScale, heightScale));
     this.currentClone.setCssStyles({ transform: `scale(${scale})` });
     this.currentWrapper.setCssStyles({ width: `${PAGE_WIDTH * scale}px`, height: `${pageHeight * scale}px` });
 

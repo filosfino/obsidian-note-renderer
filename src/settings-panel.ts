@@ -5,7 +5,7 @@ import { InputModal, ConfirmModal, FontManagerModal } from "./modals";
 import { getCoverFontList, getBodyFontList, type FontEntry } from "./fonts";
 import { deriveCoverStrokePalette, extractThemeColorChoices, extractCoverTitleColor, detectThemeBrightness, type ThemeColorChoice } from "./effects";
 import type NoteRendererPlugin from "./main";
-import type { RendererConfig } from "./main";
+import type { RendererConfig } from "./plugin-types";
 
 // ── Interfaces ──────────────────────────────────────────────────────────────
 
@@ -1499,11 +1499,11 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   // Right: actions + export
   const navRight = nav.createDiv("nr-nav-right");
 
-  const saveToNoteBtn = navRight.createEl("button", { cls: "nr-btn nr-btn-sm nr-save-note-btn", text: "存入笔记" });
+  const saveToNoteBtn = navRight.createEl("button", { cls: "nr-btn nr-btn-sm nr-btn-text nr-save-note-btn", text: "存入笔记" });
   saveToNoteBtn.title = "保存当前配置到笔记";
   saveToNoteBtn.addEventListener("click", () => { void host.handleSaveToNote(); });
 
-  const removeFromNoteBtn = navRight.createEl("button", { cls: "nr-btn nr-btn-sm nr-remove-note-btn", text: "移除" });
+  const removeFromNoteBtn = navRight.createEl("button", { cls: "nr-btn nr-btn-sm nr-btn-text nr-remove-note-btn", text: "移除" });
   removeFromNoteBtn.title = "移除笔记中的渲染配置";
   removeFromNoteBtn.addEventListener("click", () => { void host.handleRemoveFromNote(); });
 

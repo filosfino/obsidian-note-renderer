@@ -9,6 +9,7 @@
 - headless 导出缩放改为插件内置 blob/canvas 路径，不再依赖 `sips`
 - `preview-view.ts` 已拆出 note session / UI sync / export helper 这几层，主要流程不再全部挤在单个大函数里
 - preset / fallback / default 的读取已在 `main.ts` 和 `preview-view.ts` 里做了一轮类型化收口
+- browser cover playground 已落地：左侧 markdown，右侧复用真实 toolbar + preview，可直接在浏览器里调封面
 
 ## P0
 
@@ -21,6 +22,7 @@
 - 继续收紧 `schema.ts` grouped note config 的类型，减少剩余 `Record<string, unknown>` 桥接
 - 梳理 `settings-panel.ts` 的大型 UI 构建函数，考虑按 preset / cover / effects 分块
 - 给导出链路补一次大页面/多页场景下的性能观察，确认 `html-to-image` 和 `scaleBlob()` 的成本上限
+- 给 cover playground 补更明确的 demo note / preset 载入能力，方便专门调 autosize、逐行排版、effects 组合
 
 ## P2
 

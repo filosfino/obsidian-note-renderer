@@ -24,7 +24,7 @@ import {
 import { parseRendererConfig } from "./parser";
 import { migrateRendererConfig } from "./config-migrations";
 
-import type { RendererConfig } from "./main";
+import type { RendererConfig } from "./plugin-types";
 
 export interface ResolvedRenderConfig {
   settings: RendererConfig;

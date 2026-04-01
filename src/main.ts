@@ -11,7 +11,7 @@ import { THEME_SAGE } from "./themes/sage";
 import { THEME_MIST } from "./themes/mist";
 import { THEME_ROSE } from "./themes/rose";
 
-import { RENDER_DEFAULTS, RENDER_KEYS, type RenderOptions } from "./schema";
+import { RENDER_DEFAULTS, RENDER_KEYS } from "./schema";
 import {
   migrateSettings,
   readGroupedNoteConfig,
@@ -22,40 +22,32 @@ import {
 import { renderNote } from "./renderer";
 import { exportSinglePage, scaleBlob } from "./exporter";
 import { DEFAULT_FONTS, getFontDisplayName, type FontEntry } from "./fonts";
+import {
+  DEFAULT_PLUGIN_UI_STATE,
+  createDefaultRendererConfig,
+  type PluginUiState,
+  type RendererConfig,
+  type RendererPreset,
+  type RendererPresetEntry,
+} from "./plugin-types";
 
 // ── Types (derived from schema) ──────────────────────────────────────────────
-
-export type RendererConfig = RenderOptions;
-export type RendererPreset = RendererConfig;
-export interface RendererPresetEntry {
-  values: Partial<RendererPreset>;
-  locked: boolean;
-}
-
-export interface PluginUiState {
-  activePreset: string;
-  presets: Record<string, RendererPresetEntry>;
-  customFonts: FontEntry[];
-}
+export type { RendererConfig, RendererPreset, RendererPresetEntry, PluginUiState } from "./plugin-types";
 
 type PresetValues = Partial<RendererPreset>;
 
 type PersistedNoteRendererSettings = PluginUiState;
 
 // Preset keys = all render keys (auto-derived)
-export const PRESET_KEYS = RENDER_KEYS;
+export { PRESET_KEYS } from "./plugin-types";
 
-const DEFAULT_PERSISTED_SETTINGS: PersistedNoteRendererSettings = {
-  activePreset: "",
-  presets: {},
-  customFonts: [],
-};
+const DEFAULT_PERSISTED_SETTINGS: PersistedNoteRendererSettings = DEFAULT_PLUGIN_UI_STATE;
 
 // ── Plugin ───────────────────────────────────────────────────────────────────
 
 export default class NoteRendererPlugin extends Plugin {
   private pluginState: PluginUiState = { ...DEFAULT_PERSISTED_SETTINGS };
-  private fallbackRenderConfig: RendererConfig = { ...RENDER_DEFAULTS, coverEffects: { ...RENDER_DEFAULTS.coverEffects } };
+  private fallbackRenderConfig: RendererConfig = createDefaultRendererConfig();
 
   // Theme cache: name → CSS string
   private themeCache: Map<string, string> = new Map();
@@ -427,7 +419,7 @@ export default class NoteRendererPlugin extends Plugin {
     const raw = await this.loadData();
     const migrated = raw ? migrateSettings({ ...raw }) : {};
     const persisted = this.extractPersistedSettings(migrated);
-    this.fallbackRenderConfig = { ...RENDER_DEFAULTS, coverEffects: { ...RENDER_DEFAULTS.coverEffects } };
+    this.fallbackRenderConfig = createDefaultRendererConfig();
     this.pluginState = {
       activePreset: persisted.activePreset,
       presets: persisted.presets,

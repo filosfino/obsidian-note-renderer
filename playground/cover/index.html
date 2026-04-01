@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Note Renderer Cover Playground</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/playground/cover/playground.css" />
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/dist/cover-playground.js"></script>
+    <script>
+      (() => {
+        const source = new EventSource("/__playground_live_reload");
+        source.addEventListener("reload", () => {
+          window.location.reload();
+        });
+      })();
+    </script>
+  </body>
+  </html>

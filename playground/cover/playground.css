@@ -1,0 +1,213 @@
+:root {
+  --nr-playground-bg: linear-gradient(135deg, #f3efe5 0%, #dfe9f3 100%);
+  --nr-playground-panel: rgba(255, 255, 255, 0.88);
+  --nr-playground-border: rgba(32, 41, 54, 0.12);
+  --nr-playground-shadow: 0 20px 60px rgba(52, 72, 94, 0.16);
+  --nr-playground-text: #243040;
+  --background-primary: rgba(255, 255, 255, 0.94);
+  --background-primary-alt: rgba(245, 248, 252, 0.96);
+  --background-secondary: rgba(246, 248, 251, 0.9);
+  --background-secondary-alt: rgba(238, 242, 247, 0.94);
+  --background-modifier-border: rgba(46, 64, 86, 0.18);
+  --background-modifier-hover: rgba(48, 70, 95, 0.08);
+  --background-modifier-active-hover: rgba(48, 70, 95, 0.14);
+  --text-normal: #243040;
+  --text-muted: #607086;
+  --text-faint: #8fa0b2;
+  --text-on-accent: #ffffff;
+  --interactive-accent: #45658a;
+  --interactive-accent-hover: #385674;
+  --interactive-normal: rgba(69, 101, 138, 0.1);
+  --interactive-hover: rgba(69, 101, 138, 0.14);
+  --shadow-s: 0 8px 22px rgba(28, 41, 56, 0.1);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--nr-playground-bg);
+  color: var(--nr-playground-text);
+  font-family: "IBM Plex Sans", "PingFang SC", "Noto Sans SC", sans-serif;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+#app {
+  min-height: 100vh;
+  padding: 20px;
+}
+
+.nr-playground-shell {
+  display: grid;
+  grid-template-columns: minmax(320px, 36vw) 1fr;
+  gap: 20px;
+  min-height: calc(100vh - 40px);
+}
+
+.nr-playground-editor-pane,
+.nr-playground-panel-pane {
+  min-height: 0;
+  background: var(--nr-playground-panel);
+  border: 1px solid var(--nr-playground-border);
+  border-radius: 24px;
+  box-shadow: var(--nr-playground-shadow);
+  overflow: hidden;
+  backdrop-filter: blur(14px);
+}
+
+.nr-playground-pane-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--nr-playground-border);
+}
+
+.nr-playground-pane-head h2 {
+  margin: 0;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.nr-playground-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.nr-playground-editor {
+  width: 100%;
+  min-height: calc(100vh - 117px);
+  border: 0;
+  outline: none;
+  resize: none;
+  padding: 22px 24px 28px;
+  background: transparent;
+  color: inherit;
+  font: 15px/1.7 "Iosevka Etoile", "SF Mono", Menlo, monospace;
+}
+
+.nr-playground-panel {
+  height: calc(100vh - 117px);
+  overflow: auto;
+}
+
+.nr-playground-panel.nr-view {
+  background: transparent;
+}
+
+.svg-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+
+.svg-icon svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.nr-playground-notices {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 9999;
+}
+
+.nr-playground-notice {
+  background: rgba(22, 30, 40, 0.92);
+  color: #fff;
+  border-radius: 999px;
+  padding: 10px 14px;
+  font-size: 13px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(11, 18, 25, 0.35);
+  z-index: 9998;
+}
+
+.modal-content {
+  min-width: 320px;
+  max-width: min(90vw, 560px);
+  max-height: 80vh;
+  overflow: auto;
+  padding: 20px;
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.22);
+}
+
+.setting-item {
+  margin-top: 12px;
+}
+
+.setting-item-control {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.menu {
+  position: fixed;
+  z-index: 9999;
+  min-width: 150px;
+  padding: 6px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 14px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.16);
+}
+
+.menu-item {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.menu-item:hover {
+  background: rgba(36, 48, 64, 0.08);
+}
+
+@media (max-width: 980px) {
+  #app {
+    padding: 12px;
+  }
+
+  .nr-playground-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .nr-playground-editor {
+    min-height: 38vh;
+  }
+
+  .nr-playground-panel {
+    height: auto;
+    min-height: 52vh;
+  }
+}
