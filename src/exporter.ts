@@ -1,5 +1,6 @@
 import { toBlob } from "html-to-image";
 import JSZip from "jszip";
+import { PAGE_HEIGHT, PAGE_WIDTH } from "./constants";
 
 /**
  * Export page elements as PNG images packed into a zip file.
@@ -23,8 +24,8 @@ export async function exportSinglePage(
   clone.classList.add("nr-export-page");
   offscreen.appendChild(clone);
 
-  const pageWidth = parseInt(clone.style.width) || 1080;
-  const pageHeight = parseInt(clone.style.height) || 1800;
+  const pageWidth = parseInt(clone.style.width) || PAGE_WIDTH;
+  const pageHeight = parseInt(clone.style.height) || PAGE_HEIGHT;
 
   const blob = await toBlob(clone, {
     width: pageWidth,
@@ -94,8 +95,8 @@ export async function exportPages(
     offscreen.appendChild(page);
 
     // Read actual dimensions from the page's inline style
-    const pageWidth = parseInt(page.style.width) || 1080;
-    const pageHeight = parseInt(page.style.height) || 1800;
+    const pageWidth = parseInt(page.style.width) || PAGE_WIDTH;
+    const pageHeight = parseInt(page.style.height) || PAGE_HEIGHT;
 
     const blob = await toBlob(page, {
       width: pageWidth,

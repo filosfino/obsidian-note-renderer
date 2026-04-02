@@ -1,6 +1,6 @@
 import { Notice, Menu, setIcon } from "obsidian";
 import type { App } from "obsidian";
-import { FIELD_SCHEMAS, EFFECT_SCHEMAS, RENDER_DEFAULTS, COVER_STROKE_STYLE_UI, COVER_SEMANTIC_SCHEMA, isCoverSemanticFieldActive, getFieldSchema } from "./schema";
+import { FIELD_SCHEMAS, EFFECT_SCHEMAS, BODY_EFFECT_NAMES, RENDER_DEFAULTS, COVER_STROKE_STYLE_UI, COVER_SEMANTIC_SCHEMA, getDefaultCoverPaddingX, isCoverSemanticFieldActive, getFieldSchema } from "./schema";
 import { InputModal, ConfirmModal, FontManagerModal } from "./modals";
 import { getCoverFontList, getBodyFontList, type FontEntry } from "./fonts";
 import { deriveCoverStrokePalette, extractThemeColorChoices, extractCoverTitleColor, detectThemeBrightness, type ThemeColorChoice } from "./effects";
@@ -25,6 +25,7 @@ export interface PanelHost {
   handleExportCurrentPage(): Promise<void>;
   handleExport(): Promise<void>;
   applyPreset(name: string): Promise<void>;
+  clearPresetSelection(): Promise<void>;
   handleSaveToNote(): Promise<void>;
   handleRemoveFromNote(): Promise<void>;
   rebuildPresetOptions(): void;
@@ -34,6 +35,7 @@ export interface PanelHost {
 export interface PanelRefs {
   presetSelect: HTMLSelectElement;
   presetLockBtn: HTMLButtonElement;
+  configSourceBadge: HTMLElement;
   themeSelect: HTMLSelectElement;
   modeSelect: HTMLSelectElement;
   modeBtns: { long: HTMLElement; card: HTMLElement };
@@ -42,6 +44,7 @@ export interface PanelRefs {
   coverFontSelect: HTMLSelectElement;
   scaleInput: HTMLInputElement;
   coverOpacityInput: HTMLInputElement;
+  coverMarkStyleBtns: { marker: HTMLElement; block: HTMLElement; underline: HTMLElement };
   lsInput: HTMLInputElement;
   lhInput: HTMLInputElement;
   strokeStyleSelect: HTMLSelectElement;
@@ -71,13 +74,16 @@ export interface PanelRefs {
   bannerParamsRow: HTMLElement;
   shadowParamsRow: HTMLElement;
   alignBtns: { left: HTMLElement; center: HTMLElement; right: HTMLElement };
-  effectChips: Record<string, HTMLElement>;
-  effectParamRows: Record<string, HTMLElement>;
+  coverEffectChips: Record<string, HTMLElement>;
+  coverEffectParamRows: Record<string, HTMLElement>;
+  bodyEffectChips: Record<string, HTMLElement>;
+  bodyEffectParamRows: Record<string, HTMLElement>;
   coverColorInput: HTMLInputElement;
   saveToNoteBtn: HTMLElement;
   removeFromNoteBtn: HTMLElement;
   coverSection: HTMLElement;
   bodySection: HTMLElement;
+  bodyEffectsSection: HTMLElement;
   listStyleBtns: { default: HTMLElement; capsule: HTMLElement };
   previewContainer: HTMLElement;
   pageDisplay: HTMLElement;
@@ -324,6 +330,10 @@ function createCoverParamRow(parent: HTMLElement, label: string, visible: boolea
   return row;
 }
 
+function setHoverHint(element: HTMLElement, hint: string): void {
+  element.title = hint;
+}
+
 function bindBooleanChipToggle(
   host: PanelHost,
   toggle: HTMLElement,
@@ -518,11 +528,10 @@ interface StrokeControlsOptions {
   initialStyle: import("./constants").CoverStrokeStyle;
   themeNameProvider: () => string;
   resolveStrokePalette: () => Promise<import("./effects").CoverStrokePalette>;
-  clearPresetSelection: () => void;
 }
 
 function buildStrokeControls(options: StrokeControlsOptions): StrokeControlsResult {
-  const { host, parent, visible, initialStyle, themeNameProvider, resolveStrokePalette, clearPresetSelection } = options;
+  const { host, parent, visible, initialStyle, themeNameProvider, resolveStrokePalette } = options;
   const row = createCoverParamRow(parent, "描边", visible);
 
   const styleSelect = row.createEl("select", { cls: "dropdown nr-dropdown-narrow" });
@@ -644,34 +653,16 @@ function buildStrokeControls(options: StrokeControlsOptions): StrokeControlsResu
     const newOuterPercent = preset?.doubleStroke?.default ?? FIELD_SCHEMAS.coverDoubleStrokePercent.default;
     await applyStylePreset(style);
     updateUi(style);
-    if (host.editingNoteConfig) {
-      await host.updateNoteConfig("coverStrokeStyle", style);
-      await host.updateNoteConfig("coverStrokePercent", newPercent);
-      if (style === "double") {
-        await host.updateNoteConfig("coverDoubleStrokePercent", newOuterPercent);
-      }
-      if (style === "stroke" || style === "double" || style === "hollow") {
-        await host.updateNoteConfig("coverStrokeColor", "");
-      }
-      if (style === "double") {
-        await host.updateNoteConfig("coverDoubleStrokeColor", "");
-      }
-      await host.refresh();
-    } else {
-      host.plugin.setFallbackRenderValue("coverStrokeStyle", style);
-      host.plugin.setFallbackRenderValue("coverStrokePercent", newPercent);
-      if (style === "double") {
-        host.plugin.setFallbackRenderValue("coverDoubleStrokePercent", newOuterPercent);
-        host.plugin.setFallbackRenderValue("coverDoubleStrokeColor", "");
-      }
-      if (style === "stroke" || style === "double" || style === "hollow") {
-        host.plugin.setFallbackRenderValue("coverStrokeColor", "");
-      }
-      host.plugin.clearActivePreset();
-      clearPresetSelection();
-      await host.plugin.saveSettings();
-      await host.refresh();
+    host.plugin.setFallbackRenderValue("coverStrokeStyle", style);
+    host.plugin.setFallbackRenderValue("coverStrokePercent", newPercent);
+    if (style === "double") {
+      host.plugin.setFallbackRenderValue("coverDoubleStrokePercent", newOuterPercent);
+      host.plugin.setFallbackRenderValue("coverDoubleStrokeColor", "");
     }
+    if (style === "stroke" || style === "double" || style === "hollow") {
+      host.plugin.setFallbackRenderValue("coverStrokeColor", "");
+    }
+    await host.refresh();
   })(); });
 
   updateUi(initialStyle);
@@ -746,9 +737,6 @@ function buildCoverEffectControls(options: CoverEffectControlsOptions): CoverEff
     initialStyle: (strokeEnabled ? host.effective.coverStrokeStyle : host.lastStrokeStyle) as import("./constants").CoverStrokeStyle,
     themeNameProvider,
     resolveStrokePalette,
-    clearPresetSelection: () => {
-      if (presetSelect) presetSelect.value = "";
-    },
   });
 
   const glowControls = buildGlowControls(
@@ -949,6 +937,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   // ── Top bar: 预设 (compact) ──
   const presetBar = contentEl.createDiv("nr-top-bar");
   presetBar.createEl("span", { cls: "nr-row-label", text: "预设" });
+  const configSourceBadge = presetBar.createDiv({ cls: "nr-config-source-badge", text: "默认值" });
   const presetSelect = presetBar.createEl("select", { cls: "dropdown" });
   // Populate preset options directly (refs not yet available, can't call host.rebuildPresetOptions)
   presetSelect.createEl("option", { text: "(无预设)", value: "" });
@@ -971,8 +960,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     if (name) {
       await host.applyPreset(name);
     } else {
-      host.plugin.clearActivePreset();
-      await host.plugin.saveSettings();
+      await host.clearPresetSelection();
     }
     syncPresetLockButton();
     await host.refresh();
@@ -992,7 +980,8 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     await host.refresh();
   })(); });
 
-  const presetSaveBtn = presetBar.createEl("button", { cls: "nr-btn nr-btn-sm nr-btn-text", text: "保存" });
+  const presetActions = presetBar.createDiv("nr-segmented nr-top-actions");
+  const presetSaveBtn = presetActions.createEl("button", { cls: "nr-btn nr-btn-sm nr-btn-text", text: "保存" });
   presetSaveBtn.title = "保存当前配置为预设";
   presetSaveBtn.addEventListener("click", () => {
     new InputModal(host.app, "保存预设", host.plugin.getActivePresetName() || "", (name) => {
@@ -1008,7 +997,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     }).open();
   });
 
-  const presetDelBtn = presetBar.createEl("button", { cls: "nr-btn nr-btn-sm nr-btn-text", text: "删除" });
+  const presetDelBtn = presetActions.createEl("button", { cls: "nr-btn nr-btn-sm nr-btn-text", text: "删除" });
   presetDelBtn.title = "删除当前预设";
   presetDelBtn.addEventListener("click", () => {
     const name = host.plugin.getActivePresetName();
@@ -1025,6 +1014,15 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
       })();
     }).open();
   });
+  const presetApplyBtn = presetActions.createEl("button", { cls: "nr-btn nr-btn-sm nr-btn-text", text: "应用" });
+  presetApplyBtn.title = "将当前选中的预设重新应用到工作态";
+  presetApplyBtn.addEventListener("click", () => { void (async () => {
+    const name = presetSelect.value || host.plugin.getActivePresetName();
+    if (!name) { new Notice("没有选中预设"); return; }
+    await host.applyPreset(name);
+    syncPresetLockButton();
+    await host.refresh();
+  })(); });
   syncPresetLockButton();
 
   // ── Quick bar: 主题 + 模式 ──
@@ -1043,11 +1041,12 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
 
   // Mode toggle buttons (mutually exclusive, pushed right)
   quickBar.createDiv({ cls: "nr-flex-spacer" });
-  const modeBtn35 = quickBar.createEl("button", {
+  const modeGroup = quickBar.createDiv("nr-segmented nr-quick-segmented");
+  const modeBtn35 = modeGroup.createEl("button", {
     cls: `nr-btn nr-btn-sm nr-btn-text${host.effective.pageMode === "long" ? " nr-btn-active" : ""}`,
     text: "3:5",
   });
-  const modeBtn34 = quickBar.createEl("button", {
+  const modeBtn34 = modeGroup.createEl("button", {
     cls: `nr-btn nr-btn-sm nr-btn-text${host.effective.pageMode === "card" ? " nr-btn-active" : ""}`,
     text: "3:4",
   });
@@ -1122,17 +1121,18 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     { key: "right",  title: "右对齐", icon: "align-right" },
   ];
   const alignBtns: Record<string, HTMLElement> = {};
+  const alignGroup = coverHeadControls.createDiv("nr-header-align");
   alignDefs.forEach((def) => {
-    const btn = coverHeadControls.createEl("button", {
-      cls: `nr-btn nr-btn-sm${(host.effective.coverTextAlign ?? "left") === def.key ? " nr-btn-active" : ""}`,
+    const btn = alignGroup.createEl("button", {
+      cls: (host.effective.coverTextAlign ?? "left") === def.key ? "active" : "",
     });
     btn.title = def.title;
     setIcon(btn, def.icon);
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       if (host.syncing) return;
-      Object.values(alignBtns).forEach((b) => b.classList.remove("nr-btn-active"));
-      btn.classList.add("nr-btn-active");
+      Object.values(alignBtns).forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
       void host.updateSetting("coverTextAlign", def.key);
     });
     alignBtns[def.key] = btn;
@@ -1150,14 +1150,46 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
 
   const textEffectRow = coverTextBody.createDiv("nr-row");
   textEffectRow.createEl("span", { cls: "nr-row-label", text: "效果" });
+  setHoverHint(textEffectRow, "影响封面文字的强调方式和文字特效");
   const strokeToggle = textEffectRow.createEl("span", { cls: `nr-chip${strokeEnabled ? " active" : ""}`, text: "描边" });
   const glowToggle = textEffectRow.createEl("span", { cls: `nr-chip${glowEnabled ? " active" : ""}`, text: "发光" });
   const bannerToggle = textEffectRow.createEl("span", { cls: `nr-chip${host.effective.coverBanner ? " active" : ""}`, text: "色带" });
   const shadowToggle = textEffectRow.createEl("span", { cls: `nr-chip${host.effective.coverShadow ? " active" : ""}`, text: "投影" });
+  setHoverHint(strokeToggle, "给封面文字加描边，增强边界和层次");
+  setHoverHint(glowToggle, "给封面文字加发光，适合图片封面或夜景氛围");
+  setHoverHint(bannerToggle, "在文字背后加色带，适合强调一句标题");
+  setHoverHint(shadowToggle, "给文字加投影，提升立体感和可读性");
+
+  textEffectRow.createDiv("nr-flex-spacer");
+  const markStyleGroup = textEffectRow.createDiv("nr-segmented");
+  const markBtnMarker = markStyleGroup.createEl("button", {
+    cls: `nr-btn nr-btn-sm nr-btn-text${(host.effective.coverMarkStyle ?? "marker") === "marker" ? " nr-btn-active" : ""}`,
+    text: "荧光",
+  });
+  const markBtnBlock = markStyleGroup.createEl("button", {
+    cls: `nr-btn nr-btn-sm nr-btn-text${host.effective.coverMarkStyle === "block" ? " nr-btn-active" : ""}`,
+    text: "底块",
+  });
+  const markBtnUnderline = markStyleGroup.createEl("button", {
+    cls: `nr-btn nr-btn-sm nr-btn-text${host.effective.coverMarkStyle === "underline" ? " nr-btn-active" : ""}`,
+    text: "底线",
+  });
+  setHoverHint(markStyleGroup, "影响封面中 <mark> / ==关键词== 的高亮表现");
+  const setCoverMarkStyle = async (style: "marker" | "block" | "underline") => {
+    if (host.syncing) return;
+    markBtnMarker.classList.toggle("nr-btn-active", style === "marker");
+    markBtnBlock.classList.toggle("nr-btn-active", style === "block");
+    markBtnUnderline.classList.toggle("nr-btn-active", style === "underline");
+    await host.updateSetting("coverMarkStyle", style);
+  };
+  markBtnMarker.addEventListener("click", () => { void setCoverMarkStyle("marker"); });
+  markBtnBlock.addEventListener("click", () => { void setCoverMarkStyle("block"); });
+  markBtnUnderline.addEventListener("click", () => { void setCoverMarkStyle("underline"); });
 
   // Combined row: color + weight + spacing + line height
   const styleRow = coverTextBody.createDiv("nr-row");
   styleRow.createEl("span", { cls: "nr-row-label", text: "样式" });
+  setHoverHint(styleRow, "影响封面文字本身的颜色、透明度、字重、字距和行高");
 
   const colorInput = styleRow.createEl("input", { cls: "nr-color-dot", type: "color" });
   // Resolve display color: saved value → theme default → fallback
@@ -1219,6 +1251,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   // Position row
   const posRow = coverTextBody.createDiv("nr-row");
   posRow.createEl("span", { cls: "nr-row-label", text: "位置" });
+  setHoverHint(posRow, "影响封面文字在页面中的偏移和可用宽度");
 
   const oxInput = makeField(host, posRow, "X", String(host.effective.coverOffsetX),
     schemaOpts("coverOffsetX"),
@@ -1228,7 +1261,8 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     schemaOpts("coverOffsetY"),
     (val) => host.updateSetting("coverOffsetY", val));
 
-  const coverPaddingInput = makeField(host, posRow, "边距", String(host.effective.coverPagePaddingX ?? 90),
+  const coverPaddingMode = host.effective.pageMode === "long" ? "long" : "card";
+  const coverPaddingInput = makeField(host, posRow, "边距", String(host.effective.coverPagePaddingX ?? getDefaultCoverPaddingX(coverPaddingMode)),
     schemaOpts("coverPagePaddingX"),
     (val) => host.updateSetting("coverPagePaddingX", val));
 
@@ -1262,17 +1296,22 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   const bannerParamsRow = coverEffectControls.bannerParamsRow;
   const shadowParamsRow = coverEffectControls.shadowParamsRow;
 
-  // ── Section: 效果 (decorative overlays only) ──
+  // ── Section: 封面效果 (decorative overlays only) ──
   const effectSection = coverSection.createDiv("nr-section");
   const effectHead = effectSection.createDiv("nr-section-head");
   effectHead.createEl("span", { cls: "nr-section-chevron", text: "▶" });
-  effectHead.createEl("span", { cls: "nr-section-title", text: "效果" });
-
-  const effectChips = effectHead.createDiv("nr-header-chips");
+  effectHead.createEl("span", { cls: "nr-section-title", text: "封面效果" });
+  setHoverHint(effectHead, "影响封面背景和装饰层，不直接改变文字样式");
 
   const effects = host.effective.coverEffects ?? RENDER_DEFAULTS.coverEffects;
+  const effectBody = effectSection.createDiv("nr-section-body");
+  const effectChipRow = effectBody.createDiv("nr-row");
+  setHoverHint(effectChipRow, "给封面加背景装饰，例如网格、波点、斑驳光影等");
+  const effectChips = effectChipRow.createDiv("nr-inline-tokens");
   const chipToggle = (parent: HTMLElement, label: string, effectName: string, active: boolean) => {
-    const chip = parent.createEl("span", { cls: `nr-chip${active ? " active" : ""}`, text: label });
+    const chip = parent.createEl("span", { cls: `nr-compact-token${active ? " active" : ""}`, text: label });
+    const meta = EFFECT_SCHEMAS[effectName];
+    if (meta?.description) setHoverHint(chip, meta.description);
     chip.addEventListener("click", (e) => {
       e.stopPropagation();
       if (host.syncing) return;
@@ -1287,26 +1326,24 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
 
   // Build effect chips from registry
   let overlayToggle: HTMLElement = null!;
-  const effectChipMap: Record<string, HTMLElement> = {};
+  const coverEffectChipMap: Record<string, HTMLElement> = {};
   for (const [name, meta] of Object.entries(EFFECT_SCHEMAS)) {
     const chip = chipToggle(effectChips, meta.label, name, effects[name]?.enabled ?? false);
-    effectChipMap[name] = chip;
+    coverEffectChipMap[name] = chip;
     if (name === "overlay") overlayToggle = chip;
   }
 
   effectHead.addEventListener("click", () => toggleSection(effectSection));
 
-  // ── Effect section body: opacity sub-params ──
-  const effectBody = effectSection.createDiv("nr-section-body");
-
   // Build effect opacity rows from registry
-  const effectParamRows: Record<string, HTMLElement> = {};
+  const coverEffectParamRows: Record<string, HTMLElement> = {};
   for (const [name, meta] of Object.entries(EFFECT_SCHEMAS)) {
     const params = effects[name];
     const row = effectBody.createDiv("nr-row");
     row.createEl("span", { cls: "nr-row-label", text: meta.label });
+    if (meta.description) setHoverHint(row, meta.description);
     row.classList.toggle("nr-hidden", !params?.enabled);
-    effectParamRows[name] = row;
+    coverEffectParamRows[name] = row;
     makeField(host, row, "强度", String(params?.opacity ?? 50),
       { min: meta.min, max: meta.max, step: 10, unit: "%" },
       (val) => {
@@ -1314,6 +1351,34 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
         const updated = { ...eff, [name]: { ...eff[name], opacity: val } };
         return host.updateSetting("coverEffects", updated);
       });
+    if (meta.defaultMode != null && meta.modeOptions?.length) {
+      const modeSelect = row.createEl("select", { cls: "dropdown nr-dropdown-narrow nr-effect-mode-select" });
+      for (const option of meta.modeOptions) {
+        modeSelect.createEl("option", { value: option.value, text: option.label });
+      }
+      modeSelect.value = params?.mode ?? meta.defaultMode;
+      modeSelect.title = `${meta.label}模式`;
+      modeSelect.addEventListener("change", () => {
+        if (host.syncing) return;
+        const eff = host.effective.coverEffects ?? effects;
+        const updated = { ...eff, [name]: { ...eff[name], mode: modeSelect.value } };
+        void host.updateSetting("coverEffects", updated);
+      });
+    }
+    if (meta.defaultShape != null && meta.shapeOptions?.length) {
+      const shapeSelect = row.createEl("select", { cls: "dropdown nr-dropdown-narrow nr-effect-shape-select" });
+      for (const option of meta.shapeOptions) {
+        shapeSelect.createEl("option", { value: option.value, text: option.label });
+      }
+      shapeSelect.value = params?.shape ?? meta.defaultShape;
+      shapeSelect.title = `${meta.label}形状`;
+      shapeSelect.addEventListener("change", () => {
+        if (host.syncing) return;
+        const eff = host.effective.coverEffects ?? effects;
+        const updated = { ...eff, [name]: { ...eff[name], shape: shapeSelect.value } };
+        void host.updateSetting("coverEffects", updated);
+      });
+    }
     if (meta.defaultCount != null) {
       makeField(host, row, "数量", String(params?.count ?? meta.defaultCount),
         { min: meta.countMin!, max: meta.countMax! },
@@ -1441,11 +1506,12 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   bodyControls.createEl("span", { cls: "nr-size-unit", text: "px" });
 
   // List style toggle buttons
-  const listBtnDefault = bodyControls.createEl("button", {
+  const listGroup = bodyControls.createDiv("nr-segmented");
+  const listBtnDefault = listGroup.createEl("button", {
     cls: `nr-btn nr-btn-sm nr-btn-text${host.effective.listStyle !== "capsule" ? " nr-btn-active" : ""}`,
     text: "列表",
   });
-  const listBtnCapsule = bodyControls.createEl("button", {
+  const listBtnCapsule = listGroup.createEl("button", {
     cls: `nr-btn nr-btn-sm nr-btn-text${host.effective.listStyle === "capsule" ? " nr-btn-active" : ""}`,
     text: "胶囊",
   });
@@ -1457,6 +1523,118 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   };
   listBtnDefault.addEventListener("click", () => { void setListStyle("default"); });
   listBtnCapsule.addEventListener("click", () => { void setListStyle("capsule"); });
+
+  const bodyEffectsWrap = contentEl.createDiv("nr-section");
+  const bodyEffectsHead = bodyEffectsWrap.createDiv("nr-section-head");
+  bodyEffectsHead.createEl("span", { cls: "nr-section-chevron", text: "▶" });
+  bodyEffectsHead.createEl("span", { cls: "nr-section-title", text: "正文效果" });
+  const bodyEffectChipsWrap = bodyEffectsHead.createDiv("nr-header-chips");
+  bodyEffectsHead.addEventListener("click", () => toggleSection(bodyEffectsWrap));
+
+  const bodyEffects = host.effective.bodyEffects ?? RENDER_DEFAULTS.bodyEffects;
+  const bodyEffectChips: Record<string, HTMLElement> = {};
+  const bodyEffectParamRows: Record<string, HTMLElement> = {};
+  for (const name of BODY_EFFECT_NAMES) {
+    const meta = EFFECT_SCHEMAS[name];
+    const chip = bodyEffectChipsWrap.createEl("span", {
+      cls: `nr-chip${bodyEffects[name]?.enabled ? " active" : ""}`,
+      text: meta.label,
+    });
+    chip.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (host.syncing) return;
+      const eff = host.effective.bodyEffects ?? bodyEffects;
+      const current = eff[name];
+      const newEnabled = !(current?.enabled ?? false);
+      chip.classList.toggle("active", newEnabled);
+      const updated = { ...eff, [name]: { ...current, enabled: newEnabled } };
+      void host.updateSetting("bodyEffects", updated);
+    });
+    bodyEffectChips[name] = chip;
+  }
+  const bodyEffectsBody = bodyEffectsWrap.createDiv("nr-section-body");
+  for (const name of BODY_EFFECT_NAMES) {
+    const meta = EFFECT_SCHEMAS[name];
+    const params = bodyEffects[name];
+    const row = bodyEffectsBody.createDiv("nr-row");
+    row.createEl("span", { cls: "nr-row-label", text: meta.label });
+    row.classList.toggle("nr-hidden", !params?.enabled);
+    bodyEffectParamRows[name] = row;
+    makeField(host, row, "强度", String(params?.opacity ?? meta.defaultOpacity),
+      { min: meta.min, max: meta.max, step: 10, unit: "%" },
+      (val) => {
+        const eff = host.effective.bodyEffects ?? bodyEffects;
+        const updated = { ...eff, [name]: { ...eff[name], opacity: val } };
+        return host.updateSetting("bodyEffects", updated);
+      });
+    if (meta.defaultMode != null && meta.modeOptions?.length) {
+      const modeSelect = row.createEl("select", { cls: "dropdown nr-dropdown-narrow nr-effect-mode-select" });
+      for (const option of meta.modeOptions) {
+        modeSelect.createEl("option", { value: option.value, text: option.label });
+      }
+      modeSelect.value = params?.mode ?? meta.defaultMode;
+      modeSelect.title = `${meta.label}模式`;
+      modeSelect.addEventListener("change", () => {
+        if (host.syncing) return;
+        const eff = host.effective.bodyEffects ?? bodyEffects;
+        const updated = { ...eff, [name]: { ...eff[name], mode: modeSelect.value } };
+        void host.updateSetting("bodyEffects", updated);
+      });
+    }
+    if (meta.defaultShape != null && meta.shapeOptions?.length) {
+      const shapeSelect = row.createEl("select", { cls: "dropdown nr-dropdown-narrow nr-effect-shape-select" });
+      for (const option of meta.shapeOptions) {
+        shapeSelect.createEl("option", { value: option.value, text: option.label });
+      }
+      shapeSelect.value = params?.shape ?? meta.defaultShape;
+      shapeSelect.title = `${meta.label}形状`;
+      shapeSelect.addEventListener("change", () => {
+        if (host.syncing) return;
+        const eff = host.effective.bodyEffects ?? bodyEffects;
+        const updated = { ...eff, [name]: { ...eff[name], shape: shapeSelect.value } };
+        void host.updateSetting("bodyEffects", updated);
+      });
+    }
+    if (meta.defaultCount != null) {
+      makeField(host, row, "数量", String(params?.count ?? meta.defaultCount),
+        { min: meta.countMin!, max: meta.countMax! },
+        (val) => {
+          const eff = host.effective.bodyEffects ?? bodyEffects;
+          const updated = { ...eff, [name]: { ...eff[name], count: val } };
+          return host.updateSetting("bodyEffects", updated);
+        });
+    }
+    if (meta.defaultWidth != null) {
+      makeField(host, row, "宽", String(params?.width ?? meta.defaultWidth),
+        { min: meta.widthMin!, max: meta.widthMax!, step: meta.widthStep ?? 1 },
+        (val) => {
+          const eff = host.effective.bodyEffects ?? bodyEffects;
+          const updated = { ...eff, [name]: { ...eff[name], width: val } };
+          return host.updateSetting("bodyEffects", updated);
+        });
+    }
+    if (meta.defaultSpacing != null) {
+      makeField(host, row, "间距", String(params?.spacing ?? meta.defaultSpacing),
+        { min: meta.spacingMin!, max: meta.spacingMax!, step: meta.spacingStep ?? 1, unit: "px" },
+        (val) => {
+          const eff = host.effective.bodyEffects ?? bodyEffects;
+          const updated = { ...eff, [name]: { ...eff[name], spacing: val } };
+          return host.updateSetting("bodyEffects", updated);
+        });
+    }
+    if (meta.defaultSize != null) {
+      makeField(host, row, "点", String(params?.size ?? meta.defaultSize),
+        { min: meta.sizeMin!, max: meta.sizeMax!, step: meta.sizeStep ?? 1, unit: "px" },
+        (val) => {
+          const eff = host.effective.bodyEffects ?? bodyEffects;
+          const updated = { ...eff, [name]: { ...eff[name], size: val } };
+          return host.updateSetting("bodyEffects", updated);
+        });
+    }
+    bodyEffectChips[name]?.addEventListener("click", () => {
+      row.classList.toggle("nr-hidden", !bodyEffectChips[name].classList.contains("active"));
+    });
+  }
 
   // Preview area
   const previewContainer = contentEl.createDiv("nr-preview-area");
@@ -1482,8 +1660,15 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   // Navigation — 3-column layout
   const nav = contentEl.createDiv("nr-nav");
 
-  // Left spacer
-  nav.createDiv("nr-nav-left");
+  // Left: note actions
+  const navLeft = nav.createDiv("nr-nav-left");
+  const saveToNoteBtn = navLeft.createEl("button", { cls: "nr-btn nr-btn-sm nr-btn-text nr-save-note-btn", text: "存入笔记" });
+  saveToNoteBtn.title = "保存当前配置到笔记";
+  saveToNoteBtn.addEventListener("click", () => { void host.handleSaveToNote(); });
+
+  const removeFromNoteBtn = navLeft.createEl("button", { cls: "nr-btn nr-btn-sm nr-btn-text nr-remove-note-btn", text: "移除" });
+  removeFromNoteBtn.title = "移除笔记中的渲染配置";
+  removeFromNoteBtn.addEventListener("click", () => { void host.handleRemoveFromNote(); });
 
   // Center: pagination with single-page export
   const navCenter = nav.createDiv("nr-nav-center");
@@ -1496,18 +1681,8 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   setIcon(nextBtn, "chevron-right");
   nextBtn.addEventListener("click", () => host.goPage(1));
 
-  // Right: actions + export
+  // Right: export
   const navRight = nav.createDiv("nr-nav-right");
-
-  const saveToNoteBtn = navRight.createEl("button", { cls: "nr-btn nr-btn-sm nr-btn-text nr-save-note-btn", text: "存入笔记" });
-  saveToNoteBtn.title = "保存当前配置到笔记";
-  saveToNoteBtn.addEventListener("click", () => { void host.handleSaveToNote(); });
-
-  const removeFromNoteBtn = navRight.createEl("button", { cls: "nr-btn nr-btn-sm nr-btn-text nr-remove-note-btn", text: "移除" });
-  removeFromNoteBtn.title = "移除笔记中的渲染配置";
-  removeFromNoteBtn.addEventListener("click", () => { void host.handleRemoveFromNote(); });
-
-  navRight.createDiv({ cls: "nr-nav-separator" });
 
   const exportBtn = navRight.createEl("button", { cls: "nr-nav-btn" });
   exportBtn.title = "导出全部 zip";
@@ -1517,6 +1692,7 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   return {
     presetSelect,
     presetLockBtn,
+    configSourceBadge,
     themeSelect,
     modeSelect,
     modeBtns: { long: modeBtn35, card: modeBtn34 },
@@ -1525,6 +1701,11 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     coverFontSelect,
     scaleInput,
     coverOpacityInput,
+    coverMarkStyleBtns: {
+      marker: markBtnMarker,
+      block: markBtnBlock,
+      underline: markBtnUnderline,
+    },
     lsInput,
     lhInput,
     strokeStyleSelect,
@@ -1554,13 +1735,16 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     bannerParamsRow,
     shadowParamsRow,
     alignBtns: alignBtns as { left: HTMLElement; center: HTMLElement; right: HTMLElement },
-    effectChips: effectChipMap,
-    effectParamRows,
+    coverEffectChips: coverEffectChipMap,
+    coverEffectParamRows,
+    bodyEffectChips,
+    bodyEffectParamRows,
     coverColorInput: colorInput,
     saveToNoteBtn,
     removeFromNoteBtn,
     coverSection,
     bodySection,
+    bodyEffectsSection: bodyEffectsWrap,
     listStyleBtns: { default: listBtnDefault, capsule: listBtnCapsule },
     previewContainer,
     pageDisplay,

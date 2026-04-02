@@ -3,12 +3,16 @@
 ## 已完成
 
 - `renderer_config` 默认写回 frontmatter，统一落盘为 grouped schema，并自动补 `rendererConfigVersion`
+- 纯 preset 引用的 note 现在可只保存 `renderer_config.presetName`；存在 note override 时才落 grouped schema
 - frontmatter YAML 损坏时，写回会安全跳过，避免误删原 metadata
 - parser 会忽略 fenced code block 里的 `## ...`，正文示例不再误切分章节
 - 图片解析带当前 note 路径上下文，重名附件优先按 source note 解析
 - headless 导出缩放改为插件内置 blob/canvas 路径，不再依赖 `sips`
 - `preview-view.ts` 已拆出 note session / UI sync / export helper 这几层，主要流程不再全部挤在单个大函数里
 - preset / fallback / default 的读取已在 `main.ts` 和 `preview-view.ts` 里做了一轮类型化收口
+- 页面基准尺寸已改为 `card 600×800 / long 720×1200`，最终导出尺寸为 `1200×1600 / 1440×2400`
+- 页面主 padding 和正文结构 spacing 已按页面比例 / 页面变量收口，不再依赖旧尺寸固定 px
+- schema 约束已按新尺寸收紧：正文 `fontSize` 为 `22-30px`
 - browser cover playground 已落地：左侧 markdown，右侧复用真实 toolbar + preview，可直接在浏览器里调封面
 - `==高亮==` 语法已支持，渲染为 `<mark>` 并带正文荧光标注样式
 

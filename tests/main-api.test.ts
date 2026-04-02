@@ -242,7 +242,7 @@ describe("preset locking", () => {
     });
 
     plugin.togglePresetLock("基础预设");
-    plugin.setFallbackRenderValue("fontSize", 88);
+    plugin.setFallbackRenderValue("fontSize", 30);
 
     expect(plugin.savePreset("基础预设")).toBe(false);
     expect(plugin.getPresetEntry("基础预设")?.values.fontSize).toBe(RENDER_DEFAULTS.fontSize);
@@ -253,7 +253,7 @@ describe("preset locking", () => {
     seedPluginState(plugin, {
       presets: {
         示例: {
-          values: { fontSize: 42 },
+          values: { fontSize: 28 },
           locked: true,
         },
       },
@@ -271,12 +271,12 @@ describe("preset locking", () => {
     seedPluginState(plugin, {
       activePreset: "示例",
       fallback: {
-        fontSize: 88,
+        fontSize: 30,
         activeTheme: "mist",
       },
       presets: {
         示例: {
-          values: { fontSize: 42 },
+          values: { fontSize: 28 },
           locked: true,
         },
       },
@@ -292,7 +292,7 @@ describe("preset locking", () => {
       activePreset: "示例",
       presets: {
         示例: {
-          values: { fontSize: 42 },
+          values: { fontSize: 28 },
           locked: true,
         },
       },
@@ -307,26 +307,26 @@ describe("preset locking", () => {
     seedPluginState(plugin, {
       activePreset: "示例",
       fallback: {
-        fontSize: 42,
+        fontSize: 28,
       },
       presets: {
         示例: {
-          values: { fontSize: 42 },
+          values: { fontSize: 28 },
           locked: false,
         },
       },
       customFonts: [{ label: "Test", value: "\"Test\", sans-serif" }],
     });
 
-    expect(plugin.getFallbackRenderConfig().fontSize).toBe(42);
+    expect(plugin.getFallbackRenderConfig().fontSize).toBe(28);
     expect(plugin.getActivePresetName()).toBe("示例");
     expect(plugin.getCustomFonts()).toEqual([{ label: "Test", value: "\"Test\", sans-serif" }]);
 
-    plugin.setFallbackRenderValue("fontSize", 88);
+    plugin.setFallbackRenderValue("fontSize", 30);
 
-    expect(plugin.getFallbackRenderConfig().fontSize).toBe(88);
+    expect(plugin.getFallbackRenderConfig().fontSize).toBe(30);
     expect(plugin.getActivePresetName()).toBe("示例");
-    expect(plugin.getPresetEntry("示例")?.values.fontSize).toBe(42);
+    expect(plugin.getPresetEntry("示例")?.values.fontSize).toBe(28);
   });
 
   it("does not let activePreset override fallback render config when loading settings", async () => {
@@ -351,7 +351,7 @@ describe("preset locking", () => {
         "Daily Challenge": {
           values: {
             activeTheme: "mist",
-            fontSize: 40,
+            fontSize: 28,
             pageMode: "card",
           },
           locked: false,

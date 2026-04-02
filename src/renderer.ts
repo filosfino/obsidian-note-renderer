@@ -1,6 +1,6 @@
 import { App, Component, sanitizeHTMLToDom } from "obsidian";
-import { PAGE_WIDTH, PAGE_PADDING_H, PAGE_PADDING_TOP, PAGE_PADDING_BOTTOM, PAGE_HEIGHTS, getContentHeight, type PageMode } from "./constants";
-import { applyCoverEffects, deriveCoverStrokePalette, detectThemeBrightness } from "./effects";
+import { PAGE_HEIGHTS, getContentHeight, getPagePaddingBottom, getPagePaddingH, getPagePaddingTop, getPageWidth, type PageMode } from "./constants";
+import { applyPageEffects, deriveCoverStrokePalette, detectThemeBrightness, extractThemeColorValues } from "./effects";
 import { paginateBody } from "./paginator";
 import { parseNoteStructure } from "./parser";
 import { renderMarkdownToHtml, createVaultImageResolver } from "./md-to-html";
@@ -38,10 +38,27 @@ export async function renderNote(
   const cleanups: (() => void)[] = [];
   const resolveImage = createVaultImageResolver(app);
   const pageMode = options.pageMode as PageMode;
+  const pageWidth = getPageWidth(pageMode);
   const pageHeight = PAGE_HEIGHTS[pageMode];
+  const pagePaddingH = getPagePaddingH(pageMode);
+  const pagePaddingTop = getPagePaddingTop(pageMode);
+  const pagePaddingBottom = getPagePaddingBottom(pageMode);
+  const pageRadius = Math.max(8, Math.round(pageWidth * 16 / 1200));
+  const blockRadius = Math.max(4, Math.round(pageWidth * 8 / 1200));
+  const quoteBorderWidth = Math.max(3, Math.round(pageWidth * 6 / 1200));
+  const quotePaddingY = Math.max(4, Math.round(pageHeight * 8 / 1600));
+  const quotePaddingLeft = Math.max(12, Math.round(pageWidth * 24 / 1200));
+  const quoteMarginY = Math.max(8, Math.round(pageHeight * 20 / 1600));
+  const listIndent = Math.max(20, Math.round(pageWidth * 40 / 1200));
+  const listMarginBottom = Math.max(12, Math.round(pageHeight * 24 / 1600));
+  const listItemMarginBottom = Math.max(4, Math.round(pageHeight * 8 / 1600));
+  const inlineCodePaddingY = Math.max(1, Math.round(pageHeight * 2 / 1600));
+  const inlineCodePaddingX = Math.max(4, Math.round(pageWidth * 8 / 1200));
+  const blockPadding = Math.max(12, Math.round(pageWidth * 24 / 1200));
+  const blockMarginY = Math.max(8, Math.round(pageHeight * 16 / 1600));
   const contentHeight = getContentHeight(pageMode);
   const cover = buildCoverConfig(options);
-  const coverHorizontalPadding = Math.max(0, Math.min(PAGE_WIDTH / 2, cover.position.paddingX));
+  const coverHorizontalPadding = Math.max(0, Math.min(pageWidth / 2, cover.position.paddingX));
 
   const coverFont = cover.typography.fontFamily;
   const coverColor = cover.typography.color;
@@ -79,14 +96,27 @@ ${coverColorCss}
 `;
   const pageCss = `
 .nr-page {
-  width: ${PAGE_WIDTH}px;
+  width: ${pageWidth}px;
+  --nr-page-radius: ${pageRadius}px;
+  --nr-block-radius: ${blockRadius}px;
+  --nr-quote-border-width: ${quoteBorderWidth}px;
+  --nr-quote-padding-y: ${quotePaddingY}px;
+  --nr-quote-padding-left: ${quotePaddingLeft}px;
+  --nr-quote-margin-y: ${quoteMarginY}px;
+  --nr-list-indent: ${listIndent}px;
+  --nr-list-margin-bottom: ${listMarginBottom}px;
+  --nr-list-item-margin-bottom: ${listItemMarginBottom}px;
+  --nr-inline-code-padding-y: ${inlineCodePaddingY}px;
+  --nr-inline-code-padding-x: ${inlineCodePaddingX}px;
+  --nr-block-padding: ${blockPadding}px;
+  --nr-block-margin-y: ${blockMarginY}px;
   box-sizing: border-box;
   overflow: hidden;
   position: relative;
 }
 .nr-page-cover, .nr-page-body {
   height: ${pageHeight}px;
-  padding: ${PAGE_PADDING_TOP}px ${PAGE_PADDING_H}px ${PAGE_PADDING_BOTTOM}px;
+  padding: ${pagePaddingTop}px ${pagePaddingH}px ${pagePaddingBottom}px;
 }
 .nr-page-cover {
   padding-left: ${coverHorizontalPadding}px;
@@ -95,6 +125,8 @@ ${coverColorCss}
 .nr-page-body .nr-page-content {
   height: ${contentHeight}px;
   overflow: hidden;
+  position: relative;
+  z-index: 2;
 }
 .nr-page-content mark {
   background: linear-gradient(to top, rgba(255, 232, 102, 0.75) 55%, transparent 55%);
@@ -111,7 +143,7 @@ ${coverColorCss}
   top: 0; left: 0;
   width: 100%; height: 100%;
   object-fit: cover;
-  border-radius: 16px;
+  border-radius: var(--nr-page-radius);
   z-index: 0;
 }
 .nr-page-cover .nr-cover-content {
@@ -119,7 +151,7 @@ ${coverColorCss}
   z-index: 3;
 }
 .nr-cover-has-image .nr-cover-content {
-  padding: ${PAGE_PADDING_TOP}px ${coverHorizontalPadding}px ${PAGE_PADDING_BOTTOM}px;
+  padding: ${pagePaddingTop}px ${coverHorizontalPadding}px ${pagePaddingBottom}px;
 }
 .nr-cover-has-image { padding: 0; }
 .nr-full-page-img {
@@ -151,34 +183,39 @@ ${coverColorCss}
 .nr-page-content li {
   background: ${bg};
   border: 1px solid ${border};
-  border-radius: 16px;
-  padding: 20px 28px;
-  margin-bottom: 16px;
+  border-radius: var(--nr-page-radius);
+  padding: ${Math.max(10, Math.round(pageHeight * 20 / 1600))}px ${Math.max(14, Math.round(pageWidth * 28 / 1200))}px;
+  margin-bottom: var(--nr-block-margin-y);
 }
 `;
   })() : "";
-  const fullCss = themeCss + fontOverrideCss + capsuleCss + pageCss;
-
   const pages: HTMLElement[] = [];
 
   // --- Cover page ---
   const strokePercent = cover.stroke.inner.widthPercent / 100;
   const coverImageSrc = extractCoverImageSrc(structure.coverImageMarkdown, resolveImage, sourcePath);
   const hasCoverImage = coverImageSrc !== null;
+  const themeHighlight = extractThemeColorValues(themeCss, themeName).highlight;
+  const coverMarkCss = `
+.nr-page-cover .nr-cover-content mark {
+  ${buildCoverMarkCss(options, coverColor || themeTitleColor, themeHighlight, themeName, hasCoverImage)}
+}
+`;
+  const fullCss = themeCss + fontOverrideCss + capsuleCss + pageCss + coverMarkCss;
   const coverTextOpts: CoverTextOptions = {
     strokePercent,
     fontScale: cover.typography.scale,
     letterSpacing: cover.typography.letterSpacing,
     lineHeight: cover.typography.lineHeight,
-    availableWidth: Math.max(240, PAGE_WIDTH - coverHorizontalPadding * 2),
+    availableWidth: Math.max(240, pageWidth - coverHorizontalPadding * 2),
     fontFamily: coverFont,
     fontWeight: cover.typography.weight,
   };
   let coverPage: HTMLElement;
   if (structure.coverMarkdown) {
-    coverPage = buildRichCoverPage(structure.coverMarkdown, fullCss, resolveImage, sourcePath, pageHeight, coverTextOpts);
+    coverPage = buildRichCoverPage(structure.coverMarkdown, fullCss, resolveImage, sourcePath, pageWidth, pageHeight, coverTextOpts);
   } else {
-    coverPage = buildTitleCoverPage(structure.title, fullCss, pageHeight, coverTextOpts);
+    coverPage = buildTitleCoverPage(structure.title, fullCss, pageWidth, pageHeight, coverTextOpts);
   }
 
   // Apply effects to cover text (works with or without cover image)
@@ -294,7 +331,7 @@ ${coverColorCss}
 
   // ── Decorative cover effects ──
   if (options.coverEffects) {
-    applyCoverEffects(coverPage, options.coverEffects, themeCss, pageHeight);
+    applyPageEffects(coverPage, options.coverEffects, themeCss, pageMode, pageHeight);
   }
 
   // Apply cover text offset — shift child elements, not the container (which has the gradient overlay)
@@ -303,7 +340,7 @@ ${coverColorCss}
   if (offsetX !== 0 || offsetY !== 0) {
     const coverContent = coverPage.querySelector(".nr-cover-content") as HTMLElement;
     if (coverContent) {
-      const pxX = Math.round(PAGE_WIDTH * offsetX / 100);
+      const pxX = Math.round(pageWidth * offsetX / 100);
       const pxY = Math.round(pageHeight * offsetY / 100);
       for (const child of Array.from(coverContent.children)) {
         const el = child as HTMLElement;
@@ -322,8 +359,12 @@ ${coverColorCss}
       resolveImage,
       sourcePath,
       cleanups,
+      pageMode,
+      pageWidth,
       pageHeight,
-      contentHeight
+      contentHeight,
+      themeCss,
+      options.bodyEffects,
     );
     pages.push(...bodyPages);
   }
@@ -335,8 +376,8 @@ ${coverColorCss}
   };
 }
 
-function buildTitleCoverPage(title: string, css: string, pageHeight: number, coverTextOpts: CoverTextOptions): HTMLElement {
-  const pageDiv = createPageDiv("nr-page-cover", css, pageHeight);
+function buildTitleCoverPage(title: string, css: string, pageWidth: number, pageHeight: number, coverTextOpts: CoverTextOptions): HTMLElement {
+  const pageDiv = createPageDiv("nr-page-cover", css, pageWidth, pageHeight);
 
   const content = document.createElement("div");
   content.classList.add("nr-cover-content");
@@ -355,10 +396,11 @@ function buildRichCoverPage(
   css: string,
   resolveImage: (name: string, sourcePath?: string) => string,
   sourcePath: string,
+  pageWidth: number,
   pageHeight: number,
   coverTextOpts: CoverTextOptions
 ): HTMLElement {
-  const pageDiv = createPageDiv("nr-page-cover", css, pageHeight);
+  const pageDiv = createPageDiv("nr-page-cover", css, pageWidth, pageHeight);
 
   const content = document.createElement("div");
   content.classList.add("nr-cover-content");
@@ -567,11 +609,11 @@ function approximateCoverTextWidth(text: string, fontSize: number): number {
   return width;
 }
 
-function createPageDiv(extraClass: string, css: string, pageHeight: number): HTMLElement {
+function createPageDiv(extraClass: string, css: string, pageWidth: number, pageHeight: number): HTMLElement {
   const pageDiv = document.createElement("div");
   pageDiv.classList.add("nr-page", extraClass);
   pageDiv.setCssStyles({
-    width: `${PAGE_WIDTH}px`,
+    width: `${pageWidth}px`,
     height: `${pageHeight}px`,
     position: "relative",
     overflow: "hidden",
@@ -590,8 +632,12 @@ async function renderBodyPages(
   resolveImage: (name: string, sourcePath?: string) => string,
   sourcePath: string,
   cleanups: (() => void)[],
+  pageMode: PageMode,
+  pageWidth: number,
   pageHeight: number,
-  contentHeight: number
+  contentHeight: number,
+  themeCss: string,
+  bodyEffects: RenderOptions["bodyEffects"],
 ): Promise<HTMLElement[]> {
   // Render markdown to HTML using shared engine
   const bodyHtml = renderMarkdownToHtml(bodyMarkdown, (name) => resolveImage(name, sourcePath));
@@ -600,7 +646,7 @@ async function renderBodyPages(
   const measurer = document.createElement("div");
   measurer.classList.add("nr-measurer", "nr-offscreen");
   measurer.setCssStyles({
-    width: `${PAGE_WIDTH}px`,
+    width: `${pageWidth}px`,
     boxSizing: "border-box",
   });
   document.body.appendChild(measurer);
@@ -634,7 +680,7 @@ async function renderBodyPages(
 
     if (page.isFullPage) {
       pageDiv.classList.add("nr-page", "nr-page-full");
-      pageDiv.style.width = `${PAGE_WIDTH}px`;
+      pageDiv.style.width = `${pageWidth}px`;
       pageDiv.style.height = `${pageHeight}px`;
 
       // eslint-disable-next-line obsidianmd/no-forbidden-elements -- Full-page exports are rendered offscreen and need embedded CSS for html-to-image.
@@ -652,7 +698,7 @@ async function renderBodyPages(
       }
     } else {
       pageDiv.classList.add("nr-page", "nr-page-body");
-      pageDiv.style.width = `${PAGE_WIDTH}px`;
+      pageDiv.style.width = `${pageWidth}px`;
       pageDiv.style.height = `${pageHeight}px`;
 
       // eslint-disable-next-line obsidianmd/no-forbidden-elements -- Body-page exports are rendered offscreen and need embedded CSS for html-to-image.
@@ -666,6 +712,9 @@ async function renderBodyPages(
       }
 
       pageDiv.appendChild(pageContent);
+      if (bodyEffects) {
+        applyPageEffects(pageDiv, bodyEffects, themeCss, pageMode, pageHeight);
+      }
     }
     return pageDiv;
   });
@@ -698,6 +747,70 @@ function waitForImages(container: HTMLElement): Promise<void> {
 function waitForFonts(): Promise<void> {
   if (!("fonts" in document)) return Promise.resolve();
   return (document as Document & { fonts?: FontFaceSet }).fonts?.ready.then(() => {}) ?? Promise.resolve();
+}
+
+function buildCoverMarkCss(
+  options: RenderOptions,
+  accentColor: string,
+  highlightColor: string | undefined,
+  themeName: string,
+  hasCoverImage: boolean,
+): string {
+  const style = options.coverMarkStyle ?? "marker";
+  const baseFill = hasCoverImage
+    ? "rgba(255,255,255,0.34)"
+    : (highlightColor || withAlpha(accentColor, 26));
+  const fill = style === "block"
+    ? boostAlpha(baseFill, 1.55, 0.78)
+    : style === "underline"
+      ? boostAlpha(baseFill, 1.35, 0.64)
+      : boostAlpha(baseFill, 1.18, 0.52);
+
+  switch (style) {
+    case "none":
+      return "background: none; padding: 0; border-radius: 0; box-shadow: none; color: inherit;";
+    case "underline":
+      return `background: none; color: inherit; padding: 0 0.08em; border-radius: 0; box-shadow: inset 0 -0.18em 0 ${fill};`;
+    case "block":
+      return buildCoverMarkBlockCss(fill, themeName, hasCoverImage);
+    case "marker":
+    default:
+      return `background: linear-gradient(to top, ${fill} 38%, transparent 38%); color: inherit; padding: 0 0.1em; border-radius: 0.12em; box-decoration-break: clone; -webkit-box-decoration-break: clone;`;
+  }
+}
+
+function buildCoverMarkBlockCss(fill: string, themeName: string, hasCoverImage: boolean): string {
+  if (hasCoverImage) {
+    return `background: ${fill}; color: inherit; padding: 0.05em 0.18em 0.08em; border-radius: 0.16em; box-decoration-break: clone; -webkit-box-decoration-break: clone;`;
+  }
+
+  switch (themeName) {
+    case "paper":
+    case "graphite":
+      return `background: ${fill}; color: inherit; padding: 0.03em 0.16em 0.07em; border-radius: 0.12em; box-shadow: 0 0.02em 0 rgba(0,0,0,0.10); box-decoration-break: clone; -webkit-box-decoration-break: clone;`;
+    case "cream":
+    case "latte":
+    case "amber":
+    case "rose":
+      return `background: ${fill}; color: inherit; padding: 0.05em 0.2em 0.09em; border-radius: 0.2em; box-shadow: 0 0.06em 0 rgba(0,0,0,0.08); box-decoration-break: clone; -webkit-box-decoration-break: clone;`;
+    case "mist":
+    case "sage":
+    case "ink-gold":
+      return `background: ${fill}; color: inherit; padding: 0.04em 0.18em 0.08em; border-radius: 0.22em; box-shadow: 0 0.03em 0 rgba(255,255,255,0.10) inset; box-decoration-break: clone; -webkit-box-decoration-break: clone;`;
+    default:
+      return `background: ${fill}; color: inherit; padding: 0.04em 0.18em 0.08em; border-radius: 0.16em; box-decoration-break: clone; -webkit-box-decoration-break: clone;`;
+  }
+}
+
+function boostAlpha(color: string, factor: number, maxAlpha: number): string {
+  const rgbMatch = color.match(/^rgba?\(([^)]+)\)$/i);
+  if (!rgbMatch) return color;
+
+  const parts = rgbMatch[1].split(",").map((part) => part.trim());
+  if (parts.length < 3) return color;
+  const alpha = parts.length >= 4 ? parseFloat(parts[3]) : 1;
+  const nextAlpha = Math.max(0, Math.min(maxAlpha, alpha * factor));
+  return `rgba(${parts[0]},${parts[1]},${parts[2]},${nextAlpha})`;
 }
 
 function withAlpha(color: string, opacityPercent: number): string {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { Component } from "obsidian";
 import { renderNote } from "../src/renderer";
 import { RENDER_DEFAULTS } from "../src/schema";
+import { PAGE_HEIGHTS, getPageWidth } from "../src/constants";
 
 function extractUnderlineStrokeWidth(backgroundImage: string): number {
   const decoded = decodeURIComponent(backgroundImage);
@@ -270,7 +271,7 @@ describe("renderNote", () => {
     );
 
     const inlineStyle = rendered.pages[0].querySelector("style")?.textContent || "";
-    expect(inlineStyle).toContain(".nr-page-cover {\n  padding-left: 90px;\n  padding-right: 90px;\n}");
+    expect(inlineStyle).toContain(".nr-page-cover {\n  padding-left: 40px;\n  padding-right: 40px;\n}");
 
     rendered.cleanup();
   });
@@ -726,7 +727,7 @@ describe("renderNote", () => {
     const hasOutsideNode = circles.some((circle) => {
       const cx = Number(circle.getAttribute("cx"));
       const cy = Number(circle.getAttribute("cy"));
-      return cx < 0 || cx > 810 || cy < 0 || cy > 1080;
+      return cx < 0 || cx > getPageWidth("card") || cy < 0 || cy > PAGE_HEIGHTS.card;
     });
 
     expect(hasOutsideNode).toBe(true);
@@ -804,8 +805,14 @@ describe("renderNote", () => {
       },
     );
 
-    const overlayStyle = rendered.pages[0].querySelector(".nr-effect-overlay")?.getAttribute("style") || "";
-    expect(overlayStyle).toContain("transparent 84px");
+    const lines = Array.from(rendered.pages[0].querySelectorAll(".nr-effect-overlay line"));
+    const verticalLines = lines.filter((line) => line.getAttribute("x1") === line.getAttribute("x2"));
+    const horizontalLines = lines.filter((line) => line.getAttribute("y1") === line.getAttribute("y2"));
+
+    expect(verticalLines[0]?.getAttribute("x1")).toBe("6");
+    expect(verticalLines[1]?.getAttribute("x1")).toBe("90");
+    expect(horizontalLines[0]?.getAttribute("y1")).toBe("22");
+    expect(horizontalLines[1]?.getAttribute("y1")).toBe("106");
 
     rendered.cleanup();
   });

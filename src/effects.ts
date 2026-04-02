@@ -9,7 +9,8 @@
  * 4. Add UI metadata to EFFECT_META in schema.ts
  */
 
-import { PAGE_WIDTH } from "./constants";
+import { getPageWidth, type PageMode } from "./constants";
+import { DAPPLED_SHAPES } from "./dappled-shapes";
 import type { EffectParams } from "./schema";
 import { detectThemeBrightness } from "./theme-colors";
 export {
@@ -226,12 +227,222 @@ function renderDots(container: HTMLElement, params: EffectParams, ctx: EffectCon
 function renderGrid(container: HTMLElement, params: EffectParams, ctx: EffectContext): void {
   const op = params.opacity / 100;
   const spacing = params.spacing ?? 60;
-  const lineColor = ctx.effectColor + "0.3)";
+  const lineColor = ctx.isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.3)";
+  const lineWidth = 1;
+  const remainderX = ctx.pageWidth % spacing;
+  const remainderY = ctx.pageHeight % spacing;
+  const offsetX = Math.round(remainderX / 2);
+  const offsetY = Math.round(remainderY / 2);
+
   const el = createOverlay({
     opacity: String(op),
-    backgroundImage: `repeating-linear-gradient(0deg,${lineColor} 0px,${lineColor} 1px,transparent 1px,transparent ${spacing}px),repeating-linear-gradient(90deg,${lineColor} 0px,${lineColor} 1px,transparent 1px,transparent ${spacing}px)`,
   });
+
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("width", String(ctx.pageWidth));
+  svg.setAttribute("height", String(ctx.pageHeight));
+  svg.setAttribute("viewBox", `0 0 ${ctx.pageWidth} ${ctx.pageHeight}`);
+  svg.setAttribute("preserveAspectRatio", "none");
+
+  for (let x = offsetX; x <= ctx.pageWidth; x += spacing) {
+    const line = document.createElementNS(NS, "line");
+    line.setAttribute("x1", String(x));
+    line.setAttribute("y1", "0");
+    line.setAttribute("x2", String(x));
+    line.setAttribute("y2", String(ctx.pageHeight));
+    line.setAttribute("stroke", lineColor);
+    line.setAttribute("stroke-width", String(lineWidth));
+    line.setAttribute("shape-rendering", "crispEdges");
+    svg.appendChild(line);
+  }
+
+  for (let y = offsetY; y <= ctx.pageHeight; y += spacing) {
+    const line = document.createElementNS(NS, "line");
+    line.setAttribute("x1", "0");
+    line.setAttribute("y1", String(y));
+    line.setAttribute("x2", String(ctx.pageWidth));
+    line.setAttribute("y2", String(y));
+    line.setAttribute("stroke", lineColor);
+    line.setAttribute("stroke-width", String(lineWidth));
+    line.setAttribute("shape-rendering", "crispEdges");
+    svg.appendChild(line);
+  }
+
+  el.appendChild(svg);
   container.appendChild(el);
+}
+
+function renderDappledLight(container: HTMLElement, params: EffectParams, ctx: EffectContext): void {
+  const op = params.opacity / 100;
+  const mode = params.mode ?? "sunny";
+  const shape = params.shape ?? "broad";
+  const isBodyPage = container.classList.contains("nr-page-body");
+  const palettes = {
+    sunny: {
+      ambient: "rgba(255,239,196,0.44)",
+      beam: "rgba(255,219,143,0.82)",
+      beamEdge: "rgba(222,170,94,0.40)",
+      blinds: "rgba(156,121,69,0.22)",
+      leaf: "rgba(255,247,215,0.94)",
+      silhouette: "rgba(168,132,76,0.30)",
+      blend: ctx.isDark ? "screen" : "normal",
+    },
+    rainy: {
+      ambient: "rgba(213,225,239,0.34)",
+      beam: "rgba(186,205,231,0.52)",
+      beamEdge: "rgba(126,151,182,0.30)",
+      blinds: "rgba(99,116,140,0.18)",
+      leaf: "rgba(232,240,250,0.72)",
+      silhouette: "rgba(94,116,146,0.24)",
+      blend: ctx.isDark ? "screen" : "normal",
+    },
+    moonlight: {
+      ambient: "rgba(181,199,233,0.26)",
+      beam: "rgba(198,218,248,0.42)",
+      beamEdge: "rgba(132,159,206,0.28)",
+      blinds: "rgba(73,91,132,0.20)",
+      leaf: "rgba(231,240,255,0.62)",
+      silhouette: "rgba(78,98,144,0.22)",
+      blend: ctx.isDark ? "screen" : "normal",
+    },
+  } as const;
+  const palette = palettes[mode as keyof typeof palettes] ?? palettes.sunny;
+  const opacityScale = isBodyPage ? 0.82 : 1;
+  const blurScale = isBodyPage ? 1.15 : 1;
+  const shapeBoost = shape === "palm" ? 1.24 : shape === "branch" ? 1.14 : 1;
+
+  const overlay = createOverlay({
+    opacity: String(Math.min(1, op * opacityScale)),
+    mixBlendMode: palette.blend,
+    overflow: "hidden",
+  });
+
+  const ambient = document.createElement("div");
+  ambient.setCssStyles({
+    position: "absolute",
+    inset: "0",
+    background: isBodyPage
+      ? `radial-gradient(circle at 18% 10%, ${palette.ambient} 0%, transparent 34%)`
+      : `radial-gradient(circle at 14% 8%, ${palette.ambient} 0%, transparent 42%)`,
+  });
+  overlay.appendChild(ambient);
+
+  const blinds = document.createElement("div");
+  blinds.setCssStyles({
+    position: "absolute",
+    inset: isBodyPage ? "-6%" : "-10%",
+    transform: "rotate(-15deg) scale(1.04)",
+    transformOrigin: "top left",
+    backgroundImage: `repeating-linear-gradient(
+      90deg,
+      ${palette.blinds} 0px,
+      ${palette.blinds} ${isBodyPage ? 18 : 24}px,
+      transparent ${isBodyPage ? 18 : 24}px,
+      transparent ${isBodyPage ? 86 : 98}px
+    )`,
+    filter: `blur(${(isBodyPage ? 10 : 8) * blurScale}px)`,
+    opacity: isBodyPage ? "0.34" : mode === "sunny" ? "0.58" : "0.46",
+  });
+  overlay.appendChild(blinds);
+
+  const beam = document.createElement("div");
+  beam.setCssStyles({
+    position: "absolute",
+    width: isBodyPage ? "66%" : "82%",
+    height: isBodyPage ? "38%" : "56%",
+    left: isBodyPage ? "4%" : "-4%",
+    top: isBodyPage ? "-2%" : "-5%",
+    transform: "rotate(-15deg)",
+    transformOrigin: "top left",
+    background: `linear-gradient(92deg,
+      transparent 0%,
+      ${palette.beamEdge} 10%,
+      ${palette.beam} 20%,
+      ${palette.beam} 34%,
+      ${palette.beamEdge} 45%,
+      transparent 64%
+    )`,
+    filter: `blur(${(mode === "sunny" ? 34 : 28) * blurScale}px)`,
+    opacity: isBodyPage ? (mode === "sunny" ? "0.34" : "0.26") : mode === "sunny" ? "0.74" : "0.54",
+  });
+  overlay.appendChild(beam);
+
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("width", String(ctx.pageWidth));
+  svg.setAttribute("height", String(ctx.pageHeight));
+  svg.setAttribute("viewBox", `0 0 ${ctx.pageWidth} ${ctx.pageHeight}`);
+  svg.setAttribute("preserveAspectRatio", "none");
+  svg.setAttribute("aria-hidden", "true");
+  svg.style.position = "absolute";
+  svg.style.inset = "0";
+  svg.style.overflow = "visible";
+  svg.style.filter = `blur(${(mode === "sunny" ? 6 : 8) * blurScale}px)`;
+  svg.style.opacity = isBodyPage
+    ? String((mode === "sunny" ? 0.52 : mode === "rainy" ? 0.42 : 0.36) * shapeBoost)
+    : String((mode === "sunny" ? 0.92 : mode === "rainy" ? 0.7 : 0.62) * shapeBoost);
+
+  const defs = document.createElementNS(NS, "defs");
+  const leafGradient = document.createElementNS(NS, "linearGradient");
+  const gradientId = `nr-dappled-${mode}-${ctx.pageWidth}-${ctx.pageHeight}-${isBodyPage ? "body" : "cover"}`;
+  leafGradient.setAttribute("id", gradientId);
+  leafGradient.setAttribute("x1", "0%");
+  leafGradient.setAttribute("y1", "0%");
+  leafGradient.setAttribute("x2", "100%");
+  leafGradient.setAttribute("y2", "100%");
+  const stop1 = document.createElementNS(NS, "stop");
+  stop1.setAttribute("offset", "0%");
+  stop1.setAttribute("stop-color", palette.leaf);
+  const stop2 = document.createElementNS(NS, "stop");
+  stop2.setAttribute("offset", "100%");
+  stop2.setAttribute("stop-color", palette.beam);
+  stop2.setAttribute("stop-opacity", isBodyPage ? "0.45" : "0.68");
+  leafGradient.appendChild(stop1);
+  leafGradient.appendChild(stop2);
+  defs.appendChild(leafGradient);
+  svg.appendChild(defs);
+
+  const currentLeafSet = DAPPLED_SHAPES[shape as keyof typeof DAPPLED_SHAPES] ?? DAPPLED_SHAPES.broad;
+  for (const branchPath of currentLeafSet.branches) {
+    const branch = document.createElementNS(NS, "path");
+    branch.setAttribute("d", branchPath);
+    branch.setAttribute("fill", "none");
+    branch.setAttribute("stroke", palette.beamEdge);
+    branch.setAttribute("stroke-width", String(currentLeafSet.branchWidth));
+    branch.setAttribute("stroke-linecap", "round");
+    branch.setAttribute("stroke-opacity", isBodyPage ? "0.26" : "0.4");
+    svg.appendChild(branch);
+  }
+  for (let i = 0; i < currentLeafSet.leaves.length; i++) {
+    if (!ctx.isDark) {
+      const silhouette = document.createElementNS(NS, "path");
+      silhouette.setAttribute("d", currentLeafSet.leaves[i]);
+      silhouette.setAttribute("fill", palette.silhouette);
+      silhouette.setAttribute("transform", currentLeafSet.transforms[i]);
+      silhouette.setAttribute("fill-opacity", isBodyPage ? "0.38" : "0.5");
+      svg.appendChild(silhouette);
+    }
+    const path = document.createElementNS(NS, "path");
+    path.setAttribute("d", currentLeafSet.leaves[i]);
+    path.setAttribute("fill", `url(#${gradientId})`);
+    path.setAttribute("transform", currentLeafSet.transforms[i]);
+    path.setAttribute("fill-opacity", String(currentLeafSet.leafOpacity ?? 1));
+    svg.appendChild(path);
+  }
+  overlay.appendChild(svg);
+
+  const edgeShade = document.createElement("div");
+  edgeShade.setCssStyles({
+    position: "absolute",
+    inset: "0",
+    background: isBodyPage
+      ? "linear-gradient(180deg, rgba(0,0,0,0.02) 0%, transparent 14%, transparent 100%)"
+      : "linear-gradient(180deg, rgba(0,0,0,0.04) 0%, transparent 20%, transparent 100%)",
+  });
+  overlay.appendChild(edgeShade);
+
+  container.appendChild(overlay);
 }
 
 function renderVignette(container: HTMLElement, params: EffectParams): void {
@@ -370,6 +581,7 @@ const EFFECT_RENDERERS: Record<string, EffectRenderer> = {
   bokeh: renderBokeh,
   dots: renderDots,
   grid: renderGrid,
+  dappledLight: renderDappledLight,
   vignette: renderVignette,
   lightLeak: renderLightLeak,
   scanlines: renderScanlines,
@@ -382,10 +594,11 @@ const EFFECT_RENDERERS: Record<string, EffectRenderer> = {
  * Apply all enabled cover effects to a page element.
  * Iterates the registry — no hardcoded if-blocks needed.
  */
-export function applyCoverEffects(
+export function applyPageEffects(
   container: HTMLElement,
   effects: Record<string, EffectParams>,
   themeCss: string,
+  pageMode: PageMode,
   pageHeight: number,
 ): void {
   const computedPosition = window.getComputedStyle(container).position;
@@ -396,7 +609,7 @@ export function applyCoverEffects(
 
   const isDark = detectThemeBrightness(themeCss);
   const ctx: EffectContext = {
-    pageWidth: PAGE_WIDTH,
+    pageWidth: getPageWidth(pageMode),
     pageHeight,
     isDark,
     effectColor: isDark ? "rgba(255,255,255," : "rgba(0,0,0,",
@@ -410,3 +623,5 @@ export function applyCoverEffects(
     }
   }
 }
+
+export const applyCoverEffects = applyPageEffects;

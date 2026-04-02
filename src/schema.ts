@@ -42,6 +42,70 @@ interface BooleanField {
   description?: string;
 }
 
+export function getDefaultCoverPaddingX(mode: "card" | "long"): number {
+  return mode === "long" ? 48 : 40;
+}
+
+function normalizeLegacyCoverPaddingX(value: number, pageMode: "card" | "long"): number {
+  return value === 90 ? getDefaultCoverPaddingX(pageMode) : value;
+}
+
+function getLongModeNumericDefault(key: string, cardValue: number): number {
+  if (key === "coverPagePaddingX") return 48;
+  if (key === "coverGlowSize") return 72;
+  if (key === "coverShadowBlur") return 50;
+  if (key === "coverShadowOffsetX") return 6;
+  if (key === "coverShadowOffsetY") return 12;
+  return cardValue;
+}
+
+function normalizeLegacyNumericDefault(key: string, value: number, pageMode: "card" | "long"): number {
+  if (pageMode === "long") {
+    if (key === "coverGlowSize" && value === 60) return 72;
+    if (key === "coverShadowBlur" && value === 42) return 50;
+    if (key === "coverShadowOffsetX" && value === 5) return 6;
+    if (key === "coverShadowOffsetY" && value === 10) return 12;
+  }
+  return value;
+}
+
+function normalizeLegacyEffectDefault(
+  pageMode: "card" | "long",
+  scope: "coverEffects" | "bodyEffects",
+  name: string,
+  key: "width" | "spacing" | "size",
+  value: number,
+): number {
+  if (pageMode === "long") {
+    if (scope === "coverEffects") {
+      if (name === "dots" && key === "spacing" && value === 28) return 34;
+      if (name === "dots" && key === "size" && value === 4) return 5;
+      if (name === "grid" && key === "spacing" && value === 60) return 72;
+      if (name === "network" && key === "width" && value === 1) return 1.2;
+    }
+    if (scope === "bodyEffects") {
+      if (name === "grid" && key === "spacing" && value === 64) return 76;
+      if (name === "dots" && key === "spacing" && value === 32) return 38;
+      if (name === "dots" && key === "size" && value === 3) return 4;
+    }
+  }
+
+  if (scope === "coverEffects") {
+    if (name === "dots" && key === "spacing" && value === 28) return 28;
+    if (name === "dots" && key === "size" && value === 4) return 4;
+    if (name === "grid" && key === "spacing" && value === 60) return 60;
+    if (name === "network" && key === "width" && value === 1) return 1;
+  }
+
+  if (scope === "bodyEffects") {
+    if (name === "grid" && key === "spacing" && value === 64) return 64;
+    if (name === "dots" && key === "spacing" && value === 32) return 32;
+    if (name === "dots" && key === "size" && value === 3) return 3;
+  }
+
+  return value;
+}
+
 export type FieldSchema = NumericField | StringField | BooleanField;
 
 export const RENDERER_CONFIG_VERSION = 1;
@@ -70,7 +134,7 @@ export const FIELD_SCHEMAS = {
   // ── Basic ──
   activeTheme:       { type: "string",  default: "mist", enum: BUILTIN_THEMES,
                        description: "配色主题。浅色：paper / cream / latte / sage / mist / rose；深色：graphite / ink-gold / amber。也可填自定义主题文件名（不含 .css）" } as StringField,
-  fontSize:          { type: "number",  default: 40, min: 24, max: 72, step: 2, unit: "px",
+  fontSize:          { type: "number",  default: 28, min: 22, max: 30, step: 1, unit: "px",
                        description: "正文字号" } as NumericField,
   fontFamily:        { type: "string",  default: '"Source Han Sans SC", "PingFang SC", sans-serif',
                        description: "正文字体族，CSS font-family 格式" } as StringField,
@@ -78,6 +142,8 @@ export const FIELD_SCHEMAS = {
                        description: "页面比例：long = 3:5，card = 3:4" } as StringField,
   listStyle:         { type: "string",  default: "default", enum: ["default", "capsule"] as const,
                        description: "列表样式：default = 常规列表，capsule = 胶囊卡片" } as StringField,
+  coverMarkStyle:    { type: "string",  default: "marker", enum: ["marker", "block", "underline", "none"] as const,
+                       description: "封面高亮样式：marker = 荧光笔，block = 底色块，underline = 底线，none = 不特殊处理" } as StringField,
 
   // ── Cover text ──
   coverFontFamily:   { type: "string",  default: '"Noto Serif SC", "Songti SC", serif',
@@ -86,7 +152,7 @@ export const FIELD_SCHEMAS = {
                        description: "封面标题颜色，留空则跟随主题；支持任意 CSS 颜色值" } as StringField,
   coverFontOpacity:  { type: "number",  default: 100, min: 0, max: 100, step: 10, unit: "%",
                        description: "封面标题整体透明度；同时作用于填充、描边、下划线和阴影" } as NumericField,
-  coverFontScale:    { type: "number",  default: 150, min: 50, max: 300, step: 10, unit: "%",
+  coverFontScale:    { type: "number",  default: 100, min: 50, max: 300, step: 10, unit: "%",
                        description: "封面标题字号缩放比例" } as NumericField,
   coverFontWeight:   { type: "number",  default: 800, min: 100, max: 900, step: 100,
                        description: "封面标题字重（100 最细，900 最粗）" } as NumericField,
@@ -101,7 +167,7 @@ export const FIELD_SCHEMAS = {
                        description: "封面标题水平偏移" } as NumericField,
   coverOffsetY:      { type: "number",  default: -5, min: -50, max: 50, unit: "%",
                        description: "封面标题垂直偏移" } as NumericField,
-  coverPagePaddingX: { type: "number",  default: 90, min: 0, max: 180, step: 10, unit: "px",
+  coverPagePaddingX: { type: "number",  default: getDefaultCoverPaddingX("card"), min: 0, max: 180, step: 2, unit: "px",
                        description: "封面文字左右边距；0 表示铺满整页宽度" } as NumericField,
 
   // ── Cover text effects ──
@@ -119,9 +185,9 @@ export const FIELD_SCHEMAS = {
                        description: "第二层描边颜色，留空则跟随 theme 派生的外描边默认色；支持任意 CSS 颜色值" } as StringField,
   coverGlow:         { type: "boolean", default: false,
                        description: "封面标题是否显示发光。可与描边、投影、色带同时开启" } as BooleanField,
-  coverGlowSize:     { type: "number",  default: 60, min: 0, max: 80, step: 10,
+  coverGlowSize:     { type: "number",  default: 60, min: 0, max: 80, step: 2,
                        description: "发光效果半径" } as NumericField,
-  coverGlowColor:    { type: "string",  default: "",
+  coverGlowColor:    { type: "string",  default: "#a39152",
                        description: "发光颜色，留空则跟随文字颜色；支持任意 CSS 颜色值" } as StringField,
   coverShadow:       { type: "boolean", default: false,
                        description: "封面标题是否显示投影" } as BooleanField,
@@ -173,11 +239,18 @@ export function getFieldSchema(key: string): FieldSchema | undefined {
 export interface EffectParams {
   enabled: boolean;
   opacity: number;
+  mode?: string;
+  shape?: string;
   count?: number;
   width?: number;
   spacing?: number;
   size?: number;
   color?: string;
+}
+
+export interface EffectModeOption {
+  value: string;
+  label: string;
 }
 
 export interface EffectSchema {
@@ -187,6 +260,12 @@ export interface EffectSchema {
   defaultOpacity: number;
   min: number;
   max: number;
+  /** Mode parameter — for effects with a small set of named variants. */
+  defaultMode?: string;
+  modeOptions?: EffectModeOption[];
+  /** Shape parameter — for effects with a small set of visual silhouettes. */
+  defaultShape?: string;
+  shapeOptions?: EffectModeOption[];
   /** Count parameter — only for effects with discrete elements. */
   defaultCount?: number;
   countMin?: number;
@@ -230,6 +309,26 @@ export const EFFECT_SCHEMAS: Record<string, EffectSchema> = {
   grid:      { label: "网格",   description: "封面特效。细线网格纹理",
                defaultEnabled: false, defaultOpacity: 36, min: 1,  max: 50,
                defaultSpacing: 60, spacingMin: 24, spacingMax: 140, spacingStep: 4 },
+  dappledLight: {
+               label: "斑驳光影",
+               description: "封面特效。模拟窗边投射进来的柔和光影，mode 可切换晴天 / 雨天 / 月光氛围",
+               defaultEnabled: false,
+               defaultOpacity: 32,
+               min: 5,
+               max: 70,
+               defaultMode: "sunny",
+               defaultShape: "broad",
+               modeOptions: [
+                 { value: "sunny", label: "晴天" },
+                 { value: "rainy", label: "雨天" },
+                 { value: "moonlight", label: "月光" },
+               ],
+               shapeOptions: [
+                 { value: "broad", label: "阔叶" },
+                 { value: "branch", label: "枝影" },
+                 { value: "palm", label: "棕榈" },
+               ],
+  },
   lightLeak: { label: "漏光",   description: "封面特效。模拟胶片漏光，count 控制漏光区域数",
                defaultEnabled: false, defaultOpacity: 25, min: 5,  max: 80, defaultCount: 2,  countMin: 1, countMax: 5 },
   scanlines: { label: "扫描线", description: "封面特效。水平扫描线，CRT 显示器风格",
@@ -240,6 +339,8 @@ export const EFFECT_SCHEMAS: Record<string, EffectSchema> = {
 };
 
 export const EFFECT_NAMES: string[] = Object.keys(EFFECT_SCHEMAS);
+export const BODY_EFFECT_NAMES = ["grid", "dots", "dappledLight", "network"] as const;
+export type BodyEffectName = typeof BODY_EFFECT_NAMES[number];
 
 // ── Derived: RENDER_DEFAULTS ────────────────────────────────────────────────
 
@@ -252,6 +353,8 @@ export const RENDER_DEFAULTS = {
     Object.entries(EFFECT_SCHEMAS).map(([name, s]) => [name, {
       enabled: s.defaultEnabled,
       opacity: s.defaultOpacity,
+      ...(s.defaultMode != null ? { mode: s.defaultMode } : {}),
+      ...(s.defaultShape != null ? { shape: s.defaultShape } : {}),
       ...(s.defaultCount != null ? { count: s.defaultCount } : {}),
       ...(s.defaultWidth != null ? { width: s.defaultWidth } : {}),
       ...(s.defaultSpacing != null ? { spacing: s.defaultSpacing } : {}),
@@ -259,12 +362,76 @@ export const RENDER_DEFAULTS = {
       ...(s.defaultColor != null ? { color: s.defaultColor } : {}),
     }])
   ) as Record<string, EffectParams>,
+  bodyEffects: Object.fromEntries(
+    BODY_EFFECT_NAMES.map((name) => {
+      const s = EFFECT_SCHEMAS[name];
+      const bodyDefaults: Partial<EffectParams> = name === "grid"
+        ? { opacity: 16, spacing: 64 }
+        : name === "dots"
+          ? { opacity: 8, spacing: 32, size: 3 }
+          : name === "dappledLight"
+            ? { opacity: 18, mode: "sunny", shape: "broad" }
+            : name === "network"
+              ? { opacity: 10, count: 8, width: 0.5 }
+              : {};
+      return [name, {
+        enabled: false,
+        opacity: bodyDefaults.opacity ?? s.defaultOpacity,
+        ...(s.defaultMode != null ? { mode: bodyDefaults.mode ?? s.defaultMode } : {}),
+        ...(s.defaultShape != null ? { shape: bodyDefaults.shape ?? s.defaultShape } : {}),
+        ...(s.defaultCount != null ? { count: bodyDefaults.count ?? s.defaultCount } : {}),
+        ...(s.defaultWidth != null ? { width: bodyDefaults.width ?? s.defaultWidth } : {}),
+        ...(s.defaultSpacing != null ? { spacing: bodyDefaults.spacing ?? s.defaultSpacing } : {}),
+        ...(s.defaultSize != null ? { size: bodyDefaults.size ?? s.defaultSize } : {}),
+        ...(s.defaultColor != null ? { color: s.defaultColor } : {}),
+      }];
+    })
+  ) as Record<string, EffectParams>,
 } as {
   // Explicit type for TS inference (Object.fromEntries loses key types)
   [K in keyof typeof FIELD_SCHEMAS]: (typeof FIELD_SCHEMAS)[K]["default"];
 } & {
   coverEffects: Record<string, EffectParams>;
+  bodyEffects: Record<string, EffectParams>;
 };
+
+export function getModeAwareRenderDefaults(mode: "card" | "long"): RenderOptions {
+  if (mode === "card") {
+    return {
+      ...RENDER_DEFAULTS,
+      coverEffects: Object.fromEntries(
+        Object.entries(RENDER_DEFAULTS.coverEffects).map(([name, params]) => [name, { ...params }]),
+      ) as Record<string, EffectParams>,
+      bodyEffects: Object.fromEntries(
+        Object.entries(RENDER_DEFAULTS.bodyEffects).map(([name, params]) => [name, { ...params }]),
+      ) as Record<string, EffectParams>,
+    };
+  }
+
+  return {
+    ...RENDER_DEFAULTS,
+    coverPagePaddingX: getLongModeNumericDefault("coverPagePaddingX", RENDER_DEFAULTS.coverPagePaddingX),
+    coverGlowSize: getLongModeNumericDefault("coverGlowSize", RENDER_DEFAULTS.coverGlowSize),
+    coverShadowBlur: getLongModeNumericDefault("coverShadowBlur", RENDER_DEFAULTS.coverShadowBlur),
+    coverShadowOffsetX: getLongModeNumericDefault("coverShadowOffsetX", RENDER_DEFAULTS.coverShadowOffsetX),
+    coverShadowOffsetY: getLongModeNumericDefault("coverShadowOffsetY", RENDER_DEFAULTS.coverShadowOffsetY),
+    coverEffects: {
+      ...Object.fromEntries(
+        Object.entries(RENDER_DEFAULTS.coverEffects).map(([name, params]) => [name, { ...params }]),
+      ) as Record<string, EffectParams>,
+      dots: { ...RENDER_DEFAULTS.coverEffects.dots, spacing: 34, size: 5 },
+      grid: { ...RENDER_DEFAULTS.coverEffects.grid, spacing: 72 },
+      network: { ...RENDER_DEFAULTS.coverEffects.network, width: 1.2 },
+    },
+    bodyEffects: {
+      ...Object.fromEntries(
+        Object.entries(RENDER_DEFAULTS.bodyEffects).map(([name, params]) => [name, { ...params }]),
+      ) as Record<string, EffectParams>,
+      grid: { ...RENDER_DEFAULTS.bodyEffects.grid, spacing: 76 },
+      dots: { ...RENDER_DEFAULTS.bodyEffects.dots, spacing: 38, size: 4 },
+    },
+  };
+}
 
 // ── Derived types ────────────────────────────────────────────────────────────
 
@@ -376,7 +543,7 @@ export const COVER_SEMANTIC_SCHEMA = {
     fields: {
       offsetX: { key: "coverOffsetX", noteKey: "coverOffsetX", description: "水平偏移百分比", uiLabel: "X", uiControl: "number", uiOrder: 1, examples: ["-10", "0", "12"] },
       offsetY: { key: "coverOffsetY", noteKey: "coverOffsetY", description: "垂直偏移百分比", uiLabel: "Y", uiControl: "number", uiOrder: 2, examples: ["-8", "0", "10"] },
-      paddingX: { key: "coverPagePaddingX", noteKey: "coverPagePaddingX", description: "封面页左右边距；0 表示铺满整页宽度，自动换行也会同步按可用宽度计算", uiLabel: "边距", uiControl: "number", uiOrder: 3, examples: ["0", "40", "90"] },
+      paddingX: { key: "coverPagePaddingX", noteKey: "coverPagePaddingX", description: "封面页左右边距；0 表示铺满整页宽度，自动换行也会同步按可用宽度计算", uiLabel: "边距", uiControl: "number", uiOrder: 3, examples: ["0", "40", "45"] },
     },
   },
   stroke: {
@@ -538,6 +705,13 @@ export function expandSemanticNoteConfig(raw: PlainObject): PlainObject {
       result.coverEffects = effects;
     }
   }
+  const body = raw.body;
+  if (isPlainObject(body)) {
+    const effects = body.effects;
+    if (isPlainObject(effects)) {
+      result.bodyEffects = effects;
+    }
+  }
   return result;
 }
 
@@ -564,20 +738,22 @@ export function withRendererConfigVersion(config: PlainObject): PlainObject {
  * Validate and normalize a raw note config object.
  * - Resolves key aliases
  * - Validates types and clamps numeric values to schema min/max
- * - Validates coverEffects as nested object
+ * - Validates coverEffects/bodyEffects as nested objects
  * - Drops unknown keys
  */
 export function validateNoteConfig(raw: PlainObject): Partial<RenderOptions> {
   const normalized = expandSemanticNoteConfig(raw);
+  const pageMode = normalized.pageMode === "long" ? "long" : "card";
   const result: PlainObject = {};
   for (const [key, value] of Object.entries(normalized)) {
     if (value === undefined || value === null) continue;
     const canonicalKey = (NOTE_KEY_ALIASES[key] || key) as string;
     if (!(canonicalKey in RENDER_DEFAULTS)) continue;
 
-    if (canonicalKey === "coverEffects") {
+    if (canonicalKey === "coverEffects" || canonicalKey === "bodyEffects") {
       if (isPlainObject(value)) {
-        const validated = validateCoverEffects(value);
+        const allowedNames = canonicalKey === "coverEffects" ? EFFECT_NAMES : BODY_EFFECT_NAMES;
+        const validated = validateEffectMap(value, allowedNames, pageMode, canonicalKey);
         if (Object.keys(validated).length > 0) {
           result[canonicalKey] = validated;
         }
@@ -592,7 +768,10 @@ export function validateNoteConfig(raw: PlainObject): Partial<RenderOptions> {
     // Clamp numeric values to schema range; apply fromDisplay if present (user writes display value)
     if (schema.type === "number" && typeof value === "number") {
       const internal = schema.fromDisplay ? schema.fromDisplay(String(value)) : value;
-      result[canonicalKey] = clampToSchema(internal, schema);
+      const normalizedInternal = canonicalKey === "coverPagePaddingX"
+        ? normalizeLegacyCoverPaddingX(internal, pageMode)
+        : normalizeLegacyNumericDefault(canonicalKey, internal, pageMode);
+      result[canonicalKey] = clampToSchema(normalizedInternal, schema);
     } else if (schema.type === "string" && schema.enum && typeof value === "string") {
       // Validate enum values
       if (schema.enum.includes(value)) {
@@ -610,9 +789,15 @@ export function clampToSchema(value: number, schema: NumericField): number {
   return Math.max(schema.min, Math.min(schema.max, value));
 }
 
-function validateCoverEffects(raw: PlainObject): Record<string, EffectParams> {
+function validateEffectMap(
+  raw: PlainObject,
+  allowedNames: readonly string[],
+  pageMode: "card" | "long",
+  scope: "coverEffects" | "bodyEffects",
+): Record<string, EffectParams> {
   const result: Record<string, EffectParams> = {};
   for (const [name, value] of Object.entries(raw)) {
+    if (!allowedNames.includes(name)) continue;
     const schema = EFFECT_SCHEMAS[name];
     if (!schema) continue;
     if (!isPlainObject(value)) continue;
@@ -623,6 +808,16 @@ function validateCoverEffects(raw: PlainObject): Record<string, EffectParams> {
       enabled: typeof value.enabled === "boolean" ? value.enabled : schema.defaultEnabled,
       opacity,
     };
+    if (schema.defaultMode != null) {
+      const rawMode = typeof value.mode === "string" ? value.mode : schema.defaultMode;
+      const allowedModes = schema.modeOptions?.map((option) => option.value) ?? [];
+      params.mode = allowedModes.includes(rawMode) ? rawMode : schema.defaultMode;
+    }
+    if (schema.defaultShape != null) {
+      const rawShape = typeof value.shape === "string" ? value.shape : schema.defaultShape;
+      const allowedShapes = schema.shapeOptions?.map((option) => option.value) ?? [];
+      params.shape = allowedShapes.includes(rawShape) ? rawShape : schema.defaultShape;
+    }
     if (schema.defaultCount != null) {
       params.count = typeof value.count === "number"
         ? Math.max(schema.countMin!, Math.min(schema.countMax!, Math.round(value.count)))
@@ -630,17 +825,17 @@ function validateCoverEffects(raw: PlainObject): Record<string, EffectParams> {
     }
     if (schema.defaultWidth != null) {
       params.width = typeof value.width === "number"
-        ? Math.max(schema.widthMin!, Math.min(schema.widthMax!, value.width))
+        ? Math.max(schema.widthMin!, Math.min(schema.widthMax!, normalizeLegacyEffectDefault(pageMode, scope, name, "width", value.width)))
         : schema.defaultWidth;
     }
     if (schema.defaultSpacing != null) {
       params.spacing = typeof value.spacing === "number"
-        ? Math.max(schema.spacingMin!, Math.min(schema.spacingMax!, value.spacing))
+        ? Math.max(schema.spacingMin!, Math.min(schema.spacingMax!, normalizeLegacyEffectDefault(pageMode, scope, name, "spacing", value.spacing)))
         : schema.defaultSpacing;
     }
     if (schema.defaultSize != null) {
       params.size = typeof value.size === "number"
-        ? Math.max(schema.sizeMin!, Math.min(schema.sizeMax!, value.size))
+        ? Math.max(schema.sizeMin!, Math.min(schema.sizeMax!, normalizeLegacyEffectDefault(pageMode, scope, name, "size", value.size)))
         : schema.defaultSize;
     }
     if (schema.defaultColor != null) {
@@ -654,16 +849,23 @@ function validateCoverEffects(raw: PlainObject): Record<string, EffectParams> {
 // ── Extraction ──────────────────────────────────────────────────────────────
 
 export function extractRenderOptions(settings: Partial<RenderOptions>): RenderOptions {
-  const options: RenderOptions = { ...RENDER_DEFAULTS, coverEffects: { ...RENDER_DEFAULTS.coverEffects } };
+  const pageMode = settings.pageMode === "long" ? "long" : "card";
+  const modeDefaults = getModeAwareRenderDefaults(pageMode);
+  const options: RenderOptions = {
+    ...modeDefaults,
+    coverEffects: { ...modeDefaults.coverEffects },
+    bodyEffects: { ...modeDefaults.bodyEffects },
+  };
   const optionsMutable = options as Record<string, unknown>;
   for (const key of RENDER_KEYS) {
     const value = settings[key];
     if (value !== undefined) {
-      if (key === "coverEffects") {
+      if (key === "coverEffects" || key === "bodyEffects") {
+        const target = options[key];
         const src = value;
         for (const [name, params] of Object.entries(src)) {
-          if (name in options.coverEffects) {
-            options.coverEffects[name] = { ...params };
+          if (name in target) {
+            target[name] = { ...params };
           }
         }
       } else {
@@ -675,6 +877,7 @@ export function extractRenderOptions(settings: Partial<RenderOptions>): RenderOp
 }
 
 export function buildCoverConfig(options: RenderOptions): CoverConfig {
+  const pageMode = (options.pageMode ?? "card") as "card" | "long";
   return {
     typography: {
       fontFamily: options.coverFontFamily || options.fontFamily,
@@ -689,7 +892,7 @@ export function buildCoverConfig(options: RenderOptions): CoverConfig {
     position: {
       offsetX: options.coverOffsetX ?? 0,
       offsetY: options.coverOffsetY ?? 0,
-      paddingX: options.coverPagePaddingX ?? 90,
+      paddingX: options.coverPagePaddingX ?? getDefaultCoverPaddingX(pageMode),
     },
     stroke: {
       style: (options.coverStrokeStyle || "stroke") as CoverStrokeConfig["style"],
@@ -705,14 +908,14 @@ export function buildCoverConfig(options: RenderOptions): CoverConfig {
     },
     glow: {
       enabled: options.coverGlow === true,
-      size: options.coverGlowSize ?? 60,
+      size: options.coverGlowSize ?? 30,
       color: options.coverGlowColor || "",
     },
     shadow: {
       enabled: options.coverShadow !== false,
-      blur: options.coverShadowBlur ?? 16,
-      offsetX: options.coverShadowOffsetX ?? 0,
-      offsetY: options.coverShadowOffsetY ?? 4,
+      blur: options.coverShadowBlur ?? 21,
+      offsetX: options.coverShadowOffsetX ?? 3,
+      offsetY: options.coverShadowOffsetY ?? 5,
       color: options.coverShadowColor || "rgba(0,0,0,0.6)",
     },
     banner: {
@@ -732,6 +935,10 @@ export function toSemanticNoteConfig(config: Record<string, unknown>): Record<st
     if (value === undefined) continue;
     if (key === "coverEffects") {
       cover.effects = value;
+      continue;
+    }
+    if (key === "bodyEffects") {
+      result.body = { ...(result.body as Record<string, unknown> | undefined), effects: value };
       continue;
     }
 

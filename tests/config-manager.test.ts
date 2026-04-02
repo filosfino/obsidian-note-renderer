@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readGroupedNoteConfig, writeGroupedNoteConfig } from "../src/config-manager";
+import { readGroupedNoteConfig, readNoteConfig, writeGroupedNoteConfig } from "../src/config-manager";
 
 describe("renderer_config migration", () => {
   it("reads legacy flat config as latest grouped schema", () => {
@@ -63,10 +63,54 @@ hello
     expect(updated).not.toContain("coverBokehOpacity:");
   });
 
+  it("does not write legacy coverPagePaddingX default 90 back to grouped config", () => {
+    const markdown = `
+# Test Note
+
+## 正文
+
+hello
+`;
+
+    const updated = writeGroupedNoteConfig(markdown, {
+      pageMode: "card",
+      coverPagePaddingX: 90,
+    });
+
+    expect(updated).not.toContain("paddingX: 90");
+  });
+
+  it("normalizes legacy visual defaults when reading", () => {
+    const markdown = `---
+renderer_config:
+  coverGlowSize: 60
+  coverShadowBlur: 42
+  coverShadowOffsetX: 5
+  coverShadowOffsetY: 10
+  coverEffects:
+    grid:
+      enabled: true
+      opacity: 36
+      spacing: 60
+---
+
+# Test Note
+`;
+
+    const config = readNoteConfig(markdown);
+
+    expect(config?.coverGlowSize).toBe(60);
+    expect(config?.coverShadowBlur).toBe(42);
+    expect(config?.coverShadowOffsetX).toBe(5);
+    expect(config?.coverShadowOffsetY).toBe(10);
+    expect(config?.coverEffects?.grid?.spacing).toBe(60);
+  });
+
   it("prefers frontmatter renderer_config over H2 renderer_config when reading", () => {
     const markdown = `---
 renderer_config:
   theme: mist
+  presetName: Daily Challenge
   cover:
     typography:
       scale: 160
@@ -86,6 +130,7 @@ coverFontScale: 120
 
     expect(grouped).toMatchObject({
       theme: "mist",
+      presetName: "Daily Challenge",
       cover: {
         typography: {
           scale: 160,
@@ -105,7 +150,7 @@ title: Test
 
 \`\`\`yaml
 theme: cream
-fontSize: 42
+fontSize: 28
 \`\`\`
 
 ## 正文
@@ -115,13 +160,31 @@ hello
 
     const updated = writeGroupedNoteConfig(markdown, {
       theme: "mist",
-      fontSize: 48,
+      fontSize: 30,
+      activePreset: "Daily Challenge",
     });
 
     expect(updated).toContain("renderer_config:");
     expect(updated).toContain("theme: mist");
-    expect(updated).toContain("fontSize: 48");
+    expect(updated).toContain("fontSize: 30");
+    expect(updated).toContain("presetName: Daily Challenge");
     expect((updated.match(/\n## renderer_config\n/g) ?? []).length).toBe(0);
+  });
+
+  it("reads preset-only renderer_config from frontmatter", () => {
+    const markdown = `---
+renderer_config:
+  presetName: Daily Challenge
+---
+
+# Test Note
+`;
+
+    const grouped = readGroupedNoteConfig(markdown);
+
+    expect(grouped).toEqual({
+      presetName: "Daily Challenge",
+    });
   });
 
   it("does not rewrite malformed frontmatter when saving renderer_config", () => {
@@ -139,7 +202,7 @@ hello
 
     const updated = writeGroupedNoteConfig(markdown, {
       theme: "mist",
-      fontSize: 48,
+      fontSize: 30,
     });
 
     expect(updated).toBe(markdown);

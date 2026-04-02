@@ -1,4 +1,4 @@
-import { RENDER_DEFAULTS, RENDER_KEYS, type RenderOptions } from "./schema";
+import { RENDER_DEFAULTS, RENDER_KEYS, getModeAwareRenderDefaults, type RenderOptions } from "./schema";
 import type { FontEntry } from "./fonts";
 
 export type RendererConfig = RenderOptions;
@@ -24,8 +24,5 @@ export const DEFAULT_PLUGIN_UI_STATE: PluginUiState = {
 };
 
 export function createDefaultRendererConfig(): RendererConfig {
-  return {
-    ...RENDER_DEFAULTS,
-    coverEffects: { ...RENDER_DEFAULTS.coverEffects },
-  };
+  return getModeAwareRenderDefaults("card");
 }

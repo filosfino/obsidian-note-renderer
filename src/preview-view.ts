@@ -5,28 +5,32 @@ import {
   Notice,
   debounce,
 } from "obsidian";
-import { VIEW_TYPE, PAGE_WIDTH, PAGE_HEIGHTS } from "./constants";
+import { VIEW_TYPE, PAGE_HEIGHTS, getPageWidth } from "./constants";
 import { renderNote, RenderedPages } from "./renderer";
 import { exportPages, exportSinglePage } from "./exporter";
 import { deriveCoverStrokePalette, extractCoverTitleColor } from "./effects";
-import { EFFECT_SCHEMAS, RENDER_DEFAULTS, isCoverSemanticFieldActive } from "./schema";
+import { BODY_EFFECT_NAMES, EFFECT_SCHEMAS, RENDER_DEFAULTS, getDefaultCoverPaddingX, isCoverSemanticFieldActive } from "./schema";
 import {
   readNoteConfig,
+  readNoteConfigMetadata,
   resolveMergedRenderConfig,
   updateNoteConfigKey,
   saveFullNoteConfig,
+  savePresetReferenceToNote,
   removeNoteConfig,
   extractRenderOptions,
 } from "./config-manager";
 import type NoteRendererPlugin from "./main";
-import { PRESET_KEYS, type RendererConfig } from "./plugin-types";
+import { PRESET_KEYS, createDefaultRendererConfig, type RendererConfig } from "./plugin-types";
 import { buildSettingsPanel, setSelectValue as setFontSelectValue, type PanelHost, type PanelRefs } from "./settings-panel";
+import { getModeAwareRenderDefaults } from "./schema";
 
 interface NoteSession {
   filePath: string;
   markdown: string;
   hasNoteConfig: boolean;
   shouldResetWorkingConfig: boolean;
+  editingNoteConfig: boolean;
   effectiveSettings: RendererConfig;
   renderOptions: ReturnType<typeof extractRenderOptions>;
 }
@@ -49,6 +53,13 @@ function parseAlphaPercent(color: string, fallback = 100): string {
   return String(Math.round(parseFloat(parts[3]) * 100));
 }
 
+function findOptionByValue(select: HTMLSelectElement, value: string): HTMLOptionElement | null {
+  for (const option of Array.from(select.options)) {
+    if (option.value === value) return option;
+  }
+  return null;
+}
+
 export class PreviewView extends ItemView implements PanelHost {
   plugin: NoteRendererPlugin;
   private pages: HTMLElement[] = [];
@@ -57,6 +68,7 @@ export class PreviewView extends ItemView implements PanelHost {
   private resizeObserver: ResizeObserver | null = null;
   private fileChangeHandler: ((file: TAbstractFile) => void) | null = null;
   private activeFileHandler: (...args: unknown[]) => void = () => {};
+  private refreshToken = 0;
 
   // Current displayed clone + wrapper (for rescaling without re-rendering)
   private currentClone: HTMLElement | null = null;
@@ -74,11 +86,13 @@ export class PreviewView extends ItemView implements PanelHost {
   effective: RendererConfig = {
     ...RENDER_DEFAULTS,
     coverEffects: { ...RENDER_DEFAULTS.coverEffects },
+    bodyEffects: { ...RENDER_DEFAULTS.bodyEffects },
   } as RendererConfig;
   // Guard: true while writing note config, prevents file-change watcher from triggering refresh
   private writingNoteConfig = false;
   // Track whether current note actually has a renderer_config
   private hasNoteConfig = false;
+  private baselineSettings: RendererConfig = createDefaultRendererConfig();
   // Last stroke style before disabling
   lastStrokeStyle: string = "stroke";
 
@@ -113,7 +127,7 @@ export class PreviewView extends ItemView implements PanelHost {
     this.resizeObserver.observe(this.refs.previewContainer);
 
     // Watch for file changes — auto-refresh when the current note is modified
-    const debouncedRefresh = debounce(() => this.refresh(), 500, true);
+    const debouncedRefresh = debounce(() => this.refresh(), 250, false);
 
     this.fileChangeHandler = (file: TAbstractFile) => {
       if (this.writingNoteConfig) return;
@@ -124,8 +138,8 @@ export class PreviewView extends ItemView implements PanelHost {
     };
     this.app.vault.on("modify", this.fileChangeHandler);
 
-    // Watch for active file change — refresh when switching notes
-    this.activeFileHandler = () => { debouncedRefresh(); };
+    // Watch for active file change — switch immediately, don't reuse a debounced call
+    this.activeFileHandler = () => { void this.refresh(); };
     this.app.workspace.on("active-leaf-change", this.activeFileHandler );
 
     // Initial render
@@ -144,17 +158,23 @@ export class PreviewView extends ItemView implements PanelHost {
   }
 
   async refresh(): Promise<void> {
+    const refreshToken = ++this.refreshToken;
     const file = this.app.workspace.getActiveFile();
     if (!file || file.extension !== "md") {
       this.showEmpty("Open a markdown file to preview");
       return;
     }
 
+    if (file.path !== this.currentFilePath) {
+      this.showEmpty("Loading preview...");
+    }
+
     const session = await this.buildNoteSession(file.path, file.extension);
+    if (!this.isRefreshStillCurrent(refreshToken, session.filePath)) {
+      return;
+    }
     if (session.shouldResetWorkingConfig) {
-      this.resetWorkingConfigToDefault();
-      this.plugin.clearActivePreset();
-      await this.plugin.saveSettings();
+      this.loadWorkingConfig(session.effectiveSettings);
     }
     this.applyNoteSession(session);
 
@@ -163,25 +183,33 @@ export class PreviewView extends ItemView implements PanelHost {
 
     this.effectivePageMode = session.effectiveSettings.pageMode as "long" | "card";
     const themeCss = await this.plugin.loadTheme(session.effectiveSettings.activeTheme);
+    if (!this.isRefreshStillCurrent(refreshToken, session.filePath)) {
+      return;
+    }
 
     this.rendered?.cleanup();
-    this.rendered = await renderNote(
+    const rendered = await renderNote(
       this.app,
       session.markdown,
-      file.path,
+      session.filePath,
       themeCss,
       session.effectiveSettings.activeTheme,
       this.plugin,
       session.renderOptions,
     );
+    if (!this.isRefreshStillCurrent(refreshToken, session.filePath)) {
+      rendered.cleanup();
+      return;
+    }
+    this.rendered = rendered;
 
     this.pages = this.rendered.pages;
     // Hide overlay chip + params when no cover image
     if (this.refs) {
       const show = this.rendered.hasCoverImage;
       this.refs.overlayToggle.classList.toggle("nr-hidden", !show);
-      if (this.refs.effectParamRows["overlay"]) {
-        this.refs.effectParamRows["overlay"].classList.toggle("nr-hidden", !(show && this.effective.coverEffects?.overlay?.enabled));
+      if (this.refs.coverEffectParamRows["overlay"]) {
+        this.refs.coverEffectParamRows["overlay"].classList.toggle("nr-hidden", !(show && this.effective.coverEffects?.overlay?.enabled));
       }
     }
     // Preserve current page if possible, otherwise reset to 0
@@ -189,6 +217,14 @@ export class PreviewView extends ItemView implements PanelHost {
       this.currentPage = 0;
     }
     this.showPage();
+  }
+
+  private isRefreshStillCurrent(refreshToken: number, filePath: string): boolean {
+    const activeFile = this.app.workspace.getActiveFile();
+    return this.refreshToken === refreshToken
+      && !!activeFile
+      && activeFile.extension === "md"
+      && activeFile.path === filePath;
   }
 
   private async buildNoteSession(filePath: string, extension: string): Promise<NoteSession> {
@@ -199,15 +235,44 @@ export class PreviewView extends ItemView implements PanelHost {
 
     const markdown = await this.app.vault.read(file);
     const noteConfig = readNoteConfig(markdown);
-    const resolved = resolveMergedRenderConfig(this.plugin.getFallbackRenderConfig(), noteConfig);
+    const noteMeta = readNoteConfigMetadata(markdown);
+    const switchedFile = filePath !== this.currentFilePath;
+    const activePreset = noteMeta.activePreset && this.plugin.getPresetValues(noteMeta.activePreset)
+      ? noteMeta.activePreset
+      : "";
+    const hasNoteSource = !!noteConfig || !!activePreset;
+
+    if (switchedFile || hasNoteSource) {
+      const baseSettings = activePreset
+        ? this.buildSettingsFromPreset(activePreset) ?? createDefaultRendererConfig()
+        : createDefaultRendererConfig();
+      const resolved = resolveMergedRenderConfig(
+        baseSettings,
+        noteConfig,
+      );
+      this.plugin.setActivePresetName(activePreset);
+
+      return {
+        filePath,
+        markdown,
+        hasNoteConfig: hasNoteSource,
+        shouldResetWorkingConfig: true,
+        editingNoteConfig: false,
+        effectiveSettings: resolved.settings,
+        renderOptions: resolved.options,
+      };
+    }
+
+    const effectiveSettings = this.plugin.getFallbackRenderConfig();
 
     return {
       filePath,
       markdown,
       hasNoteConfig: !!noteConfig,
-      shouldResetWorkingConfig: filePath !== this.currentFilePath && !noteConfig,
-      effectiveSettings: resolved.settings,
-      renderOptions: resolved.options,
+      shouldResetWorkingConfig: false,
+      editingNoteConfig: false,
+      effectiveSettings,
+      renderOptions: extractRenderOptions(effectiveSettings),
     };
   }
 
@@ -215,13 +280,16 @@ export class PreviewView extends ItemView implements PanelHost {
     this.currentFilePath = session.filePath;
     this.hasNoteConfig = session.hasNoteConfig;
     this.effective = session.effectiveSettings;
-    this.editingNoteConfig = session.hasNoteConfig;
-    this.updateNoteActionButtons(session.hasNoteConfig);
+    if (session.shouldResetWorkingConfig) {
+      this.baselineSettings = this.cloneSettings(session.effectiveSettings);
+    }
+    this.editingNoteConfig = session.editingNoteConfig;
+    this.updateNoteActionButtons(session.hasNoteConfig, session.editingNoteConfig);
   }
 
-  private updateNoteActionButtons(hasNoteConfig: boolean): void {
+  private updateNoteActionButtons(hasNoteConfig: boolean, editingNoteConfig: boolean): void {
     if (!this.refs) return;
-    this.refs.saveToNoteBtn.classList.toggle("nr-hidden", hasNoteConfig);
+    this.refs.saveToNoteBtn.classList.remove("nr-hidden");
     this.refs.removeFromNoteBtn.classList.toggle("nr-hidden", !hasNoteConfig);
   }
 
@@ -232,6 +300,12 @@ export class PreviewView extends ItemView implements PanelHost {
     }
   }
 
+  private loadWorkingConfig(settings: RendererConfig): void {
+    for (const key of PRESET_KEYS) {
+      this.plugin.setFallbackRenderValue(key, settings[key]);
+    }
+  }
+
   /**
    * Route a setting change to global or note config depending on editing mode.
    * All UI handlers should call this instead of directly mutating fallback/plugin state.
@@ -239,13 +313,125 @@ export class PreviewView extends ItemView implements PanelHost {
   async updateSetting<K extends keyof RendererConfig>(
     key: K, value: RendererConfig[K]
   ): Promise<void> {
-    if (this.editingNoteConfig) {
-      await this.updateNoteConfig(key as string, value);
-    } else {
-      this.plugin.setFallbackRenderValue(key, value);
-      await this.plugin.saveSettings();
+    if (key === "pageMode") {
+      const nextMode = value as RendererConfig["pageMode"];
+      const adjusted = this.applyModeDefaultsForPageModeSwitch(this.effective, nextMode);
+      for (const presetKey of PRESET_KEYS) {
+        this.plugin.setFallbackRenderValue(presetKey, adjusted[presetKey]);
+      }
+      await this.refresh();
+      return;
+    }
+
+    this.plugin.setFallbackRenderValue(key, value);
+    if (key === "coverEffects") {
+      const coverEffects = value as RendererConfig["coverEffects"];
+      const nextBodyEffects: RendererConfig["bodyEffects"] = {
+        ...this.effective.bodyEffects,
+      };
+      for (const effectName of BODY_EFFECT_NAMES) {
+        const source = coverEffects[effectName];
+        const currentBody = nextBodyEffects[effectName];
+        if (!source || !currentBody) continue;
+        nextBodyEffects[effectName] = {
+          ...currentBody,
+          opacity: source.opacity,
+          mode: source.mode,
+          shape: source.shape,
+          count: source.count,
+          width: source.width,
+          spacing: source.spacing,
+          size: source.size,
+          color: source.color,
+        };
+      }
+      this.plugin.setFallbackRenderValue("bodyEffects", nextBodyEffects);
+    } else if (key === "bodyEffects") {
+      const bodyEffects = value as RendererConfig["bodyEffects"];
+      const nextCoverEffects: RendererConfig["coverEffects"] = {
+        ...this.effective.coverEffects,
+      };
+      for (const effectName of BODY_EFFECT_NAMES) {
+        const source = bodyEffects[effectName];
+        const currentCover = nextCoverEffects[effectName];
+        if (!source || !currentCover) continue;
+        nextCoverEffects[effectName] = {
+          ...currentCover,
+          opacity: source.opacity,
+          mode: source.mode,
+          shape: source.shape,
+          count: source.count,
+          width: source.width,
+          spacing: source.spacing,
+          size: source.size,
+          color: source.color,
+        };
+      }
+      this.plugin.setFallbackRenderValue("coverEffects", nextCoverEffects);
     }
     await this.refresh();
+  }
+
+  private applyModeDefaultsForPageModeSwitch(
+    current: RendererConfig,
+    nextMode: RendererConfig["pageMode"],
+  ): RendererConfig {
+    const prevMode = current.pageMode === "long" ? "long" : "card";
+    const nextModeKey = nextMode === "long" ? "long" : "card";
+    const prevDefaults = getModeAwareRenderDefaults(prevMode);
+    const nextDefaults = getModeAwareRenderDefaults(nextModeKey);
+    const nextSettings = this.cloneSettings(current);
+    const nextSettingsMutable = nextSettings as Record<string, unknown>;
+    nextSettingsMutable.pageMode = nextMode;
+
+    const modeSensitiveKeys: Array<keyof RendererConfig> = [
+      "coverPagePaddingX",
+      "coverGlowSize",
+      "coverShadowBlur",
+      "coverShadowOffsetX",
+      "coverShadowOffsetY",
+    ];
+
+    for (const modeKey of modeSensitiveKeys) {
+      if (current[modeKey] === prevDefaults[modeKey]) {
+        nextSettingsMutable[modeKey] = nextDefaults[modeKey];
+      }
+    }
+
+    const coverEffects = this.cloneEffectsMap(current.coverEffects);
+    const prevCover = prevDefaults.coverEffects;
+    const nextCover = nextDefaults.coverEffects;
+    for (const effectName of ["dots", "grid", "network"]) {
+      const currentEffect = coverEffects[effectName];
+      const prevEffect = prevCover[effectName];
+      const nextEffect = nextCover[effectName];
+      if (!currentEffect || !prevEffect || !nextEffect) continue;
+      if (currentEffect.spacing === prevEffect.spacing && nextEffect.spacing !== undefined) currentEffect.spacing = nextEffect.spacing;
+      if (currentEffect.size === prevEffect.size && nextEffect.size !== undefined) currentEffect.size = nextEffect.size;
+      if (currentEffect.width === prevEffect.width && nextEffect.width !== undefined) currentEffect.width = nextEffect.width;
+    }
+    nextSettingsMutable.coverEffects = coverEffects;
+
+    const bodyEffects = this.cloneEffectsMap(current.bodyEffects);
+    const prevBody = prevDefaults.bodyEffects;
+    const nextBody = nextDefaults.bodyEffects;
+    for (const effectName of ["dots", "grid"]) {
+      const currentEffect = bodyEffects[effectName];
+      const prevEffect = prevBody[effectName];
+      const nextEffect = nextBody[effectName];
+      if (!currentEffect || !prevEffect || !nextEffect) continue;
+      if (currentEffect.spacing === prevEffect.spacing && nextEffect.spacing !== undefined) currentEffect.spacing = nextEffect.spacing;
+      if (currentEffect.size === prevEffect.size && nextEffect.size !== undefined) currentEffect.size = nextEffect.size;
+    }
+    nextSettingsMutable.bodyEffects = bodyEffects;
+
+    return nextSettings;
+  }
+
+  private cloneEffectsMap<T extends Record<string, { enabled: boolean; opacity: number }>>(effects: T): T {
+    return Object.fromEntries(
+      Object.entries(effects).map(([name, params]) => [name, { ...params }]),
+    ) as T;
   }
 
   /**
@@ -259,14 +445,14 @@ export class PreviewView extends ItemView implements PanelHost {
     const markdown = await this.app.vault.read(file);
     const hasNoteConfig = !!readNoteConfig(markdown);
     const updated = hasNoteConfig
-      ? updateNoteConfigKey(markdown, key, value)
+      ? updateNoteConfigKey(markdown, key, value, { activePreset: this.getActivePresetName() || undefined })
       : (() => {
           const nextSettings: RendererConfig = {
             ...this.effective,
             [key]: value,
           };
           const nextOptions = extractRenderOptions(nextSettings);
-          return saveFullNoteConfig(markdown, nextOptions);
+          return saveFullNoteConfig(markdown, nextOptions, { activePreset: this.getActivePresetName() || undefined });
         })();
     if (updated === markdown) return;
 
@@ -279,12 +465,32 @@ export class PreviewView extends ItemView implements PanelHost {
     const preset = this.plugin.getPresetValues(name);
     if (!preset) return;
 
+    const nextSettings = createDefaultRendererConfig() as RendererConfig;
+    const nextSettingsMutable = nextSettings as Record<string, unknown>;
     for (const key of PRESET_KEYS) {
-      this.plugin.setFallbackRenderValue(key, this.getPresetValueOrDefault(preset, key));
+      nextSettingsMutable[key] = this.getPresetValueOrDefault(preset, key);
     }
 
+    for (const key of PRESET_KEYS) {
+      this.plugin.setFallbackRenderValue(key, nextSettings[key]);
+    }
     this.plugin.setActivePresetName(name);
-    await this.plugin.saveSettings();
+  }
+
+  private buildSettingsFromPreset(name: string): RendererConfig | null {
+    const preset = this.getPresetValues(name);
+    if (!preset) return null;
+
+    const settings = createDefaultRendererConfig() as RendererConfig;
+    const mutable = settings as Record<string, unknown>;
+    for (const key of PRESET_KEYS) {
+      mutable[key] = this.getPresetValueOrDefault(preset, key);
+    }
+    return settings;
+  }
+
+  async clearPresetSelection(): Promise<void> {
+    this.plugin.clearActivePreset();
   }
 
   /** Rebuild preset dropdown options from current settings. */
@@ -328,8 +534,7 @@ export class PreviewView extends ItemView implements PanelHost {
     if (!presetName) return false;
     const preset = this.getPresetValues(presetName);
     if (!preset) return false;
-    const fallbackSettings = this.plugin.getFallbackRenderConfig();
-    const currentSettings = this.hasNoteConfig ? s : fallbackSettings;
+    const currentSettings = s;
     for (const key of PRESET_KEYS) {
       const expectedVal = this.getPresetValueOrDefault(preset, key);
       const currentVal = currentSettings[key];
@@ -345,10 +550,87 @@ export class PreviewView extends ItemView implements PanelHost {
     if (!this.refs) return;
     this.syncing = true;
     this.syncPresetUi(s);
+    this.syncConfigSourceUi(s);
     this.syncBaseControls(s);
     this.syncCoverStylingControls(s);
     this.syncThemeDerivedColors(s);
     this.syncing = false;
+  }
+
+  private syncConfigSourceUi(s: RendererConfig): void {
+    if (!this.refs) return;
+
+    const badge = this.refs.configSourceBadge;
+    const source = this.getConfigSourceState(s);
+    badge.textContent = source.label;
+    badge.title = source.title;
+    badge.classList.toggle("is-note", source.kind === "note");
+    badge.classList.toggle("is-working", source.kind !== "note");
+  }
+
+  private getConfigSourceState(s: RendererConfig): {
+    kind: "note" | "working" | "default";
+    label: string;
+    title: string;
+  } {
+    const activePreset = this.getActivePresetName();
+    const matchesBaseline = this.areSettingsEqual(s, this.baselineSettings);
+    const matchesDefault = this.areSettingsEqual(s, createDefaultRendererConfig());
+
+    if (this.hasNoteConfig && matchesBaseline) {
+      return {
+        kind: "note",
+        label: "笔记配置",
+        title: activePreset
+          ? `当前使用笔记配置，关联预设「${activePreset}」`
+          : "当前使用笔记里的 renderer_config",
+      };
+    }
+
+    if (activePreset) {
+      return {
+        kind: "working",
+        label: "预设工作态",
+        title: `当前是未保存的工作态，基于预设「${activePreset}」`,
+      };
+    }
+
+    if (!this.hasNoteConfig && matchesDefault) {
+      return {
+        kind: "default",
+        label: "默认值",
+        title: "当前没有笔记配置，预览使用默认值",
+      };
+    }
+
+    return {
+      kind: "working",
+      label: "工作态",
+      title: this.hasNoteConfig
+        ? "当前是未保存的工作态，已偏离笔记配置"
+        : "当前是未保存的工作态，尚未存入笔记",
+    };
+  }
+
+  private areSettingsEqual(a: RendererConfig, b: RendererConfig): boolean {
+    for (const key of PRESET_KEYS) {
+      if (JSON.stringify(a[key]) !== JSON.stringify(b[key])) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private cloneSettings(settings: RendererConfig): RendererConfig {
+    return {
+      ...settings,
+      coverEffects: Object.fromEntries(
+        Object.entries(settings.coverEffects).map(([name, params]) => [name, { ...params }]),
+      ),
+      bodyEffects: Object.fromEntries(
+        Object.entries(settings.bodyEffects).map(([name, params]) => [name, { ...params }]),
+      ),
+    } as RendererConfig;
   }
 
   private syncPresetUi(s: RendererConfig): void {
@@ -358,7 +640,7 @@ export class PreviewView extends ItemView implements PanelHost {
     const isModified = presetName ? this.isPresetModified(s) : false;
     const presetLocked = presetName ? this.plugin.isPresetLocked(presetName) : false;
     const selectedOpt = presetName
-      ? this.refs.presetSelect.querySelector<HTMLOptionElement>(`option[value="${CSS.escape(presetName)}"]`)
+      ? findOptionByValue(this.refs.presetSelect, presetName)
       : null;
 
     this.refs.presetSelect.value = presetName;
@@ -367,8 +649,15 @@ export class PreviewView extends ItemView implements PanelHost {
     this.refs.presetLockBtn.disabled = !presetName;
     this.refs.presetLockBtn.classList.toggle("is-disabled", !presetName);
 
+    for (const name of this.plugin.getPresetNames()) {
+      const opt = findOptionByValue(this.refs.presetSelect, name);
+      if (opt) {
+        opt.text = this.plugin.getPresetDisplayName(name);
+      }
+    }
+
     if (selectedOpt) {
-      selectedOpt.text = isModified ? `${baseLabel} (modified)` : baseLabel;
+      selectedOpt.text = isModified ? `${baseLabel} (modified)` : this.plugin.getPresetDisplayName(presetName);
     }
   }
 
@@ -392,9 +681,13 @@ export class PreviewView extends ItemView implements PanelHost {
     const r = this.refs;
     const strokeOn = s.coverStrokeStyle !== "none";
     const align = s.coverTextAlign ?? "left";
+    const markStyle = s.coverMarkStyle ?? "marker";
 
     r.scaleInput.value = String(s.coverFontScale);
     r.coverOpacityInput.value = String(s.coverFontOpacity ?? 100);
+    r.coverMarkStyleBtns.marker.classList.toggle("nr-btn-active", markStyle === "marker");
+    r.coverMarkStyleBtns.block.classList.toggle("nr-btn-active", markStyle === "block");
+    r.coverMarkStyleBtns.underline.classList.toggle("nr-btn-active", markStyle === "underline");
     r.lsInput.value = String(s.coverLetterSpacing);
     r.lhInput.value = String(s.coverLineHeight);
     r.strokeStyleSelect.value = s.coverStrokeStyle;
@@ -410,7 +703,8 @@ export class PreviewView extends ItemView implements PanelHost {
     r.overlayToggle.classList.toggle("active", s.coverEffects?.overlay?.enabled ?? false);
     r.oxInput.value = String(s.coverOffsetX);
     r.oyInput.value = String(s.coverOffsetY);
-    r.coverPaddingInput.value = String(s.coverPagePaddingX ?? 90);
+    const coverPaddingMode = s.pageMode === "long" ? "long" : "card";
+    r.coverPaddingInput.value = String(s.coverPagePaddingX ?? getDefaultCoverPaddingX(coverPaddingMode));
     r.shadowToggle.classList.toggle("active", s.coverShadow);
     r.blurInput.value = String(s.coverShadowBlur);
     r.shadowColorInput.value = parseColorValue(s.coverShadowColor, "#000000");
@@ -423,29 +717,42 @@ export class PreviewView extends ItemView implements PanelHost {
     r.glowParamsRow.classList.toggle("nr-hidden", !s.coverGlow);
     r.bannerParamsRow.classList.toggle("nr-hidden", !s.coverBanner);
     r.shadowParamsRow.classList.toggle("nr-hidden", !s.coverShadow);
-    r.alignBtns.left.classList.toggle("nr-btn-active", align === "left");
-    r.alignBtns.center.classList.toggle("nr-btn-active", align === "center");
-    r.alignBtns.right.classList.toggle("nr-btn-active", align === "right");
+    r.alignBtns.left.classList.toggle("active", align === "left");
+    r.alignBtns.center.classList.toggle("active", align === "center");
+    r.alignBtns.right.classList.toggle("active", align === "right");
 
-    this.syncEffectControls(s);
+    this.syncEffectControls(s, "cover");
+    this.syncEffectControls(s, "body");
   }
 
-  private syncEffectControls(s: RendererConfig): void {
+  private syncEffectControls(s: RendererConfig, target: "cover" | "body"): void {
     if (!this.refs) return;
 
-    for (const [name, chip] of Object.entries(this.refs.effectChips)) {
-      const params = s.coverEffects?.[name];
+    const chipMap = target === "cover" ? this.refs.coverEffectChips : this.refs.bodyEffectChips;
+    const rowMap = target === "cover" ? this.refs.coverEffectParamRows : this.refs.bodyEffectParamRows;
+    const effectMap = target === "cover" ? s.coverEffects : s.bodyEffects;
+
+    for (const [name, chip] of Object.entries(chipMap)) {
+      const params = effectMap?.[name];
       const enabled = params?.enabled ?? false;
       chip.classList.toggle("active", enabled);
-      const row = this.refs.effectParamRows[name];
+      const row = rowMap[name];
       if (!row) continue;
 
       row.classList.toggle("nr-hidden", !enabled);
+      const meta = EFFECT_SCHEMAS[name];
       const inputs = row.querySelectorAll<HTMLInputElement>(".nr-field-input");
       if (inputs[0] && params?.opacity != null) inputs[0].value = String(params.opacity);
+      const modeSelect = row.querySelector<HTMLSelectElement>(".nr-effect-mode-select");
+      if (modeSelect && meta?.defaultMode != null) {
+        modeSelect.value = params?.mode ?? meta.defaultMode;
+      }
+      const shapeSelect = row.querySelector<HTMLSelectElement>(".nr-effect-shape-select");
+      if (shapeSelect && meta?.defaultShape != null) {
+        shapeSelect.value = params?.shape ?? meta.defaultShape;
+      }
 
       let inputIndex = 1;
-      const meta = EFFECT_SCHEMAS[name];
       if (meta?.defaultCount != null && inputs[inputIndex]) {
         inputs[inputIndex].value = String(params?.count ?? meta.defaultCount);
         inputIndex += 1;
@@ -492,9 +799,15 @@ export class PreviewView extends ItemView implements PanelHost {
     }
     const markdown = await this.app.vault.read(file);
     const options = extractRenderOptions(this.effective);
-
-    const updated = saveFullNoteConfig(markdown, options);
+    const activePreset = this.getActivePresetName();
+    const updated = activePreset && !this.isPresetModified(this.effective)
+      ? savePresetReferenceToNote(markdown, activePreset)
+      : saveFullNoteConfig(markdown, options, { activePreset: activePreset || undefined });
     await this.app.vault.modify(file, updated);
+    this.baselineSettings = this.cloneSettings(this.effective);
+    this.hasNoteConfig = true;
+    this.updateNoteActionButtons(true, this.editingNoteConfig);
+    this.syncConfigSourceUi(this.effective);
     new Notice("已存入笔记");
   }
 
@@ -508,6 +821,11 @@ export class PreviewView extends ItemView implements PanelHost {
     const markdown = await this.app.vault.read(file);
     const updated = removeNoteConfig(markdown);
     await this.app.vault.modify(file, updated);
+    this.plugin.clearActivePreset();
+    this.baselineSettings = createDefaultRendererConfig();
+    this.hasNoteConfig = false;
+    this.updateNoteActionButtons(false, this.editingNoteConfig);
+    this.syncConfigSourceUi(this.effective);
     new Notice("已移除笔记配置");
   }
 
@@ -552,23 +870,25 @@ export class PreviewView extends ItemView implements PanelHost {
     // Show/hide sections based on current page
     this.refs.coverSection.classList.toggle("nr-hidden", this.currentPage !== 0);
     this.refs.bodySection.classList.toggle("nr-hidden", this.currentPage === 0);
+    this.refs.bodyEffectsSection.classList.toggle("nr-hidden", this.currentPage === 0);
   }
 
   /** Rescale the current page clone to fit the preview area's width and height */
   private rescale(): void {
     if (!this.currentClone || !this.currentWrapper || !this.refs) return;
 
+    const pageWidth = getPageWidth(this.effectivePageMode);
     const pageHeight = PAGE_HEIGHTS[this.effectivePageMode];
     const horizontalPadding = 24;
     const verticalPadding = 24;
     const maxPreviewWidth = 460;
     const areaWidth = Math.max(1, Math.min(this.refs.previewContainer.clientWidth, maxPreviewWidth) - horizontalPadding);
     const areaHeight = Math.max(1, this.refs.previewContainer.clientHeight - verticalPadding);
-    const widthScale = areaWidth / PAGE_WIDTH;
+    const widthScale = areaWidth / pageWidth;
     const heightScale = areaHeight / pageHeight;
     const scale = Math.max(0.1, Math.min(widthScale, heightScale));
     this.currentClone.setCssStyles({ transform: `scale(${scale})` });
-    this.currentWrapper.setCssStyles({ width: `${PAGE_WIDTH * scale}px`, height: `${pageHeight * scale}px` });
+    this.currentWrapper.setCssStyles({ width: `${pageWidth * scale}px`, height: `${pageHeight * scale}px` });
 
     if (this.coverCropOverlay) {
       const cropH = PAGE_HEIGHTS["card"];

@@ -16,6 +16,7 @@ import {
   migrateSettings,
   readGroupedNoteConfig,
   readNoteConfig,
+  readNoteConfigMetadata,
   resolveMergedRenderConfig,
   writeGroupedNoteConfig,
 } from "./config-manager";
@@ -316,7 +317,12 @@ export default class NoteRendererPlugin extends Plugin {
 
     const markdown = await this.app.vault.read(file);
     const noteConfig = readNoteConfig(markdown);
-    const resolved = resolveMergedRenderConfig(this.getFallbackRenderConfig(), noteConfig);
+    const noteMeta = readNoteConfigMetadata(markdown);
+    const presetValues = noteMeta.activePreset ? this.getPresetValues(noteMeta.activePreset) : undefined;
+    const baseSettings = presetValues
+      ? { ...createDefaultRendererConfig(), ...presetValues }
+      : this.getFallbackRenderConfig();
+    const resolved = resolveMergedRenderConfig(baseSettings, noteConfig);
     const themeCss = await this.loadTheme(resolved.settings.activeTheme);
 
     const rendered = await renderNote(this.app, markdown, file.path, themeCss, resolved.settings.activeTheme, this, resolved.options);
@@ -390,7 +396,12 @@ export default class NoteRendererPlugin extends Plugin {
 
     const markdown = await this.app.vault.read(file);
     const noteConfig = readNoteConfig(markdown);
-    const resolved = resolveMergedRenderConfig(this.getFallbackRenderConfig(), noteConfig);
+    const noteMeta = readNoteConfigMetadata(markdown);
+    const presetValues = noteMeta.activePreset ? this.getPresetValues(noteMeta.activePreset) : undefined;
+    const baseSettings = presetValues
+      ? { ...createDefaultRendererConfig(), ...presetValues }
+      : this.getFallbackRenderConfig();
+    const resolved = resolveMergedRenderConfig(baseSettings, noteConfig);
     const themeCss = await this.loadTheme(resolved.settings.activeTheme);
 
     const rendered = await renderNote(this.app, markdown, file.path, themeCss, resolved.settings.activeTheme, this, resolved.options);
