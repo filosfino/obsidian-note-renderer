@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.0
+
+### Improvements
+
+- Shrink base page sizes to `600×800` (card) and `720×1200` (long) while keeping `pixelRatio: 2`, so final exports are `1200×1600` and `1440×2400`
+- Make page padding and most body structure spacing scale with page dimensions instead of relying on legacy fixed px values
+- Switch schema defaults to mode-aware values so `card` and `long` can carry different cover padding, glow, shadow, and texture defaults
+- Tighten body typography controls to `22-30px` with `1px` steps to better match the new page sizes
+- Allow note frontmatter to store just `renderer_config.presetName` when a note only references a preset, avoiding full config dumps
+- Resolve preset-only note configs correctly across preview refreshes and headless rendering paths
+- Update README / CLAUDE / TODO docs to reflect the new sizing, note-config, and preset flow
+
 ## 0.4.3
 
 ### Improvements
