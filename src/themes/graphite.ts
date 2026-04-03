@@ -43,7 +43,7 @@ export const THEME_GRAPHITE = `
 
 /* Cover emphasis: marker highlight — bottom-half stripe */
 .nr-cover-content mark {
-  background: linear-gradient(to top, rgba(255,255,255,0.15) 35%, transparent 35%);
+  background: linear-gradient(to top, rgba(255,214,102,0.42) 35%, transparent 35%);
   padding: 0 4px;
   color: inherit;
 }

@@ -247,12 +247,18 @@ ${coverColorCss}
     const textShadows: string[] = [];
     let bannerPadding: string | null = null;
     let bannerClipPath: string | null = null;
-    switch (strokeStyle) {
+      switch (strokeStyle) {
         case "none":
           break;
-        case "stroke":
-          css += ` -webkit-text-stroke: ${sw}px ${strokeColor}; paint-order: stroke fill;`;
+        case "stroke": {
+          const innerStrokeWidth = Math.max(1, Math.round(sw * 0.45));
+          css += ` -webkit-text-stroke: ${innerStrokeWidth}px ${strokeColor}; paint-order: stroke fill;`;
+          const clone = ensureOutlineBackdrop(htmlEl, sw, strokeColor, textOpacity);
+          if (clone) {
+            applyUnderlineScale(clone, fs, { overrideColor: strokeColor });
+          }
           break;
+        }
         case "double": {
           css += ` -webkit-text-stroke: ${sw}px ${strokeColor}; paint-order: stroke fill;`;
           const clone = ensureDoubleStrokeBackdrop(htmlEl, doubleStrokeWidth, doubleStrokeColor, textOpacity);
@@ -262,8 +268,13 @@ ${coverColorCss}
           break;
         }
         case "hollow": {
-          css = hasInlineColor ? ";" : ";";
-          css += ` color: transparent !important; -webkit-text-fill-color: transparent; -webkit-text-stroke: ${sw}px ${strokeColor}; paint-order: stroke fill;`;
+          css = "; color: transparent !important; -webkit-text-fill-color: transparent;";
+          const clone = ensureOutlineBackdrop(htmlEl, sw, strokeColor, textOpacity);
+          if (clone) {
+            clone.style.color = "transparent";
+            clone.style.webkitTextFillColor = "transparent";
+            applyUnderlineScale(clone, fs, { overrideColor: strokeColor });
+          }
           break;
         }
       }
@@ -841,6 +852,10 @@ function withAlpha(color: string, opacityPercent: number): string {
 }
 
 function ensureDoubleStrokeBackdrop(el: HTMLElement, radius: number, color: string, opacity = 1): HTMLElement | null {
+  return ensureOutlineBackdrop(el, radius, color, opacity);
+}
+
+function ensureOutlineBackdrop(el: HTMLElement, radius: number, color: string, opacity = 1): HTMLElement | null {
   const parent = el.parentElement;
   if (!parent) return null;
 
@@ -948,18 +963,21 @@ function buildUnderlinePath(waveHeight: number): string {
 }
 
 function buildOutlineRingShadows(radius: number, color: string): string[] {
-  const offsets = new Set<string>();
-  const steps = Math.max(16, radius * 10);
+  const clampedRadius = Math.max(1, radius);
+  const layers = Math.max(2, Math.min(6, Math.ceil(clampedRadius / 2)));
+  const blur = Math.max(0.35, Number((clampedRadius * 0.12).toFixed(2)));
+  const shadows = new Set<string>();
 
-  for (let i = 0; i < steps; i++) {
-    const angle = (Math.PI * 2 * i) / steps;
-    const x = Math.round(Math.cos(angle) * radius);
-    const y = Math.round(Math.sin(angle) * radius);
-    offsets.add(`${x},${y}`);
+  for (let layer = 1; layer <= layers; layer++) {
+    const layerRadius = Number(((clampedRadius * layer) / layers).toFixed(2));
+    const steps = Math.max(24, Math.ceil(layerRadius * 18));
+    for (let i = 0; i < steps; i++) {
+      const angle = (Math.PI * 2 * i) / steps;
+      const x = Number((Math.cos(angle) * layerRadius).toFixed(2));
+      const y = Number((Math.sin(angle) * layerRadius).toFixed(2));
+      shadows.add(`${x}px ${y}px ${blur}px ${color}`);
+    }
   }
 
-  return Array.from(offsets).map((offset) => {
-    const [x, y] = offset.split(",");
-    return `${x}px ${y}px 0 ${color}`;
-  });
+  return Array.from(shadows);
 }

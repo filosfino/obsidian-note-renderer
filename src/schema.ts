@@ -53,18 +53,18 @@ function normalizeLegacyCoverPaddingX(value: number, pageMode: "card" | "long"):
 function getLongModeNumericDefault(key: string, cardValue: number): number {
   if (key === "coverPagePaddingX") return 48;
   if (key === "coverGlowSize") return 72;
-  if (key === "coverShadowBlur") return 50;
-  if (key === "coverShadowOffsetX") return 6;
-  if (key === "coverShadowOffsetY") return 12;
+  if (key === "coverShadowBlur") return 5;
+  if (key === "coverShadowOffsetX") return 5;
+  if (key === "coverShadowOffsetY") return 5;
   return cardValue;
 }
 
 function normalizeLegacyNumericDefault(key: string, value: number, pageMode: "card" | "long"): number {
   if (pageMode === "long") {
     if (key === "coverGlowSize" && value === 60) return 72;
-    if (key === "coverShadowBlur" && value === 42) return 50;
-    if (key === "coverShadowOffsetX" && value === 5) return 6;
-    if (key === "coverShadowOffsetY" && value === 10) return 12;
+    if (key === "coverShadowBlur" && (value === 42 || value === 50)) return 5;
+    if (key === "coverShadowOffsetX" && (value === 5 || value === 6)) return 5;
+    if (key === "coverShadowOffsetY" && (value === 10 || value === 12)) return 5;
   }
   return value;
 }
@@ -169,7 +169,7 @@ export const FIELD_SCHEMAS = {
 
   // ── Cover text effects ──
   coverStrokeStyle:  { type: "string",  default: "none", enum: ["none", "stroke", "double", "hollow"] as const,
-                       description: "封面标题描边样式。stroke = 单层描边，double = 内外双描边，hollow = 透明填充仅保留外轮廓" } as StringField,
+                       description: "封面标题描边样式。stroke = 圆润单描边，double = 内外双描边，hollow = 透明填充仅保留外轮廓" } as StringField,
   coverStrokePercent:{ type: "number",  default: 8, min: 0, max: 100, step: 0.5,
                        description: "主描边粗细（相对于字号的百分比）。double 模式下表示内描边，hollow 模式下表示镂空轮廓粗细" } as NumericField,
   coverStrokeOpacity:{ type: "number",  default: 34, min: 0, max: 100,
@@ -188,11 +188,11 @@ export const FIELD_SCHEMAS = {
                        description: "发光颜色，留空则跟随文字颜色；支持任意 CSS 颜色值" } as StringField,
   coverShadow:       { type: "boolean", default: false,
                        description: "封面标题是否显示投影" } as BooleanField,
-  coverShadowBlur:   { type: "number",  default: 42, min: 0, max: 200,
+  coverShadowBlur:   { type: "number",  default: 5, min: 0, max: 200,
                        description: "标题投影模糊半径" } as NumericField,
   coverShadowOffsetX:{ type: "number",  default: 5, min: -100, max: 100,
                        description: "标题投影水平偏移" } as NumericField,
-  coverShadowOffsetY:{ type: "number",  default: 10, min: -100, max: 100,
+  coverShadowOffsetY:{ type: "number",  default: 5, min: -100, max: 100,
                        description: "标题投影垂直偏移" } as NumericField,
   coverShadowColor:  { type: "string",  default: "rgba(0,0,0,0.6)",
                        description: "标题投影颜色，支持任意 CSS 颜色值含 rgba" } as StringField,
@@ -530,8 +530,8 @@ export const COVER_SEMANTIC_SCHEMA = {
     fields: {
       style: { description: "描边模式：none / stroke / double / hollow", relatedFields: ["coverStrokePercent", "coverDoubleStrokePercent"] },
       opacity: { description: "描边透明度；主要作用于描边层，不影响文字填充", appliesWhen: "coverStrokeStyle != none && coverStrokeStyle != hollow" },
-      innerWidth: { description: "内描边粗度，相对字号的百分比", appliesWhen: "coverStrokeStyle in [stroke, double, hollow]", relatedFields: ["coverStrokeStyle", "coverStrokeColor"] },
-      innerColor: { description: "内描边颜色；留空时跟随当前 theme 派生色", followsThemeWhenEmpty: true, relatedFields: ["coverFontColor", "coverDoubleStrokeColor"], appliesWhen: "coverStrokeStyle in [stroke, double, hollow]" },
+      innerWidth: { description: "描边粗度，相对字号的百分比", appliesWhen: "coverStrokeStyle in [stroke, double, hollow]", relatedFields: ["coverStrokeStyle", "coverStrokeColor"] },
+      innerColor: { description: "描边颜色；留空时跟随当前 theme 派生色", followsThemeWhenEmpty: true, relatedFields: ["coverFontColor", "coverDoubleStrokeColor"], appliesWhen: "coverStrokeStyle in [stroke, double, hollow]" },
       outerWidth: { description: "外描边粗度，仅 double 模式生效", appliesWhen: "coverStrokeStyle == double", relatedFields: ["coverStrokeStyle", "coverDoubleStrokeColor"] },
       outerColor: { description: "外描边颜色，仅 double 模式生效；留空时跟随当前 theme 派生色", followsThemeWhenEmpty: true, relatedFields: ["coverStrokeColor"], appliesWhen: "coverStrokeStyle == double" },
     },
@@ -660,8 +660,8 @@ export function buildCoverConfig(options: RenderOptions): CoverConfig {
     },
     shadow: {
       enabled: options.coverShadow !== false,
-      blur: options.coverShadowBlur ?? 21,
-      offsetX: options.coverShadowOffsetX ?? 3,
+      blur: options.coverShadowBlur ?? 5,
+      offsetX: options.coverShadowOffsetX ?? 5,
       offsetY: options.coverShadowOffsetY ?? 5,
       color: options.coverShadowColor || "rgba(0,0,0,0.6)",
     },

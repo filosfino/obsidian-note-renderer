@@ -1,8 +1,9 @@
 /**
  * config-manager.ts — Unified render config merge / extraction helpers.
  *
- * Note-level renderer_config support has been removed. The only remaining
- * source of truth is the plugin fallback config plus optional preset values.
+ * Primary flow uses plugin fallback config plus optional presets.
+ * A lightweight note-level renderer_config frontmatter layer is still supported
+ * for explicit save/remove actions in the preview UI.
  */
 
 import {
@@ -22,6 +23,17 @@ export interface ResolvedRenderConfig {
   settings: RendererConfig;
   options: RenderOptions;
   cover: CoverConfig;
+}
+
+export interface NoteConfigMetadata {
+  activePreset?: string;
+}
+
+interface ParsedFrontmatter {
+  data: Record<string, unknown>;
+  body: string;
+  hasFrontmatter: boolean;
+  parseError: boolean;
 }
 
 /**
@@ -70,10 +82,107 @@ export function resolveMergedRenderConfig(
   return { settings, options, cover };
 }
 
+export function readNoteConfig(markdown: string): Partial<RenderOptions> | null {
+  const frontmatter = parseFrontmatter(markdown);
+  const config = frontmatter.data.renderer_config;
+  if (!config || typeof config !== "object" || Array.isArray(config)) return null;
+  const { presetName, activePreset, ...rest } = config as Record<string, unknown>;
+  void presetName;
+  void activePreset;
+  return rest as Partial<RenderOptions>;
+}
+
+export function readNoteConfigMetadata(markdown: string): NoteConfigMetadata {
+  const frontmatter = parseFrontmatter(markdown);
+  const config = frontmatter.data.renderer_config;
+  if (!config || typeof config !== "object" || Array.isArray(config)) return {};
+
+  const raw = config as Record<string, unknown>;
+  const activePreset = typeof raw.presetName === "string" && raw.presetName
+    ? raw.presetName
+    : raw.activePreset;
+  return typeof activePreset === "string" && activePreset
+    ? { activePreset }
+    : {};
+}
+
+export function saveFullNoteConfig(
+  markdown: string,
+  options: RenderOptions,
+  metadata: NoteConfigMetadata = {},
+): string {
+  return writeFrontmatter(markdown, options, metadata);
+}
+
+export function savePresetReferenceToNote(markdown: string, presetName: string): string {
+  return writeFrontmatter(markdown, {}, { activePreset: presetName });
+}
+
+export function removeNoteConfig(markdown: string): string {
+  return writeFrontmatter(markdown, null);
+}
+
 function deepCopyEffects(effects: Record<string, EffectParams>): Record<string, EffectParams> {
   return Object.fromEntries(
     Object.entries(effects).map(([name, params]) => [name, { ...params }]),
   );
+}
+
+function parseFrontmatter(markdown: string): ParsedFrontmatter {
+  const yaml = require("js-yaml") as typeof import("js-yaml");
+  const match = markdown.match(/^---\n([\s\S]*?)\n---\n?/);
+  if (!match) return { data: {}, body: markdown, hasFrontmatter: false, parseError: false };
+
+  let data: Record<string, unknown> = {};
+  let parseError = false;
+  try {
+    const parsed = yaml.load(match[1]);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      data = parsed as Record<string, unknown>;
+    }
+  } catch {
+    parseError = true;
+  }
+
+  return {
+    data,
+    body: markdown.slice(match[0].length),
+    hasFrontmatter: true,
+    parseError,
+  };
+}
+
+function writeFrontmatter(
+  markdown: string,
+  rendererConfig: Record<string, unknown> | null,
+  metadata: NoteConfigMetadata = {},
+): string {
+  const yaml = require("js-yaml") as typeof import("js-yaml");
+  const { data, body, hasFrontmatter, parseError } = parseFrontmatter(markdown);
+  if (hasFrontmatter && parseError) return markdown;
+
+  const next = { ...data };
+  const payload = {
+    ...(rendererConfig ?? {}),
+    ...(metadata.activePreset ? { presetName: metadata.activePreset } : {}),
+  };
+  if (Object.keys(payload).length > 0) {
+    next.renderer_config = payload;
+  } else {
+    delete next.renderer_config;
+  }
+
+  const cleanedBody = body.replace(/^\n+/, "");
+  if (Object.keys(next).length === 0) {
+    return cleanedBody.trimStart();
+  }
+
+  const yamlStr = yaml.dump(next, {
+    indent: 2,
+    lineWidth: -1,
+    sortKeys: false,
+  });
+  return `---\n${yamlStr}---\n\n${cleanedBody}`;
 }
 
 export { extractRenderOptions, buildCoverConfig, RENDER_KEYS, RENDER_DEFAULTS };

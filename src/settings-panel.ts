@@ -22,6 +22,8 @@ export interface PanelHost {
   goPage(delta: number): void;
   handleExportCurrentPage(): Promise<void>;
   handleExport(): Promise<void>;
+  handleSaveToNote(): Promise<void>;
+  handleRemoveFromNote(): Promise<void>;
   applyPreset(name: string): Promise<void>;
   clearPresetSelection(): Promise<void>;
   rebuildPresetOptions(): void;
@@ -75,6 +77,8 @@ export interface PanelRefs {
   bodyEffectChips: Record<string, HTMLElement>;
   bodyEffectParamRows: Record<string, HTMLElement>;
   coverColorInput: HTMLInputElement;
+  saveToNoteBtn: HTMLButtonElement;
+  removeFromNoteBtn: HTMLButtonElement;
   coverSection: HTMLElement;
   bodySection: HTMLElement;
   bodyEffectsSection: HTMLElement;
@@ -170,11 +174,20 @@ function makeField(
   return input;
 }
 
+function normalizeHexColor(color: string): string {
+  if (!color.startsWith("#")) return color;
+  const hex = color.slice(1).trim();
+  if (hex.length === 3) {
+    return `#${hex.split("").map((ch) => ch + ch).join("")}`;
+  }
+  return color;
+}
+
 function parseColorValue(color: string | null | undefined, fallback = "#000000"): string {
-  if (!color) return fallback;
-  if (color.startsWith("#")) return color;
+  if (!color) return normalizeHexColor(fallback);
+  if (color.startsWith("#")) return normalizeHexColor(color);
   const parts = color.match(/[\d.]+/g);
-  if (!parts || parts.length < 3) return fallback;
+  if (!parts || parts.length < 3) return normalizeHexColor(fallback);
   return "#" + [0, 1, 2]
     .map((index) => Math.round(Number(parts[index])).toString(16).padStart(2, "0"))
     .join("");
@@ -1654,8 +1667,14 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   // Navigation — 3-column layout
   const nav = contentEl.createDiv("nr-nav");
 
-  // Left: reserved for future actions
   const navLeft = nav.createDiv("nr-nav-left");
+  const saveToNoteBtn = navLeft.createEl("button", { cls: "nr-btn nr-btn-sm nr-btn-text nr-save-note-btn", text: "存入笔记" });
+  saveToNoteBtn.title = "保存当前配置到笔记";
+  saveToNoteBtn.addEventListener("click", () => { void host.handleSaveToNote(); });
+
+  const removeFromNoteBtn = navLeft.createEl("button", { cls: "nr-btn nr-btn-sm nr-btn-text nr-remove-note-btn", text: "移除" });
+  removeFromNoteBtn.title = "从笔记中删除渲染配置";
+  removeFromNoteBtn.addEventListener("click", () => { void host.handleRemoveFromNote(); });
 
   // Center: pagination with single-page export
   const navCenter = nav.createDiv("nr-nav-center");
@@ -1727,6 +1746,8 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     bodyEffectChips,
     bodyEffectParamRows,
     coverColorInput: colorInput,
+    saveToNoteBtn,
+    removeFromNoteBtn,
     coverSection,
     bodySection,
     bodyEffectsSection: bodyEffectsWrap,

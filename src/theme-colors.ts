@@ -65,7 +65,7 @@ export const BUILT_IN_THEME_COLOR_TOKENS = {
     background: "#3a3a3a",
     bodyText: "#e0e0e0",
     title: "#fff",
-    highlight: "rgba(255,255,255,0.15)",
+    highlight: "rgba(255,214,102,0.42)",
     blockquoteText: "#bbb",
     blockquoteBorder: "#555",
     inlineCodeText: "#ff7a7a",

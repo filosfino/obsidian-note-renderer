@@ -70,6 +70,11 @@
   background: var(--background-modifier-hover);
 }
 
+.nr-view .nr-btn-sm.nr-btn-text {
+  width: auto;
+  padding: 0 8px;
+}
+
 .nr-btn-active {
   background: var(--interactive-accent) !important;
   color: var(--text-on-accent) !important;

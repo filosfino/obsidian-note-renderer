@@ -11,6 +11,12 @@ import { exportPages, exportSinglePage } from "./exporter";
 import { deriveCoverStrokePalette, extractCoverTitleColor } from "./effects";
 import { BODY_EFFECT_NAMES, EFFECT_SCHEMAS, RENDER_DEFAULTS, getDefaultCoverPaddingX, isCoverSemanticFieldActive } from "./schema";
 import {
+  readNoteConfig,
+  readNoteConfigMetadata,
+  resolveMergedRenderConfig,
+  saveFullNoteConfig,
+  savePresetReferenceToNote,
+  removeNoteConfig,
   extractRenderOptions,
 } from "./config-manager";
 import type NoteRendererPlugin from "./main";
@@ -21,6 +27,7 @@ import { getModeAwareRenderDefaults } from "./schema";
 interface NoteSession {
   filePath: string;
   markdown: string;
+  hasNoteConfig: boolean;
   shouldResetWorkingConfig: boolean;
   effectiveSettings: RendererConfig;
   renderOptions: ReturnType<typeof extractRenderOptions>;
@@ -28,11 +35,20 @@ interface NoteSession {
 
 type PresetValues = Partial<RendererConfig>;
 
+function normalizeHexColor(color: string): string {
+  if (!color.startsWith("#")) return color;
+  const hex = color.slice(1).trim();
+  if (hex.length === 3) {
+    return `#${hex.split("").map((ch) => ch + ch).join("")}`;
+  }
+  return color;
+}
+
 function parseColorValue(color: string, fallback = "#000000"): string {
-  if (!color) return fallback;
-  if (color.startsWith("#")) return color;
+  if (!color) return normalizeHexColor(fallback);
+  if (color.startsWith("#")) return normalizeHexColor(color);
   const parts = color.match(/[\d.]+/g);
-  if (!parts || parts.length < 3) return fallback;
+  if (!parts || parts.length < 3) return normalizeHexColor(fallback);
   return "#" + [0, 1, 2]
     .map((index) => Math.round(Number(parts[index])).toString(16).padStart(2, "0"))
     .join("");
@@ -70,6 +86,7 @@ export class PreviewView extends ItemView implements PanelHost {
 
   // Guard: true while syncing UI from effective settings, prevents change handlers from looping.
   syncing = false;
+  private hasNoteConfig = false;
 
   // The effective settings (note config or fallback plugin defaults) — UI handlers read from this
   effective: RendererConfig = {
@@ -218,19 +235,38 @@ export class PreviewView extends ItemView implements PanelHost {
     }
 
     const markdown = await this.app.vault.read(file);
+    const noteConfig = readNoteConfig(markdown);
+    const noteMeta = readNoteConfigMetadata(markdown);
     const switchedFile = filePath !== this.currentFilePath;
-    const effectiveSettings = switchedFile
-      ? createDefaultRendererConfig()
-      : this.plugin.getFallbackRenderConfig();
+    const activePreset = noteMeta.activePreset && this.plugin.getPresetValues(noteMeta.activePreset)
+      ? noteMeta.activePreset
+      : "";
+    const hasNoteConfig = !!noteConfig || !!activePreset;
+
     if (switchedFile) {
+      const baseSettings = activePreset
+        ? this.buildSettingsFromPreset(activePreset) ?? createDefaultRendererConfig()
+        : createDefaultRendererConfig();
+      const resolved = resolveMergedRenderConfig(baseSettings, noteConfig);
       this.resetWorkingConfigToDefault();
-      this.plugin.clearActivePreset();
+      this.plugin.setActivePresetName(activePreset);
+      return {
+        filePath,
+        markdown,
+        hasNoteConfig,
+        shouldResetWorkingConfig: true,
+        effectiveSettings: resolved.settings,
+        renderOptions: resolved.options,
+      };
     }
+
+    const effectiveSettings = this.plugin.getFallbackRenderConfig();
 
     return {
       filePath,
       markdown,
-      shouldResetWorkingConfig: switchedFile,
+      hasNoteConfig,
+      shouldResetWorkingConfig: false,
       effectiveSettings,
       renderOptions: extractRenderOptions(effectiveSettings),
     };
@@ -238,10 +274,18 @@ export class PreviewView extends ItemView implements PanelHost {
 
   private applyNoteSession(session: NoteSession): void {
     this.currentFilePath = session.filePath;
+    this.hasNoteConfig = session.hasNoteConfig;
     this.effective = session.effectiveSettings;
     if (session.shouldResetWorkingConfig) {
       this.baselineSettings = this.cloneSettings(session.effectiveSettings);
     }
+    this.updateNoteActionButtons(session.hasNoteConfig);
+  }
+
+  private updateNoteActionButtons(hasNoteConfig: boolean): void {
+    if (!this.refs) return;
+    this.refs.saveToNoteBtn.classList.remove("nr-hidden");
+    this.refs.removeFromNoteBtn.classList.toggle("nr-hidden", !hasNoteConfig);
   }
 
   private resetWorkingConfigToDefault(): void {
@@ -489,16 +533,26 @@ export class PreviewView extends ItemView implements PanelHost {
     badge.textContent = source.label;
     badge.title = source.title;
     badge.classList.remove("is-note");
+    badge.classList.toggle("is-note", source.kind === "note");
     badge.classList.toggle("is-working", source.kind === "working");
   }
 
   private getConfigSourceState(s: RendererConfig): {
-    kind: "working" | "default";
+    kind: "note" | "working" | "default";
     label: string;
     title: string;
   } {
     const activePreset = this.getActivePresetName();
+    const matchesBaseline = this.areSettingsEqual(s, this.baselineSettings);
     const matchesDefault = this.areSettingsEqual(s, createDefaultRendererConfig());
+
+    if (this.hasNoteConfig && matchesBaseline) {
+      return {
+        kind: "note",
+        label: "笔记配置",
+        title: "当前使用笔记里的 renderer_config",
+      };
+    }
 
     if (activePreset) {
       return {
@@ -519,7 +573,9 @@ export class PreviewView extends ItemView implements PanelHost {
     return {
       kind: "working",
       label: "工作态",
-      title: "当前是未保存的工作态",
+      title: this.hasNoteConfig
+        ? "当前是未保存的工作态，已偏离笔记配置"
+        : "当前是未保存的工作态",
     };
   }
 
@@ -826,6 +882,43 @@ export class PreviewView extends ItemView implements PanelHost {
       `${zipName}.zip`,
       `Exported ${this.pages.length} pages`,
     );
+  }
+
+  async handleSaveToNote(): Promise<void> {
+    const file = this.app.workspace.getActiveFile();
+    if (!file || file.extension !== "md") {
+      new Notice("No active Markdown file");
+      return;
+    }
+
+    const markdown = await this.app.vault.read(file);
+    const activePreset = this.getActivePresetName();
+    const updated = activePreset && !this.isPresetModified(this.effective)
+      ? savePresetReferenceToNote(markdown, activePreset)
+      : saveFullNoteConfig(markdown, extractRenderOptions(this.effective), { activePreset: activePreset || undefined });
+    await this.app.vault.modify(file, updated);
+    this.baselineSettings = this.cloneSettings(this.effective);
+    this.hasNoteConfig = true;
+    this.updateNoteActionButtons(true);
+    this.syncConfigSourceUi(this.effective);
+    new Notice("已存入笔记");
+  }
+
+  async handleRemoveFromNote(): Promise<void> {
+    const file = this.app.workspace.getActiveFile();
+    if (!file || file.extension !== "md") {
+      new Notice("No active Markdown file");
+      return;
+    }
+
+    const markdown = await this.app.vault.read(file);
+    const updated = removeNoteConfig(markdown);
+    await this.app.vault.modify(file, updated);
+    this.hasNoteConfig = false;
+    this.baselineSettings = createDefaultRendererConfig();
+    this.updateNoteActionButtons(false);
+    this.syncConfigSourceUi(this.effective);
+    new Notice("已从笔记删除配置");
   }
 
   private async runExport(
