@@ -15,19 +15,15 @@ export interface PanelHost {
   app: App;
   effective: RendererConfig;
   syncing: boolean;
-  editingNoteConfig: boolean;
   lastStrokeStyle: string;
 
   updateSetting<K extends keyof RendererConfig>(key: K, value: RendererConfig[K]): Promise<void>;
-  updateNoteConfig(key: string, value: unknown): Promise<void>;
   refresh(): Promise<void>;
   goPage(delta: number): void;
   handleExportCurrentPage(): Promise<void>;
   handleExport(): Promise<void>;
   applyPreset(name: string): Promise<void>;
   clearPresetSelection(): Promise<void>;
-  handleSaveToNote(): Promise<void>;
-  handleRemoveFromNote(): Promise<void>;
   rebuildPresetOptions(): void;
 }
 
@@ -79,8 +75,6 @@ export interface PanelRefs {
   bodyEffectChips: Record<string, HTMLElement>;
   bodyEffectParamRows: Record<string, HTMLElement>;
   coverColorInput: HTMLInputElement;
-  saveToNoteBtn: HTMLElement;
-  removeFromNoteBtn: HTMLElement;
   coverSection: HTMLElement;
   bodySection: HTMLElement;
   bodyEffectsSection: HTMLElement;
@@ -1660,15 +1654,8 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
   // Navigation — 3-column layout
   const nav = contentEl.createDiv("nr-nav");
 
-  // Left: note actions
+  // Left: reserved for future actions
   const navLeft = nav.createDiv("nr-nav-left");
-  const saveToNoteBtn = navLeft.createEl("button", { cls: "nr-btn nr-btn-sm nr-btn-text nr-save-note-btn", text: "存入笔记" });
-  saveToNoteBtn.title = "保存当前配置到笔记";
-  saveToNoteBtn.addEventListener("click", () => { void host.handleSaveToNote(); });
-
-  const removeFromNoteBtn = navLeft.createEl("button", { cls: "nr-btn nr-btn-sm nr-btn-text nr-remove-note-btn", text: "移除" });
-  removeFromNoteBtn.title = "移除笔记中的渲染配置";
-  removeFromNoteBtn.addEventListener("click", () => { void host.handleRemoveFromNote(); });
 
   // Center: pagination with single-page export
   const navCenter = nav.createDiv("nr-nav-center");
@@ -1740,8 +1727,6 @@ export function buildSettingsPanel(host: PanelHost, contentEl: HTMLElement): Pan
     bodyEffectChips,
     bodyEffectParamRows,
     coverColorInput: colorInput,
-    saveToNoteBtn,
-    removeFromNoteBtn,
     coverSection,
     bodySection,
     bodyEffectsSection: bodyEffectsWrap,

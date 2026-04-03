@@ -2,9 +2,8 @@
 
 ## 已完成
 
-- `renderer_config` 默认写回 frontmatter，统一落盘为 grouped schema，并自动补 `rendererConfigVersion`
-- 纯 preset 引用的 note 现在可只保存 `renderer_config.presetName`；存在 note override 时才落 grouped schema
-- frontmatter YAML 损坏时，写回会安全跳过，避免误删原 metadata
+- note 内 `renderer_config` 支持已整体移除；工作流统一收敛到 preset + working config
+- `schema.json` 已裁剪为紧凑 runtime export，不再输出 grouped / flat / semantic 多套兼容快照
 - parser 会忽略 fenced code block 里的 `## ...`，正文示例不再误切分章节
 - 图片解析带当前 note 路径上下文，重名附件优先按 source note 解析
 - headless 导出缩放改为插件内置 blob/canvas 路径，不再依赖 `sips`
@@ -19,8 +18,7 @@
 ## P0
 
 - 给 `refresh()` / 导出流程补更贴近真实使用的 integration-style 测试
-- 把 `README.md` 里的 CLI / renderer_config 示例补成一组最小可运行 cookbook，覆盖单页导出、批量导出、迁移写回
-- 评估 `preview-view.ts` 里 file watcher 与 note write guard 的竞态边界，特别是连续切 note + 自动保存的场景
+- 评估 `preview-view.ts` 里 file watcher 与切 note 重置 working config 的竞态边界
 
 ## P1
 

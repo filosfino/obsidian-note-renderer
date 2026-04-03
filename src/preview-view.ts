@@ -11,13 +11,6 @@ import { exportPages, exportSinglePage } from "./exporter";
 import { deriveCoverStrokePalette, extractCoverTitleColor } from "./effects";
 import { BODY_EFFECT_NAMES, EFFECT_SCHEMAS, RENDER_DEFAULTS, getDefaultCoverPaddingX, isCoverSemanticFieldActive } from "./schema";
 import {
-  readNoteConfig,
-  readNoteConfigMetadata,
-  resolveMergedRenderConfig,
-  updateNoteConfigKey,
-  saveFullNoteConfig,
-  savePresetReferenceToNote,
-  removeNoteConfig,
   extractRenderOptions,
 } from "./config-manager";
 import type NoteRendererPlugin from "./main";
@@ -28,9 +21,7 @@ import { getModeAwareRenderDefaults } from "./schema";
 interface NoteSession {
   filePath: string;
   markdown: string;
-  hasNoteConfig: boolean;
   shouldResetWorkingConfig: boolean;
-  editingNoteConfig: boolean;
   effectiveSettings: RendererConfig;
   renderOptions: ReturnType<typeof extractRenderOptions>;
 }
@@ -77,21 +68,15 @@ export class PreviewView extends ItemView implements PanelHost {
   private effectivePageMode: "long" | "card" = "long";
   private currentFilePath: string | null = null;
 
-  // Guard: true while syncing UI from renderer_config, prevents change handlers from writing back during refresh
+  // Guard: true while syncing UI from effective settings, prevents change handlers from looping.
   syncing = false;
 
-  // Note-first mode: UI parameter changes write to the active note's renderer_config when a markdown note is open
-  editingNoteConfig = false;
   // The effective settings (note config or fallback plugin defaults) — UI handlers read from this
   effective: RendererConfig = {
     ...RENDER_DEFAULTS,
     coverEffects: { ...RENDER_DEFAULTS.coverEffects },
     bodyEffects: { ...RENDER_DEFAULTS.bodyEffects },
   } as RendererConfig;
-  // Guard: true while writing note config, prevents file-change watcher from triggering refresh
-  private writingNoteConfig = false;
-  // Track whether current note actually has a renderer_config
-  private hasNoteConfig = false;
   private baselineSettings: RendererConfig = createDefaultRendererConfig();
   // Last stroke style before disabling
   lastStrokeStyle: string = "stroke";
@@ -130,7 +115,6 @@ export class PreviewView extends ItemView implements PanelHost {
     const debouncedRefresh = debounce(() => this.refresh(), 250, false);
 
     this.fileChangeHandler = (file: TAbstractFile) => {
-      if (this.writingNoteConfig) return;
       const activeFile = this.app.workspace.getActiveFile();
       if (activeFile && file.path === activeFile.path) {
         debouncedRefresh();
@@ -234,43 +218,19 @@ export class PreviewView extends ItemView implements PanelHost {
     }
 
     const markdown = await this.app.vault.read(file);
-    const noteConfig = readNoteConfig(markdown);
-    const noteMeta = readNoteConfigMetadata(markdown);
     const switchedFile = filePath !== this.currentFilePath;
-    const activePreset = noteMeta.activePreset && this.plugin.getPresetValues(noteMeta.activePreset)
-      ? noteMeta.activePreset
-      : "";
-    const hasNoteSource = !!noteConfig || !!activePreset;
-
-    if (switchedFile || hasNoteSource) {
-      const baseSettings = activePreset
-        ? this.buildSettingsFromPreset(activePreset) ?? createDefaultRendererConfig()
-        : createDefaultRendererConfig();
-      const resolved = resolveMergedRenderConfig(
-        baseSettings,
-        noteConfig,
-      );
-      this.plugin.setActivePresetName(activePreset);
-
-      return {
-        filePath,
-        markdown,
-        hasNoteConfig: hasNoteSource,
-        shouldResetWorkingConfig: true,
-        editingNoteConfig: false,
-        effectiveSettings: resolved.settings,
-        renderOptions: resolved.options,
-      };
+    const effectiveSettings = switchedFile
+      ? createDefaultRendererConfig()
+      : this.plugin.getFallbackRenderConfig();
+    if (switchedFile) {
+      this.resetWorkingConfigToDefault();
+      this.plugin.clearActivePreset();
     }
-
-    const effectiveSettings = this.plugin.getFallbackRenderConfig();
 
     return {
       filePath,
       markdown,
-      hasNoteConfig: !!noteConfig,
-      shouldResetWorkingConfig: false,
-      editingNoteConfig: false,
+      shouldResetWorkingConfig: switchedFile,
       effectiveSettings,
       renderOptions: extractRenderOptions(effectiveSettings),
     };
@@ -278,19 +238,10 @@ export class PreviewView extends ItemView implements PanelHost {
 
   private applyNoteSession(session: NoteSession): void {
     this.currentFilePath = session.filePath;
-    this.hasNoteConfig = session.hasNoteConfig;
     this.effective = session.effectiveSettings;
     if (session.shouldResetWorkingConfig) {
       this.baselineSettings = this.cloneSettings(session.effectiveSettings);
     }
-    this.editingNoteConfig = session.editingNoteConfig;
-    this.updateNoteActionButtons(session.hasNoteConfig, session.editingNoteConfig);
-  }
-
-  private updateNoteActionButtons(hasNoteConfig: boolean, editingNoteConfig: boolean): void {
-    if (!this.refs) return;
-    this.refs.saveToNoteBtn.classList.remove("nr-hidden");
-    this.refs.removeFromNoteBtn.classList.toggle("nr-hidden", !hasNoteConfig);
   }
 
   private resetWorkingConfigToDefault(): void {
@@ -434,33 +385,6 @@ export class PreviewView extends ItemView implements PanelHost {
     ) as T;
   }
 
-  /**
-   * Update a single key in the active note's renderer_config JSON.
-   * Reads the note, modifies the JSON, writes it back.
-   */
-  async updateNoteConfig(key: string, value: unknown): Promise<void> {
-    const file = this.app.workspace.getActiveFile();
-    if (!file || file.extension !== "md") return;
-
-    const markdown = await this.app.vault.read(file);
-    const hasNoteConfig = !!readNoteConfig(markdown);
-    const updated = hasNoteConfig
-      ? updateNoteConfigKey(markdown, key, value, { activePreset: this.getActivePresetName() || undefined })
-      : (() => {
-          const nextSettings: RendererConfig = {
-            ...this.effective,
-            [key]: value,
-          };
-          const nextOptions = extractRenderOptions(nextSettings);
-          return saveFullNoteConfig(markdown, nextOptions, { activePreset: this.getActivePresetName() || undefined });
-        })();
-    if (updated === markdown) return;
-
-    this.writingNoteConfig = true;
-    await this.app.vault.modify(file, updated);
-    setTimeout(() => { this.writingNoteConfig = false; }, 100);
-  }
-
   async applyPreset(name: string): Promise<void> {
     const preset = this.plugin.getPresetValues(name);
     if (!preset) return;
@@ -545,7 +469,7 @@ export class PreviewView extends ItemView implements PanelHost {
     return false;
   }
 
-  /** Sync UI control display values to reflect effective settings (e.g. after renderer_config override). */
+  /** Sync UI control display values to reflect effective settings. */
   private syncUiToSettings(s: RendererConfig): void {
     if (!this.refs) return;
     this.syncing = true;
@@ -564,28 +488,17 @@ export class PreviewView extends ItemView implements PanelHost {
     const source = this.getConfigSourceState(s);
     badge.textContent = source.label;
     badge.title = source.title;
-    badge.classList.toggle("is-note", source.kind === "note");
-    badge.classList.toggle("is-working", source.kind !== "note");
+    badge.classList.remove("is-note");
+    badge.classList.toggle("is-working", source.kind === "working");
   }
 
   private getConfigSourceState(s: RendererConfig): {
-    kind: "note" | "working" | "default";
+    kind: "working" | "default";
     label: string;
     title: string;
   } {
     const activePreset = this.getActivePresetName();
-    const matchesBaseline = this.areSettingsEqual(s, this.baselineSettings);
     const matchesDefault = this.areSettingsEqual(s, createDefaultRendererConfig());
-
-    if (this.hasNoteConfig && matchesBaseline) {
-      return {
-        kind: "note",
-        label: "笔记配置",
-        title: activePreset
-          ? `当前使用笔记配置，关联预设「${activePreset}」`
-          : "当前使用笔记里的 renderer_config",
-      };
-    }
 
     if (activePreset) {
       return {
@@ -595,20 +508,18 @@ export class PreviewView extends ItemView implements PanelHost {
       };
     }
 
-    if (!this.hasNoteConfig && matchesDefault) {
+    if (matchesDefault) {
       return {
         kind: "default",
         label: "默认值",
-        title: "当前没有笔记配置，预览使用默认值",
+        title: "当前没有选中预设，预览使用默认值",
       };
     }
 
     return {
       kind: "working",
       label: "工作态",
-      title: this.hasNoteConfig
-        ? "当前是未保存的工作态，已偏离笔记配置"
-        : "当前是未保存的工作态，尚未存入笔记",
+      title: "当前是未保存的工作态",
     };
   }
 
@@ -788,45 +699,6 @@ export class PreviewView extends ItemView implements PanelHost {
       this.refs.doubleStrokeColorInput.value = parseColorValue(s.coverDoubleStrokeColor, strokePalette.outer);
       this.refs.glowColorInput.value = parseColorValue(s.coverGlowColor, s.coverFontColor || themeColor);
     });
-  }
-
-  /** Save current UI settings as renderer_config into the active note. */
-  async handleSaveToNote(): Promise<void> {
-    const file = this.app.workspace.getActiveFile();
-    if (!file || file.extension !== "md") {
-      new Notice("No active Markdown file");
-      return;
-    }
-    const markdown = await this.app.vault.read(file);
-    const options = extractRenderOptions(this.effective);
-    const activePreset = this.getActivePresetName();
-    const updated = activePreset && !this.isPresetModified(this.effective)
-      ? savePresetReferenceToNote(markdown, activePreset)
-      : saveFullNoteConfig(markdown, options, { activePreset: activePreset || undefined });
-    await this.app.vault.modify(file, updated);
-    this.baselineSettings = this.cloneSettings(this.effective);
-    this.hasNoteConfig = true;
-    this.updateNoteActionButtons(true, this.editingNoteConfig);
-    this.syncConfigSourceUi(this.effective);
-    new Notice("已存入笔记");
-  }
-
-  /** Remove renderer_config section from the active note. */
-  async handleRemoveFromNote(): Promise<void> {
-    const file = this.app.workspace.getActiveFile();
-    if (!file || file.extension !== "md") {
-      new Notice("No active Markdown file");
-      return;
-    }
-    const markdown = await this.app.vault.read(file);
-    const updated = removeNoteConfig(markdown);
-    await this.app.vault.modify(file, updated);
-    this.plugin.clearActivePreset();
-    this.baselineSettings = createDefaultRendererConfig();
-    this.hasNoteConfig = false;
-    this.updateNoteActionButtons(false, this.editingNoteConfig);
-    this.syncConfigSourceUi(this.effective);
-    new Notice("已移除笔记配置");
   }
 
   private showPage(): void {

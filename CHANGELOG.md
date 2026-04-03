@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.1
+
+### Improvements
+
+- Remove note-level `renderer_config` parsing, writing, and migration code, and simplify preview/headless rendering around plugin working config plus presets
+- Trim `schema.json` down to the runtime schema surface only, dropping compatibility snapshots and moving theme color semantics to `theme-colors.yaml`
+- Shrink schema/runtime metadata further by keeping only the semantic field info the settings UI actually uses
+- Update README / CLAUDE / TODO docs to match the new config and export model
+
 ## 0.5.0
 
 ### Improvements

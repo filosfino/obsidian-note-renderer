@@ -108,9 +108,6 @@ function normalizeLegacyEffectDefault(
 
 export type FieldSchema = NumericField | StringField | BooleanField;
 
-export const RENDERER_CONFIG_VERSION = 1;
-export const RENDERER_CONFIG_VERSION_KEY = "rendererConfigVersion";
-
 export interface StrokeControlSchema {
   default: number;
   min: number;
@@ -498,140 +495,74 @@ export interface CoverConfig {
   banner: CoverBannerConfig;
 }
 
-type CoverSemanticFieldPath = readonly [keyof CoverConfig, string] | readonly [keyof CoverConfig, string, string];
-
 export interface SemanticFieldMeta {
-  key: string;
-  noteKey: string;
   description: string;
-  uiLabel?: string;
-  uiControl?: "color" | "number" | "select" | "toggle";
-  uiOrder?: number;
   appliesWhen?: string;
   followsThemeWhenEmpty?: boolean;
   relatedFields?: readonly string[];
-  examples?: readonly string[];
 }
 
 export interface SemanticGroupMeta {
-  label: string;
-  description: string;
-  composition?: string;
   fields: Record<string, SemanticFieldMeta>;
 }
 
 export const COVER_SEMANTIC_SCHEMA = {
   typography: {
-    label: "文字",
-    description: "封面标题的基础排版样式。",
-    composition: "定义封面标题本身的字体、填充和排版，不包含描边/发光/投影。",
     fields: {
-      fontFamily: { key: "coverFontFamily", noteKey: "coverFontFamily", description: "封面标题字体族", uiLabel: "字体", uiControl: "select", uiOrder: 1, examples: ['"Yuanti SC", "PingFang SC", sans-serif'] },
-      color: { key: "coverFontColor", noteKey: "coverFontColor", description: "封面标题填充色；留空时跟随主题标题色", uiLabel: "文字色", uiControl: "color", uiOrder: 2, followsThemeWhenEmpty: true, relatedFields: ["coverGlowColor", "coverStrokeColor"], examples: ["#111111", "#ffffff", ""] },
-      opacity: { key: "coverFontOpacity", noteKey: "coverFontOpacity", description: "封面标题整体透明度", uiLabel: "透明", uiControl: "number", uiOrder: 3, examples: ["40", "70", "100"] },
-      scale: { key: "coverFontScale", noteKey: "coverFontScale", description: "封面标题字号缩放比例", uiLabel: "缩放", uiControl: "number", uiOrder: 4, examples: ["100", "180", "240"] },
-      weight: { key: "coverFontWeight", noteKey: "coverFontWeight", description: "封面标题字重", uiLabel: "字重", uiControl: "select", uiOrder: 5, examples: ["700", "800", "900"] },
-      letterSpacing: { key: "coverLetterSpacing", noteKey: "coverLetterSpacing", description: "封面标题字间距", uiLabel: "间距", uiControl: "number", uiOrder: 6, examples: ["0", "5", "12"] },
-      lineHeight: { key: "coverLineHeight", noteKey: "coverLineHeight", description: "封面标题行高", uiLabel: "行高", uiControl: "number", uiOrder: 7, examples: ["1.1", "1.3", "1.6"] },
-      align: { key: "coverTextAlign", noteKey: "coverTextAlign", description: "封面标题对齐方式", uiLabel: "对齐", uiControl: "select", uiOrder: 8, examples: ["left", "center", "right"] },
+      fontFamily: { description: "封面标题字体族" },
+      color: { description: "封面标题填充色；留空时跟随主题标题色", followsThemeWhenEmpty: true, relatedFields: ["coverGlowColor", "coverStrokeColor"] },
+      opacity: { description: "封面标题整体透明度" },
+      scale: { description: "封面标题字号缩放比例" },
+      weight: { description: "封面标题字重" },
+      letterSpacing: { description: "封面标题字间距" },
+      lineHeight: { description: "封面标题行高" },
+      align: { description: "封面标题对齐方式" },
     },
   },
   position: {
-    label: "位置",
-    description: "封面标题相对封面中心的偏移。",
-    composition: "只影响封面标题块的位置，不改变页面整体布局。",
     fields: {
-      offsetX: { key: "coverOffsetX", noteKey: "coverOffsetX", description: "水平偏移百分比", uiLabel: "X", uiControl: "number", uiOrder: 1, examples: ["-10", "0", "12"] },
-      offsetY: { key: "coverOffsetY", noteKey: "coverOffsetY", description: "垂直偏移百分比", uiLabel: "Y", uiControl: "number", uiOrder: 2, examples: ["-8", "0", "10"] },
-      paddingX: { key: "coverPagePaddingX", noteKey: "coverPagePaddingX", description: "封面页左右边距；0 表示铺满整页宽度，自动换行也会同步按可用宽度计算", uiLabel: "边距", uiControl: "number", uiOrder: 3, examples: ["0", "40", "45"] },
+      offsetX: { description: "水平偏移百分比" },
+      offsetY: { description: "垂直偏移百分比" },
+      paddingX: { description: "封面页左右边距；0 表示铺满整页宽度，自动换行也会同步按可用宽度计算" },
     },
   },
   stroke: {
-    label: "描边",
-    description: "封面标题描边系统，支持单描边、双描边和镂空。",
-    composition: "double 表示内外双描边；hollow 表示透明填充，仅保留轮廓线。",
     fields: {
-      style: { key: "coverStrokeStyle", noteKey: "coverStrokeStyle", description: "描边模式：none / stroke / double / hollow", uiLabel: "模式", uiControl: "select", uiOrder: 1, relatedFields: ["coverStrokePercent", "coverDoubleStrokePercent"], examples: ["stroke", "double", "hollow"] },
-      opacity: { key: "coverStrokeOpacity", noteKey: "coverStrokeOpacity", description: "描边透明度；主要作用于描边层，不影响文字填充", uiLabel: "透明", uiControl: "number", uiOrder: 6, appliesWhen: "coverStrokeStyle != none && coverStrokeStyle != hollow", examples: ["60", "90", "100"] },
-      innerWidth: { key: "coverStrokePercent", noteKey: "coverStrokePercent", description: "内描边粗度，相对字号的百分比", uiLabel: "内粗", uiControl: "number", uiOrder: 4, appliesWhen: "coverStrokeStyle in [stroke, double, hollow]", relatedFields: ["coverStrokeStyle", "coverStrokeColor"], examples: ["1", "5", "9"] },
-      innerColor: { key: "coverStrokeColor", noteKey: "coverStrokeColor", description: "内描边颜色；留空时跟随当前 theme 派生色", uiLabel: "内色", uiControl: "color", uiOrder: 2, appliesWhen: "coverStrokeStyle in [stroke, double, hollow]", followsThemeWhenEmpty: true, relatedFields: ["coverFontColor", "coverDoubleStrokeColor"], examples: ["#ffffff", "#111111", ""] },
-      outerWidth: { key: "coverDoubleStrokePercent", noteKey: "coverDoubleStrokePercent", description: "外描边粗度，仅 double 模式生效", uiLabel: "外粗", uiControl: "number", uiOrder: 5, appliesWhen: "coverStrokeStyle == double", relatedFields: ["coverStrokeStyle", "coverDoubleStrokeColor"], examples: ["3", "5", "10"] },
-      outerColor: { key: "coverDoubleStrokeColor", noteKey: "coverDoubleStrokeColor", description: "外描边颜色，仅 double 模式生效；留空时跟随当前 theme 派生色", uiLabel: "外色", uiControl: "color", uiOrder: 3, appliesWhen: "coverStrokeStyle == double", followsThemeWhenEmpty: true, relatedFields: ["coverStrokeColor"], examples: ["#2b1a1a", "#000000", ""] },
+      style: { description: "描边模式：none / stroke / double / hollow", relatedFields: ["coverStrokePercent", "coverDoubleStrokePercent"] },
+      opacity: { description: "描边透明度；主要作用于描边层，不影响文字填充", appliesWhen: "coverStrokeStyle != none && coverStrokeStyle != hollow" },
+      innerWidth: { description: "内描边粗度，相对字号的百分比", appliesWhen: "coverStrokeStyle in [stroke, double, hollow]", relatedFields: ["coverStrokeStyle", "coverStrokeColor"] },
+      innerColor: { description: "内描边颜色；留空时跟随当前 theme 派生色", followsThemeWhenEmpty: true, relatedFields: ["coverFontColor", "coverDoubleStrokeColor"], appliesWhen: "coverStrokeStyle in [stroke, double, hollow]" },
+      outerWidth: { description: "外描边粗度，仅 double 模式生效", appliesWhen: "coverStrokeStyle == double", relatedFields: ["coverStrokeStyle", "coverDoubleStrokeColor"] },
+      outerColor: { description: "外描边颜色，仅 double 模式生效；留空时跟随当前 theme 派生色", followsThemeWhenEmpty: true, relatedFields: ["coverStrokeColor"], appliesWhen: "coverStrokeStyle == double" },
     },
   },
   glow: {
-    label: "发光",
-    description: "封面标题发光效果，可与描边、投影叠加。",
-    composition: "独立开关，不与描边或投影互斥。",
     fields: {
-      enabled: { key: "coverGlow", noteKey: "coverGlow", description: "是否启用发光", uiLabel: "发光", uiControl: "toggle", uiOrder: 1, relatedFields: ["coverGlowSize", "coverGlowColor"], examples: ["true", "false"] },
-      size: { key: "coverGlowSize", noteKey: "coverGlowSize", description: "发光强度", uiLabel: "光", uiControl: "number", uiOrder: 2, appliesWhen: "coverGlow == true", examples: ["20", "40", "60"] },
-      color: { key: "coverGlowColor", noteKey: "coverGlowColor", description: "发光颜色；留空时跟随文字填充色", uiLabel: "发光色", uiControl: "color", uiOrder: 3, appliesWhen: "coverGlow == true", followsThemeWhenEmpty: true, relatedFields: ["coverFontColor"], examples: ["#ffcc66", "#ffffff", ""] },
+      enabled: { description: "是否启用发光", relatedFields: ["coverGlowSize", "coverGlowColor"] },
+      size: { description: "发光强度", appliesWhen: "coverGlow == true" },
+      color: { description: "发光颜色；留空时跟随文字填充色", followsThemeWhenEmpty: true, relatedFields: ["coverFontColor"], appliesWhen: "coverGlow == true" },
     },
   },
   shadow: {
-    label: "投影",
-    description: "封面标题投影效果，可与描边、发光叠加。",
-    composition: "独立开关，不与描边或发光互斥。",
     fields: {
-      enabled: { key: "coverShadow", noteKey: "coverShadow", description: "是否启用投影", uiLabel: "投影", uiControl: "toggle", uiOrder: 1, relatedFields: ["coverShadowBlur", "coverShadowColor"], examples: ["true", "false"] },
-      blur: { key: "coverShadowBlur", noteKey: "coverShadowBlur", description: "投影模糊半径", uiLabel: "模糊", uiControl: "number", uiOrder: 2, appliesWhen: "coverShadow == true", examples: ["8", "16", "32"] },
-      offsetX: { key: "coverShadowOffsetX", noteKey: "coverShadowOffsetX", description: "投影水平偏移", uiLabel: "X", uiControl: "number", uiOrder: 4, appliesWhen: "coverShadow == true", examples: ["0", "2", "-2"] },
-      offsetY: { key: "coverShadowOffsetY", noteKey: "coverShadowOffsetY", description: "投影垂直偏移", uiLabel: "Y", uiControl: "number", uiOrder: 5, appliesWhen: "coverShadow == true", examples: ["2", "4", "8"] },
-      color: { key: "coverShadowColor", noteKey: "coverShadowColor", description: "投影颜色", uiLabel: "投影色", uiControl: "color", uiOrder: 3, appliesWhen: "coverShadow == true", relatedFields: ["coverShadowBlur"], examples: ["rgba(0,0,0,0.6)", "#000000"] },
+      enabled: { description: "是否启用投影", relatedFields: ["coverShadowBlur", "coverShadowColor"] },
+      blur: { description: "投影模糊半径", appliesWhen: "coverShadow == true" },
+      offsetX: { description: "投影水平偏移", appliesWhen: "coverShadow == true" },
+      offsetY: { description: "投影垂直偏移", appliesWhen: "coverShadow == true" },
+      color: { description: "投影颜色", appliesWhen: "coverShadow == true", relatedFields: ["coverShadowBlur"] },
     },
   },
   banner: {
-    label: "色带",
-    description: "封面标题背景色带效果。",
-    composition: "在标题文字背后生成一条斜切背景带。",
     fields: {
-      enabled: { key: "coverBanner", noteKey: "coverBanner", description: "是否启用色带", uiLabel: "色带", uiControl: "toggle", uiOrder: 1, relatedFields: ["coverBannerColor", "coverBannerSkew", "coverBannerPaddingPercent"], examples: ["true", "false"] },
-      color: { key: "coverBannerColor", noteKey: "coverBannerColor", description: "色带颜色", uiLabel: "色带色", uiControl: "color", uiOrder: 2, appliesWhen: "coverBanner == true", examples: ["rgba(0,0,0,0.5)", "#222222"] },
-      skew: { key: "coverBannerSkew", noteKey: "coverBannerSkew", description: "色带切角/倾斜度", uiLabel: "斜", uiControl: "number", uiOrder: 3, appliesWhen: "coverBanner == true", examples: ["4", "6", "10"] },
-      paddingPercent: { key: "coverBannerPaddingPercent", noteKey: "coverBannerPaddingPercent", description: "色带左右额外留白，按当前字号百分比计算，值越大越不容易被斜角压到文字", uiLabel: "宽", uiControl: "number", uiOrder: 4, appliesWhen: "coverBanner == true", examples: ["20", "40", "60"] },
+      enabled: { description: "是否启用色带", relatedFields: ["coverBannerColor", "coverBannerSkew", "coverBannerPaddingPercent"] },
+      color: { description: "色带颜色", appliesWhen: "coverBanner == true" },
+      skew: { description: "色带切角/倾斜度", appliesWhen: "coverBanner == true" },
+      paddingPercent: { description: "色带左右额外留白，按当前字号百分比计算，值越大越不容易被斜角压到文字", appliesWhen: "coverBanner == true" },
     },
   },
 } as const satisfies Record<string, SemanticGroupMeta>;
 
-const COVER_SEMANTIC_FIELD_PATHS: Record<string, CoverSemanticFieldPath> = {
-  coverFontFamily: ["typography", "fontFamily"],
-  coverFontColor: ["typography", "color"],
-  coverFontOpacity: ["typography", "opacity"],
-  coverFontScale: ["typography", "scale"],
-  coverFontWeight: ["typography", "weight"],
-  coverLetterSpacing: ["typography", "letterSpacing"],
-  coverLineHeight: ["typography", "lineHeight"],
-  coverTextAlign: ["typography", "align"],
-  coverOffsetX: ["position", "offsetX"],
-  coverOffsetY: ["position", "offsetY"],
-  coverPagePaddingX: ["position", "paddingX"],
-  coverStrokeStyle: ["stroke", "style"],
-  coverStrokeOpacity: ["stroke", "opacity"],
-  coverStrokePercent: ["stroke", "inner", "widthPercent"],
-  coverStrokeColor: ["stroke", "inner", "color"],
-  coverDoubleStrokePercent: ["stroke", "outer", "widthPercent"],
-  coverDoubleStrokeColor: ["stroke", "outer", "color"],
-  coverGlow: ["glow", "enabled"],
-  coverGlowSize: ["glow", "size"],
-  coverGlowColor: ["glow", "color"],
-  coverShadow: ["shadow", "enabled"],
-  coverShadowBlur: ["shadow", "blur"],
-  coverShadowOffsetX: ["shadow", "offsetX"],
-  coverShadowOffsetY: ["shadow", "offsetY"],
-  coverShadowColor: ["shadow", "color"],
-  coverBanner: ["banner", "enabled"],
-  coverBannerColor: ["banner", "color"],
-  coverBannerSkew: ["banner", "skew"],
-  coverBannerPaddingPercent: ["banner", "paddingPercent"],
-};
-
 type CoverSemanticGroupKey = keyof typeof COVER_SEMANTIC_SCHEMA;
-type PlainObject = Record<string, unknown>;
-
-function isPlainObject(value: unknown): value is PlainObject {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function evaluateSemanticCondition(expression: string, values: Record<string, unknown>): boolean {
   const inMatch = expression.match(/^(\w+)\s+in\s+\[([^\]]+)\]$/);
@@ -660,190 +591,6 @@ export function isCoverSemanticFieldActive<G extends CoverSemanticGroupKey>(
   const meta = (COVER_SEMANTIC_SCHEMA[group].fields as Record<string, SemanticFieldMeta>)[field];
   if (!meta.appliesWhen) return true;
   return evaluateSemanticCondition(meta.appliesWhen, values);
-}
-
-export function getCoverSemanticFieldMeta<G extends CoverSemanticGroupKey>(
-  group: G,
-  field: string,
-): SemanticFieldMeta | null {
-  return (COVER_SEMANTIC_SCHEMA[group].fields as Record<string, SemanticFieldMeta>)[field] ?? null;
-}
-
-function setNestedValue(target: PlainObject, path: readonly string[], value: unknown): void {
-  let current: PlainObject = target;
-  for (let i = 0; i < path.length - 1; i++) {
-    const key = path[i];
-    const existing = current[key];
-    if (!isPlainObject(existing)) {
-      current[key] = {};
-    }
-    current = current[key] as PlainObject;
-  }
-  current[path[path.length - 1]] = value;
-}
-
-function getNestedValue(source: PlainObject, path: readonly string[]): unknown {
-  let current: unknown = source;
-  for (const key of path) {
-    if (!isPlainObject(current)) return undefined;
-    current = current[key];
-  }
-  return current;
-}
-
-export function expandSemanticNoteConfig(raw: PlainObject): PlainObject {
-  const result: PlainObject = { ...raw };
-  const cover = raw.cover;
-  if (isPlainObject(cover)) {
-    const coverObject = cover;
-    for (const [key, path] of Object.entries(COVER_SEMANTIC_FIELD_PATHS)) {
-      const value = getNestedValue(coverObject, path as readonly string[]);
-      if (value !== undefined) result[key] = value;
-    }
-    const effects = coverObject.effects;
-    if (isPlainObject(effects)) {
-      result.coverEffects = effects;
-    }
-  }
-  const body = raw.body;
-  if (isPlainObject(body)) {
-    const effects = body.effects;
-    if (isPlainObject(effects)) {
-      result.bodyEffects = effects;
-    }
-  }
-  return result;
-}
-
-// ── Key mapping ──────────────────────────────────────────────────────────────
-
-export const NOTE_KEY_ALIASES: Record<string, RenderKey> = {
-  theme: "activeTheme",
-};
-
-export const INTERNAL_TO_NOTE_KEY: Partial<Record<RenderKey, string>> = {
-  activeTheme: "theme",
-};
-
-export function withRendererConfigVersion(config: PlainObject): PlainObject {
-  return {
-    [RENDERER_CONFIG_VERSION_KEY]: RENDERER_CONFIG_VERSION,
-    ...config,
-  };
-}
-
-// ── Validation ───────────────────────────────────────────────────────────────
-
-/**
- * Validate and normalize a raw note config object.
- * - Resolves key aliases
- * - Validates types and clamps numeric values to schema min/max
- * - Validates coverEffects/bodyEffects as nested objects
- * - Drops unknown keys
- */
-export function validateNoteConfig(raw: PlainObject): Partial<RenderOptions> {
-  const normalized = expandSemanticNoteConfig(raw);
-  const pageMode = normalized.pageMode === "long" ? "long" : "card";
-  const result: PlainObject = {};
-  for (const [key, value] of Object.entries(normalized)) {
-    if (value === undefined || value === null) continue;
-    const canonicalKey = (NOTE_KEY_ALIASES[key] || key) as string;
-    if (!(canonicalKey in RENDER_DEFAULTS)) continue;
-
-    if (canonicalKey === "coverEffects" || canonicalKey === "bodyEffects") {
-      if (isPlainObject(value)) {
-        const allowedNames = canonicalKey === "coverEffects" ? EFFECT_NAMES : BODY_EFFECT_NAMES;
-        const validated = validateEffectMap(value, allowedNames, pageMode, canonicalKey);
-        if (Object.keys(validated).length > 0) {
-          result[canonicalKey] = validated;
-        }
-      }
-      continue;
-    }
-
-    const schema = getFieldSchema(canonicalKey);
-    if (!schema) continue;
-    if (typeof value !== schema.type) continue;
-
-    // Clamp numeric values to schema range; apply fromDisplay if present (user writes display value)
-    if (schema.type === "number" && typeof value === "number") {
-      const internal = schema.fromDisplay ? schema.fromDisplay(String(value)) : value;
-      const normalizedInternal = canonicalKey === "coverPagePaddingX"
-        ? normalizeLegacyCoverPaddingX(internal, pageMode)
-        : normalizeLegacyNumericDefault(canonicalKey, internal, pageMode);
-      result[canonicalKey] = clampToSchema(normalizedInternal, schema);
-    } else if (schema.type === "string" && schema.enum && typeof value === "string") {
-      // Validate enum values
-      if (schema.enum.includes(value)) {
-        result[canonicalKey] = value;
-      }
-    } else {
-      result[canonicalKey] = value;
-    }
-  }
-  return result as Partial<RenderOptions>;
-}
-
-/** Clamp a numeric value to the schema's min/max range. */
-export function clampToSchema(value: number, schema: NumericField): number {
-  return Math.max(schema.min, Math.min(schema.max, value));
-}
-
-function validateEffectMap(
-  raw: PlainObject,
-  allowedNames: readonly string[],
-  pageMode: "card" | "long",
-  scope: "coverEffects" | "bodyEffects",
-): Record<string, EffectParams> {
-  const result: Record<string, EffectParams> = {};
-  for (const [name, value] of Object.entries(raw)) {
-    if (!allowedNames.includes(name)) continue;
-    const schema = EFFECT_SCHEMAS[name];
-    if (!schema) continue;
-    if (!isPlainObject(value)) continue;
-    const opacity = typeof value.opacity === "number"
-      ? Math.max(schema.min, Math.min(schema.max, value.opacity))
-      : schema.defaultOpacity;
-    const params: EffectParams = {
-      enabled: typeof value.enabled === "boolean" ? value.enabled : schema.defaultEnabled,
-      opacity,
-    };
-    if (schema.defaultMode != null) {
-      const rawMode = typeof value.mode === "string" ? value.mode : schema.defaultMode;
-      const allowedModes = schema.modeOptions?.map((option) => option.value) ?? [];
-      params.mode = allowedModes.includes(rawMode) ? rawMode : schema.defaultMode;
-    }
-    if (schema.defaultShape != null) {
-      const rawShape = typeof value.shape === "string" ? value.shape : schema.defaultShape;
-      const allowedShapes = schema.shapeOptions?.map((option) => option.value) ?? [];
-      params.shape = allowedShapes.includes(rawShape) ? rawShape : schema.defaultShape;
-    }
-    if (schema.defaultCount != null) {
-      params.count = typeof value.count === "number"
-        ? Math.max(schema.countMin!, Math.min(schema.countMax!, Math.round(value.count)))
-        : schema.defaultCount;
-    }
-    if (schema.defaultWidth != null) {
-      params.width = typeof value.width === "number"
-        ? Math.max(schema.widthMin!, Math.min(schema.widthMax!, normalizeLegacyEffectDefault(pageMode, scope, name, "width", value.width)))
-        : schema.defaultWidth;
-    }
-    if (schema.defaultSpacing != null) {
-      params.spacing = typeof value.spacing === "number"
-        ? Math.max(schema.spacingMin!, Math.min(schema.spacingMax!, normalizeLegacyEffectDefault(pageMode, scope, name, "spacing", value.spacing)))
-        : schema.defaultSpacing;
-    }
-    if (schema.defaultSize != null) {
-      params.size = typeof value.size === "number"
-        ? Math.max(schema.sizeMin!, Math.min(schema.sizeMax!, normalizeLegacyEffectDefault(pageMode, scope, name, "size", value.size)))
-        : schema.defaultSize;
-    }
-    if (schema.defaultColor != null) {
-      params.color = typeof value.color === "string" ? value.color : schema.defaultColor;
-    }
-    result[name] = params;
-  }
-  return result;
 }
 
 // ── Extraction ──────────────────────────────────────────────────────────────
@@ -925,51 +672,4 @@ export function buildCoverConfig(options: RenderOptions): CoverConfig {
       paddingPercent: options.coverBannerPaddingPercent ?? 40,
     },
   };
-}
-
-export function toSemanticNoteConfig(config: Record<string, unknown>): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
-  const cover: Record<string, unknown> = {};
-
-  for (const [key, value] of Object.entries(config)) {
-    if (value === undefined) continue;
-    if (key === "coverEffects") {
-      cover.effects = value;
-      continue;
-    }
-    if (key === "bodyEffects") {
-      result.body = { ...(result.body as Record<string, unknown> | undefined), effects: value };
-      continue;
-    }
-
-    const noteKey = (INTERNAL_TO_NOTE_KEY as Record<string, string>)[key] || key;
-    const path = COVER_SEMANTIC_FIELD_PATHS[key];
-    if (path) {
-      setNestedValue(cover, path as readonly string[], value);
-      continue;
-    }
-
-    result[noteKey] = value;
-  }
-
-  if (Object.keys(cover).length > 0) {
-    result.cover = cover;
-  }
-
-  return result;
-}
-
-export function toNoteConfigKeys(config: Record<string, unknown>): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(config)) {
-    const noteKey = (INTERNAL_TO_NOTE_KEY as Record<string, string>)[key] || key;
-    // Convert internal values to display values for note storage
-    const schema = getFieldSchema(key);
-    if (schema?.type === "number" && schema.toDisplay && typeof value === "number") {
-      result[noteKey] = parseFloat(schema.toDisplay(value));
-    } else {
-      result[noteKey] = value;
-    }
-  }
-  return result;
 }

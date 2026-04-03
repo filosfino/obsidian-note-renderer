@@ -13,12 +13,7 @@ import { THEME_ROSE } from "./themes/rose";
 
 import { RENDER_DEFAULTS, RENDER_KEYS } from "./schema";
 import {
-  migrateSettings,
-  readGroupedNoteConfig,
-  readNoteConfig,
-  readNoteConfigMetadata,
   resolveMergedRenderConfig,
-  writeGroupedNoteConfig,
 } from "./config-manager";
 import { renderNote } from "./renderer";
 import { exportSinglePage, scaleBlob } from "./exporter";
@@ -298,7 +293,7 @@ export default class NoteRendererPlugin extends Plugin {
 
   /**
    * Render a markdown file to PNG images and save to a directory.
-   * Uses the note's renderer_config, falling back to plugin defaults when absent.
+   * Uses the current working renderer config.
    *
    * @param filePath - vault-relative path, e.g. "4.projects/小红书分享/notes/xxx.md"
    * @param outputDir - absolute filesystem path, e.g. "/tmp/nr-output"
@@ -316,13 +311,7 @@ export default class NoteRendererPlugin extends Plugin {
     }
 
     const markdown = await this.app.vault.read(file);
-    const noteConfig = readNoteConfig(markdown);
-    const noteMeta = readNoteConfigMetadata(markdown);
-    const presetValues = noteMeta.activePreset ? this.getPresetValues(noteMeta.activePreset) : undefined;
-    const baseSettings = presetValues
-      ? { ...createDefaultRendererConfig(), ...presetValues }
-      : this.getFallbackRenderConfig();
-    const resolved = resolveMergedRenderConfig(baseSettings, noteConfig);
+    const resolved = resolveMergedRenderConfig(this.getFallbackRenderConfig());
     const themeCss = await this.loadTheme(resolved.settings.activeTheme);
 
     const rendered = await renderNote(this.app, markdown, file.path, themeCss, resolved.settings.activeTheme, this, resolved.options);
@@ -349,33 +338,6 @@ export default class NoteRendererPlugin extends Plugin {
   }
 
   /**
-   * Read renderer_config from a note and return the latest grouped note-facing schema.
-   *
-   * Usage via Obsidian CLI:
-   *   obsidian eval code="JSON.stringify(await app.plugins.plugins['note-renderer'].loadRendererConfigFromNote('path/to/note.md'), null, 2)"
-   */
-  async loadRendererConfigFromNote(noteFilePath: string): Promise<Record<string, unknown> | null> {
-    const file = this.getMarkdownFile(noteFilePath);
-    const markdown = await this.app.vault.read(file);
-    return readGroupedNoteConfig(markdown);
-  }
-
-  /**
-   * Write renderer_config to a note.
-   * Accepts grouped or legacy flat config and always writes grouped schema.
-   *
-   * Usage via Obsidian CLI:
-   *   obsidian eval code="await app.plugins.plugins['note-renderer'].writeRendererConfigToNote('path/to/note.md', { theme: 'cream', cover: { typography: { align: 'center' } } })"
-   */
-  async writeRendererConfigToNote(noteFilePath: string, rendererConfig: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const file = this.getMarkdownFile(noteFilePath);
-    const markdown = await this.app.vault.read(file);
-    const updated = writeGroupedNoteConfig(markdown, rendererConfig);
-    await this.app.vault.modify(file, updated);
-    return (await this.loadRendererConfigFromNote(noteFilePath)) ?? {};
-  }
-
-  /**
    * 渲染指定页面到文件。
    *
    * @param filePath - vault 内的 markdown 文件相对路径
@@ -395,13 +357,7 @@ export default class NoteRendererPlugin extends Plugin {
     }
 
     const markdown = await this.app.vault.read(file);
-    const noteConfig = readNoteConfig(markdown);
-    const noteMeta = readNoteConfigMetadata(markdown);
-    const presetValues = noteMeta.activePreset ? this.getPresetValues(noteMeta.activePreset) : undefined;
-    const baseSettings = presetValues
-      ? { ...createDefaultRendererConfig(), ...presetValues }
-      : this.getFallbackRenderConfig();
-    const resolved = resolveMergedRenderConfig(baseSettings, noteConfig);
+    const resolved = resolveMergedRenderConfig(this.getFallbackRenderConfig());
     const themeCss = await this.loadTheme(resolved.settings.activeTheme);
 
     const rendered = await renderNote(this.app, markdown, file.path, themeCss, resolved.settings.activeTheme, this, resolved.options);
@@ -428,8 +384,7 @@ export default class NoteRendererPlugin extends Plugin {
 
   async loadSettings(): Promise<void> {
     const raw = await this.loadData();
-    const migrated = raw ? migrateSettings({ ...raw }) : {};
-    const persisted = this.extractPersistedSettings(migrated);
+    const persisted = this.extractPersistedSettings(raw && typeof raw === "object" ? raw as Record<string, unknown> : {});
     this.fallbackRenderConfig = createDefaultRendererConfig();
     this.pluginState = {
       activePreset: persisted.activePreset,
@@ -437,19 +392,17 @@ export default class NoteRendererPlugin extends Plugin {
       customFonts: persisted.customFonts,
     };
 
-    // Also migrate presets
     if (this.pluginState.presets) {
       for (const [name, preset] of Object.entries(this.pluginState.presets as Record<string, RendererPresetEntry | Partial<RendererPreset>>)) {
         const isEntry = typeof preset === "object" && preset !== null && "values" in preset;
         const values = isEntry ? preset.values : preset;
         this.pluginState.presets[name] = {
-          values: migrateSettings({ ...values }) as Partial<RendererPreset>,
+          values: values as Partial<RendererPreset>,
           locked: isEntry ? Boolean(preset.locked) : false,
         };
       }
     }
 
-    // Ensure customFonts exists (migration from older data.json)
     this.pluginState.customFonts ??= [];
 
     // Auto-import fonts used in current settings and presets into customFonts
@@ -513,15 +466,6 @@ export default class NoteRendererPlugin extends Plugin {
       customFonts: this.pluginState.customFonts,
     };
   }
-
-  private getMarkdownFile(filePath: string): TFile {
-    const file = this.app.vault.getAbstractFileByPath(filePath);
-    if (!(file instanceof TFile) || file.extension !== "md") {
-      throw new Error(`Not a markdown file: ${filePath}`);
-    }
-    return file;
-  }
-
   private async writeRenderedPageToFile(
     page: HTMLElement,
     pngName: string,

@@ -1,7 +1,3 @@
-import yaml from "js-yaml";
-import { migrateRendererConfig } from "./config-migrations";
-import { validateNoteConfig } from "./schema";
-
 /**
  * Parse XHS note markdown into structured sections based on H2 headings.
  *
@@ -10,7 +6,6 @@ import { validateNoteConfig } from "./schema";
  * - ## 封面文字    → cover text content (overlaid on image if present)
  * - ## 封面图      → (optional) cover background image
  * - ## 正文        → body content (auto-paginated)
- * - ## renderer_config → locked render settings (JSON/YAML code block, not rendered)
  *
  * Legacy: ## 封面 is treated as ## 封面文字 for backward compatibility.
  *
@@ -26,91 +21,6 @@ export interface NoteStructure {
   coverMarkdown: string | null;      // null = no cover text, use title-only cover
   coverImageMarkdown: string | null;  // null = no cover image
   bodyMarkdown: string;
-}
-
-/**
- * Parse `## renderer_config` section from markdown.
- * Supports both JSON and YAML code blocks.
- * Returns a partial settings object (only keys present in the config).
- * Returns null if no renderer_config section or config is invalid.
- */
-export function parseRendererConfig(markdown: string): Record<string, unknown> | null {
-  const frontmatterConfig = parseFrontmatterRendererConfig(markdown);
-  if (frontmatterConfig) return frontmatterConfig;
-
-  const stripped = stripFrontmatter(markdown);
-  const sections = splitH2Sections(stripped);
-  const configSection = sections.find((s) => s.heading === "renderer_config");
-  if (!configSection) return null;
-
-  // Extract code block content and language tag
-  const codeMatch = configSection.content.match(/```(\w*)\s*\n([\s\S]*?)\n```/);
-  if (!codeMatch) return null;
-
-  const lang = codeMatch[1].toLowerCase();
-  const body = codeMatch[2];
-
-  const parsed = parseConfigBody(lang, body);
-  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-    const migrated = migrateRendererConfig({ ...(parsed as Record<string, unknown>) });
-    return validateNoteConfig(migrated);
-  }
-  return null;
-}
-
-function parseFrontmatterRendererConfig(markdown: string): Record<string, unknown> | null {
-  const frontmatter = parseFrontmatter(markdown);
-  const config = frontmatter?.renderer_config;
-  if (!config || typeof config !== "object" || Array.isArray(config)) return null;
-
-  const migrated = migrateRendererConfig({ ...(config as Record<string, unknown>) });
-  return validateNoteConfig(migrated);
-}
-
-/**
- * Parse config body based on language tag.
- * - "json" → JSON only
- * - "yaml" / "yml" → YAML only
- * - "" (no tag) → try JSON first, then YAML
- */
-function parseConfigBody(lang: string, body: string): unknown {
-  if (lang === "json") {
-    return tryParseJson(body);
-  }
-  if (lang === "yaml" || lang === "yml") {
-    return tryParseYaml(body);
-  }
-  // No language tag: try JSON first, fall back to YAML
-  return tryParseJson(body) ?? tryParseYaml(body);
-}
-
-function tryParseJson(text: string): unknown {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return null;
-  }
-}
-
-function tryParseYaml(text: string): unknown {
-  try {
-    return yaml.load(text);
-  } catch {
-    return null;
-  }
-}
-
-function parseFrontmatter(markdown: string): Record<string, unknown> | null {
-  const match = markdown.match(/^---\n([\s\S]*?)\n---\n?/);
-  if (!match) return null;
-  try {
-    const parsed = yaml.load(match[1]);
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? parsed as Record<string, unknown>
-      : null;
-  } catch {
-    return null;
-  }
 }
 
 interface Section {
