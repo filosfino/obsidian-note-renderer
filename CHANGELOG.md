@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Improvements
+
+- Save note frontmatter `renderer_config` as `presetName + partial overrides` instead of dumping the full resolved config whenever a preset is active
+- Keep reading legacy full note config dumps for backward compatibility
+- Update README / CLAUDE / TODO docs to reflect the lightweight note frontmatter flow
+
 ## 0.5.1
 
 ### Improvements

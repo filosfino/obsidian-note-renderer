@@ -2,7 +2,7 @@
 
 ## 已完成
 
-- note 内 `renderer_config` 支持已整体移除；工作流统一收敛到 preset + working config
+- note 内 `renderer_config` 已收敛为轻量 frontmatter：优先保存 `presetName + 局部 override`，并兼容旧的完整 config dump
 - `schema.json` 已裁剪为紧凑 runtime export，不再输出 grouped / flat / semantic 多套兼容快照
 - parser 会忽略 fenced code block 里的 `## ...`，正文示例不再误切分章节
 - 图片解析带当前 note 路径上下文，重名附件优先按 source note 解析

@@ -14,7 +14,7 @@ import {
   readNoteConfig,
   readNoteConfigMetadata,
   resolveMergedRenderConfig,
-  saveFullNoteConfig,
+  saveNoteConfig,
   savePresetReferenceToNote,
   removeNoteConfig,
   extractRenderOptions,
@@ -893,9 +893,17 @@ export class PreviewView extends ItemView implements PanelHost {
 
     const markdown = await this.app.vault.read(file);
     const activePreset = this.getActivePresetName();
+    const presetBase = activePreset
+      ? this.buildSettingsFromPreset(activePreset)
+      : null;
     const updated = activePreset && !this.isPresetModified(this.effective)
       ? savePresetReferenceToNote(markdown, activePreset)
-      : saveFullNoteConfig(markdown, extractRenderOptions(this.effective), { activePreset: activePreset || undefined });
+      : saveNoteConfig(
+        markdown,
+        extractRenderOptions(this.effective),
+        { activePreset: activePreset || undefined },
+        presetBase,
+      );
     await this.app.vault.modify(file, updated);
     this.baselineSettings = this.cloneSettings(this.effective);
     this.hasNoteConfig = true;

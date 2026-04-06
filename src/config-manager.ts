@@ -106,12 +106,16 @@ export function readNoteConfigMetadata(markdown: string): NoteConfigMetadata {
     : {};
 }
 
-export function saveFullNoteConfig(
+export function saveNoteConfig(
   markdown: string,
   options: RenderOptions,
   metadata: NoteConfigMetadata = {},
+  baseOptions: Partial<RenderOptions> | null = null,
 ): string {
-  return writeFrontmatter(markdown, options, metadata);
+  const payload = metadata.activePreset
+    ? diffConfig(baseOptions ?? {}, options)
+    : options;
+  return writeFrontmatter(markdown, payload, metadata);
 }
 
 export function savePresetReferenceToNote(markdown: string, presetName: string): string {
@@ -126,6 +130,60 @@ function deepCopyEffects(effects: Record<string, EffectParams>): Record<string, 
   return Object.fromEntries(
     Object.entries(effects).map(([name, params]) => [name, { ...params }]),
   );
+}
+
+function diffConfig(
+  base: Partial<RenderOptions>,
+  next: RenderOptions,
+): Partial<RenderOptions> {
+  const diff: Partial<RenderOptions> = {};
+  const mutable = diff as Record<string, unknown>;
+
+  for (const key of RENDER_KEYS) {
+    const nextValue = next[key];
+    const baseValue = base[key];
+
+    if ((key === "coverEffects" || key === "bodyEffects")
+      && nextValue && typeof nextValue === "object"
+      && baseValue && typeof baseValue === "object") {
+      const effectDiff = diffEffects(
+        baseValue as Record<string, EffectParams>,
+        nextValue as Record<string, EffectParams>,
+      );
+      if (Object.keys(effectDiff).length > 0) {
+        mutable[key] = effectDiff;
+      }
+      continue;
+    }
+
+    if (JSON.stringify(baseValue) !== JSON.stringify(nextValue)) {
+      mutable[key] = nextValue;
+    }
+  }
+
+  return diff;
+}
+
+function diffEffects(
+  base: Record<string, EffectParams>,
+  next: Record<string, EffectParams>,
+): Record<string, Partial<EffectParams>> {
+  const diff: Record<string, Partial<EffectParams>> = {};
+
+  for (const [name, params] of Object.entries(next)) {
+    const baseParams = base[name];
+    const paramDiff: Partial<EffectParams> = {};
+    for (const [paramKey, paramValue] of Object.entries(params)) {
+      if (!baseParams || JSON.stringify(baseParams[paramKey as keyof EffectParams]) !== JSON.stringify(paramValue)) {
+        paramDiff[paramKey as keyof EffectParams] = paramValue;
+      }
+    }
+    if (Object.keys(paramDiff).length > 0) {
+      diff[name] = paramDiff;
+    }
+  }
+
+  return diff;
 }
 
 function parseFrontmatter(markdown: string): ParsedFrontmatter {

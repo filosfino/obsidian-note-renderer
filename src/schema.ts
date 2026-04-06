@@ -53,18 +53,18 @@ function normalizeLegacyCoverPaddingX(value: number, pageMode: "card" | "long"):
 function getLongModeNumericDefault(key: string, cardValue: number): number {
   if (key === "coverPagePaddingX") return 48;
   if (key === "coverGlowSize") return 72;
-  if (key === "coverShadowBlur") return 5;
-  if (key === "coverShadowOffsetX") return 5;
-  if (key === "coverShadowOffsetY") return 5;
+  if (key === "coverShadowBlur") return 6;
+  if (key === "coverShadowOffsetX") return 6;
+  if (key === "coverShadowOffsetY") return 6;
   return cardValue;
 }
 
 function normalizeLegacyNumericDefault(key: string, value: number, pageMode: "card" | "long"): number {
   if (pageMode === "long") {
     if (key === "coverGlowSize" && value === 60) return 72;
-    if (key === "coverShadowBlur" && (value === 42 || value === 50)) return 5;
-    if (key === "coverShadowOffsetX" && (value === 5 || value === 6)) return 5;
-    if (key === "coverShadowOffsetY" && (value === 10 || value === 12)) return 5;
+    if (key === "coverShadowBlur" && (value === 42 || value === 50)) return 6;
+    if (key === "coverShadowOffsetX" && (value === 5 || value === 6)) return 6;
+    if (key === "coverShadowOffsetY" && (value === 10 || value === 12)) return 6;
   }
   return value;
 }
@@ -188,11 +188,11 @@ export const FIELD_SCHEMAS = {
                        description: "发光颜色，留空则跟随文字颜色；支持任意 CSS 颜色值" } as StringField,
   coverShadow:       { type: "boolean", default: false,
                        description: "封面标题是否显示投影" } as BooleanField,
-  coverShadowBlur:   { type: "number",  default: 5, min: 0, max: 200,
+  coverShadowBlur:   { type: "number",  default: 6, min: 0, max: 200,
                        description: "标题投影模糊半径" } as NumericField,
-  coverShadowOffsetX:{ type: "number",  default: 5, min: -100, max: 100,
+  coverShadowOffsetX:{ type: "number",  default: 6, min: -100, max: 100,
                        description: "标题投影水平偏移" } as NumericField,
-  coverShadowOffsetY:{ type: "number",  default: 5, min: -100, max: 100,
+  coverShadowOffsetY:{ type: "number",  default: 6, min: -100, max: 100,
                        description: "标题投影垂直偏移" } as NumericField,
   coverShadowColor:  { type: "string",  default: "rgba(0,0,0,0.6)",
                        description: "标题投影颜色，支持任意 CSS 颜色值含 rgba" } as StringField,
@@ -660,9 +660,9 @@ export function buildCoverConfig(options: RenderOptions): CoverConfig {
     },
     shadow: {
       enabled: options.coverShadow !== false,
-      blur: options.coverShadowBlur ?? 5,
-      offsetX: options.coverShadowOffsetX ?? 5,
-      offsetY: options.coverShadowOffsetY ?? 5,
+      blur: options.coverShadowBlur ?? 6,
+      offsetX: options.coverShadowOffsetX ?? 6,
+      offsetY: options.coverShadowOffsetY ?? 6,
       color: options.coverShadowColor || "rgba(0,0,0,0.6)",
     },
     banner: {
