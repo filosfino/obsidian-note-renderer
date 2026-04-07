@@ -126,11 +126,12 @@ function toggleSection(target: HTMLElement): void {
 }
 
 /** Build makeField opts from a FieldSchema. Numeric fields only. */
-function schemaOpts(key: string): { min: number; max: number; step?: number; unit?: string; transform?: (v: number) => string; parse?: (v: string) => number } {
+function schemaOpts(key: string): { min: number; max: number; clamp?: boolean; step?: number; unit?: string; transform?: (v: number) => string; parse?: (v: string) => number } {
   const s = getFieldSchema(key);
   if (!s || s.type !== "number") return { min: 0, max: 100 };
   return {
     min: s.min, max: s.max,
+    ...(s.clamp === false ? { clamp: false } : {}),
     ...(s.step !== undefined && s.step !== 1 ? { step: s.step } : {}),
     ...(s.unit ? { unit: s.unit } : {}),
     ...(s.toDisplay ? { transform: s.toDisplay } : {}),
@@ -144,7 +145,7 @@ function makeField(
   parent: HTMLElement,
   label: string,
   value: string,
-  opts: { min: number; max: number; step?: number; unit?: string; transform?: (v: number) => string; parse?: (v: string) => number },
+  opts: { min: number; max: number; clamp?: boolean; step?: number; unit?: string; transform?: (v: number) => string; parse?: (v: string) => number },
   onUpdate: (val: number) => Promise<void>,
 ): HTMLInputElement {
   const group = parent.createDiv("nr-field");
@@ -153,11 +154,12 @@ function makeField(
   input.value = value;
   if (opts.unit) group.createEl("span", { cls: "nr-field-unit", text: opts.unit });
   const step = opts.step ?? 1;
+  const shouldClamp = opts.clamp !== false;
   const parse = opts.parse ?? ((v: string) => parseFloat(v) || 0);
   const transform = opts.transform ?? String;
   const applyVal = async (raw: number) => {
     if (host.syncing) return;
-    const val = Math.max(opts.min, Math.min(opts.max, raw));
+    const val = shouldClamp ? Math.max(opts.min, Math.min(opts.max, raw)) : raw;
     input.value = transform(val);
     await onUpdate(val);
   };

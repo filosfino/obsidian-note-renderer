@@ -375,13 +375,15 @@ function renderDappledLight(container: HTMLElement, params: EffectParams, ctx: E
   svg.setAttribute("viewBox", `0 0 ${ctx.pageWidth} ${ctx.pageHeight}`);
   svg.setAttribute("preserveAspectRatio", "none");
   svg.setAttribute("aria-hidden", "true");
-  svg.style.position = "absolute";
-  svg.style.inset = "0";
-  svg.style.overflow = "visible";
-  svg.style.filter = `blur(${(mode === "sunny" ? 6 : 8) * blurScale}px)`;
-  svg.style.opacity = isBodyPage
-    ? String((mode === "sunny" ? 0.52 : mode === "rainy" ? 0.42 : 0.36) * shapeBoost)
-    : String((mode === "sunny" ? 0.92 : mode === "rainy" ? 0.7 : 0.62) * shapeBoost);
+  svg.setAttribute("style", [
+    "position: absolute",
+    "inset: 0",
+    "overflow: visible",
+    `filter: blur(${(mode === "sunny" ? 6 : 8) * blurScale}px)`,
+    `opacity: ${isBodyPage
+      ? String((mode === "sunny" ? 0.52 : mode === "rainy" ? 0.42 : 0.36) * shapeBoost)
+      : String((mode === "sunny" ? 0.92 : mode === "rainy" ? 0.7 : 0.62) * shapeBoost)}`,
+  ].join("; "));
 
   const defs = document.createElementNS(NS, "defs");
   const leafGradient = document.createElementNS(NS, "linearGradient");

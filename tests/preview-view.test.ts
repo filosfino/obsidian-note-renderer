@@ -1,8 +1,18 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkspaceLeaf } from "obsidian";
 import { PreviewView } from "../src/preview-view";
 import { RENDER_DEFAULTS } from "../src/schema";
 import { TFile } from "obsidian";
+
+const {
+  renderNoteMock,
+} = vi.hoisted(() => ({
+  renderNoteMock: vi.fn(),
+}));
+
+vi.mock("../src/renderer", () => ({
+  renderNote: renderNoteMock,
+}));
 
 function createPluginStub(overrides?: Partial<typeof RENDER_DEFAULTS> & {
   activePreset?: string;
@@ -36,6 +46,10 @@ function createPluginStub(overrides?: Partial<typeof RENDER_DEFAULTS> & {
     saveSettings: async () => {},
   };
 }
+
+beforeEach(() => {
+  renderNoteMock.mockReset();
+});
 
 describe("PreviewView preset state", () => {
   it("marks a preset as modified when the working config differs from it", () => {
@@ -237,6 +251,84 @@ describe("PreviewView preset state", () => {
       activeTheme: RENDER_DEFAULTS.activeTheme,
       fontSize: RENDER_DEFAULTS.fontSize,
     });
+  });
+
+  it("refreshes a switched note through preset-backed frontmatter overrides", async () => {
+    const file = new TFile() as TFile & { path: string; extension: string };
+    file.path = "notes/next.md";
+    file.extension = "md";
+    const markdown = `---
+renderer_config:
+  presetName: default
+  fontSize: 30
+---
+
+# Note
+`;
+    const page = document.createElement("div");
+    const cleanup = vi.fn();
+    const loadTheme = vi.fn(async () => ".theme {}");
+    const read = vi.fn(async () => markdown);
+    renderNoteMock.mockResolvedValue({
+      pages: [page],
+      cleanup,
+      hasCoverImage: false,
+    });
+
+    const plugin = {
+      ...createPluginStub({
+        activeTheme: "paper",
+        fontSize: 24,
+        presets: {
+          default: {
+            values: {
+              ...RENDER_DEFAULTS,
+              activeTheme: "cream",
+              fontSize: 26,
+            },
+            locked: false,
+          },
+        },
+      }),
+      app: {
+        workspace: {
+          getActiveFile: () => file,
+        },
+        vault: {
+          read,
+        },
+      },
+      loadTheme,
+    };
+
+    const view = new PreviewView(new WorkspaceLeaf(), plugin as never);
+    (view as unknown as { app: unknown }).app = plugin.app;
+    (view as unknown as { syncUiToSettings: (settings: typeof RENDER_DEFAULTS) => void }).syncUiToSettings = vi.fn();
+    (view as unknown as { showPage: () => void }).showPage = vi.fn();
+
+    await view.refresh();
+
+    expect(read).toHaveBeenCalledWith(file);
+    expect(plugin.getActivePresetName()).toBe("default");
+    expect(plugin.getFallbackRenderConfig()).toMatchObject({
+      activeTheme: "cream",
+      fontSize: 30,
+    });
+    expect(loadTheme).toHaveBeenCalledWith("cream");
+    expect(renderNoteMock).toHaveBeenCalledWith(
+      plugin.app,
+      markdown,
+      "notes/next.md",
+      ".theme {}",
+      "cream",
+      plugin,
+      expect.objectContaining({
+        activeTheme: "cream",
+        fontSize: 30,
+      }),
+    );
+    expect((view as unknown as { pages: HTMLElement[] }).pages).toEqual([page]);
+    expect((view as unknown as { rendered: { cleanup: () => void } | null }).rendered).toMatchObject({ cleanup });
   });
 
   it("does not try to export the current page when no pages are rendered", async () => {

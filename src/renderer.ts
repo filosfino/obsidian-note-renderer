@@ -271,8 +271,10 @@ ${coverColorCss}
           css = "; color: transparent !important; -webkit-text-fill-color: transparent;";
           const clone = ensureOutlineBackdrop(htmlEl, sw, strokeColor, textOpacity);
           if (clone) {
-            clone.style.color = "transparent";
-            clone.style.webkitTextFillColor = "transparent";
+            clone.setCssStyles({
+              color: "transparent",
+              webkitTextFillColor: "transparent",
+            });
             applyUnderlineScale(clone, fs, { overrideColor: strokeColor });
           }
           break;

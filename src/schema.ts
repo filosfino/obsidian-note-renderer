@@ -21,6 +21,7 @@ interface NumericField {
   min: number;
   max: number;
   step?: number;       // default 1
+  clamp?: boolean;     // default true; false means UI should not hard-clamp the value
   unit?: string;       // display unit: "%", "px", "em"
   description?: string;
   /** Transform internal value → display string. Default: String() */
@@ -62,9 +63,6 @@ function getLongModeNumericDefault(key: string, cardValue: number): number {
 function normalizeLegacyNumericDefault(key: string, value: number, pageMode: "card" | "long"): number {
   if (pageMode === "long") {
     if (key === "coverGlowSize" && value === 60) return 72;
-    if (key === "coverShadowBlur" && (value === 42 || value === 50)) return 6;
-    if (key === "coverShadowOffsetX" && (value === 5 || value === 6)) return 6;
-    if (key === "coverShadowOffsetY" && (value === 10 || value === 12)) return 6;
   }
   return value;
 }
@@ -131,7 +129,7 @@ export const FIELD_SCHEMAS = {
   // ── Basic ──
   activeTheme:       { type: "string",  default: "mist", enum: BUILTIN_THEMES,
                        description: "配色主题。浅色：paper / cream / latte / sage / mist / rose；深色：graphite / ink-gold / amber。也可填自定义主题文件名（不含 .css）" } as StringField,
-  fontSize:          { type: "number",  default: 28, min: 22, max: 30, step: 1, unit: "px",
+  fontSize:          { type: "number",  default: 28, min: 20, max: 30, step: 1, unit: "px",
                        description: "正文字号" } as NumericField,
   fontFamily:        { type: "string",  default: '"Source Han Sans SC", "PingFang SC", sans-serif',
                        description: "正文字体族，CSS font-family 格式" } as StringField,
@@ -160,9 +158,9 @@ export const FIELD_SCHEMAS = {
                      } as NumericField,
   coverTextAlign:    { type: "string",  default: "left", enum: ["left", "center", "right"] as const,
                        description: "封面标题对齐方式" } as StringField,
-  coverOffsetX:      { type: "number",  default: 0, min: -50, max: 50, unit: "%",
+  coverOffsetX:      { type: "number",  default: 0, min: -50, max: 50, clamp: false, unit: "%",
                        description: "封面标题水平偏移" } as NumericField,
-  coverOffsetY:      { type: "number",  default: -5, min: -50, max: 50, unit: "%",
+  coverOffsetY:      { type: "number",  default: -5, min: -50, max: 50, clamp: false, unit: "%",
                        description: "封面标题垂直偏移" } as NumericField,
   coverPagePaddingX: { type: "number",  default: getDefaultCoverPaddingX("card"), min: 0, max: 180, step: 2, unit: "px",
                        description: "封面文字左右边距；0 表示铺满整页宽度" } as NumericField,
